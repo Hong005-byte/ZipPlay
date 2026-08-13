@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Net.Http;
 using System.Reflection;
+using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -20,11 +21,16 @@ namespace PixelLyric8BitFix
         private bool _proceeding = false;
 
         private readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-        private string? _foundUpdateUrl;
+        private UpdateInfo? _foundUpdate;
+        private bool _updateInProgress;
 
         public SettingsWindow()
         {
             InitializeComponent();
+
+            // GitHub API 强制要求请求带 User-Agent，不带会直接 403——之前漏配过这个，
+            // 403 被 UpdateChecker 当成"没有更新"处理，导致明明有新版本却显示"已是最新版本"
+            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("ZipPlay-UpdateChecker");
 
             Closed += (s, e) =>
             {
@@ -93,7 +99,7 @@ namespace PixelLyric8BitFix
             TxtUpdateStatus.Cursor = Cursors.Arrow;
             TxtUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99));
             TxtUpdateStatus.Text = "🔄 检查中...";
-            _foundUpdateUrl = null;
+            _foundUpdate = null;
 
             var currentVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(1, 0, 0);
             var result = await UpdateChecker.CheckAsync(currentVersion, _httpClient);
@@ -105,8 +111,11 @@ namespace PixelLyric8BitFix
             }
             else if (result.Update != null)
             {
-                _foundUpdateUrl = result.Update.ReleaseUrl;
-                TxtUpdateStatus.Text = $"🎉 发现新版本 v{result.Update.Version}，点击这里前往下载";
+                _foundUpdate = result.Update;
+                bool canOneClick = !string.IsNullOrEmpty(result.Update.InstallerDownloadUrl);
+                TxtUpdateStatus.Text = canOneClick
+                    ? $"🎉 发现新版本 v{result.Update.Version}，点击这里立即更新"
+                    : $"🎉 发现新版本 v{result.Update.Version}，点击这里前往下载";
                 TxtUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0xFF, 0x55));
                 TxtUpdateStatus.Cursor = Cursors.Hand;
             }
@@ -119,14 +128,43 @@ namespace PixelLyric8BitFix
             BtnCheckUpdate.IsEnabled = true;
         }
 
-        private void TxtUpdateStatus_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        // 有安装包直链就一键下载 + 静默装 + 自动重启进新版本；没有直链就退回打开浏览器
+        private async void TxtUpdateStatus_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            if (string.IsNullOrEmpty(_foundUpdateUrl)) return;
+            if (_updateInProgress || _foundUpdate == null) return;
+
+            if (string.IsNullOrEmpty(_foundUpdate.InstallerDownloadUrl))
+            {
+                try { Process.Start(new ProcessStartInfo(_foundUpdate.ReleaseUrl) { UseShellExecute = true }); } catch { }
+                return;
+            }
+
+            _updateInProgress = true;
+            TxtUpdateStatus.Cursor = Cursors.Arrow;
+            TxtUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99));
+            TxtUpdateStatus.Text = "⬇ 下载中... 0%";
+
             try
             {
-                Process.Start(new ProcessStartInfo(_foundUpdateUrl) { UseShellExecute = true });
+                var progress = new Progress<double>(p =>
+                {
+                    TxtUpdateStatus.Text = $"⬇ 下载中... {(int)(p * 100)}%";
+                });
+
+                string installerPath = await UpdateChecker.DownloadInstallerAsync(
+                    _foundUpdate.InstallerDownloadUrl, _httpClient, progress, CancellationToken.None);
+
+                TxtUpdateStatus.Text = "✅ 正在安装...";
+                _proceeding = true; // 接下来是主动退出去装新版本，不是意外关闭
+                UpdateChecker.LaunchInstallerAndExit(installerPath);
             }
-            catch { /* 打不开浏览器也不该崩程序 */ }
+            catch
+            {
+                _updateInProgress = false;
+                TxtUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(0xE0, 0x88, 0x88));
+                TxtUpdateStatus.Text = "⚠️ 下载失败，点击重试";
+                TxtUpdateStatus.Cursor = Cursors.Hand;
+            }
         }
     }
 }

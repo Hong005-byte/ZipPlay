@@ -8,7 +8,7 @@
 ; 这样应用内的更新检测（跟 GitHub Release 的 tag 比大小）才会准。
 
 #define MyAppName "ZipPlay"
-#define MyAppVersion "1.1.1"
+#define MyAppVersion "1.1.2"
 #define MyAppPublisher "Hong005-byte"
 #define MyAppURL "https://github.com/Hong005-byte/ZipPlay"
 #define MyAppExeName "PixelLyric8BitFix.exe"
@@ -51,4 +51,6 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
+; 故意不加 skipifsilent：app 内的"一键更新"是用 /VERYSILENT 跑这个安装包的，
+; 装完得自动把新版本重新拉起来，用户才不会觉得"点了更新然后 app 就消失了"。
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall

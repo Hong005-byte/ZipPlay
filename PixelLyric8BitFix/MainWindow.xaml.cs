@@ -62,7 +62,8 @@ namespace PixelLyric8BitFix
         // 如果是"跳去设置页"这种正常流程就不退出程序，否则（双击 / 右键退出 / Alt+F4）才真退出。
         private bool _navigatingToSettings = false;
 
-        private string? _updateReleaseUrl;
+        private UpdateInfo? _updateInfo;
+        private bool _updateInProgress;
 
         public MainWindow() : this(AppSettings.Load()) { }
 
@@ -136,23 +137,46 @@ namespace PixelLyric8BitFix
 
             Dispatcher.Invoke(() =>
             {
-                _updateReleaseUrl = info.ReleaseUrl;
+                _updateInfo = info;
                 TxtUpdateBadge.Text = $"🎉 新版本 v{info.Version}";
                 UpdateBadge.Visibility = Visibility.Visible;
             });
         }
 
-        // 点新版本徽标：用系统默认浏览器打开 GitHub Release 页面
-        private void UpdateBadge_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        // 点新版本徽标：一键下载安装包 + 静默装上 + 自动重启进新版本；
+        // 找不到安装包直链时退回成打开浏览器手动下载，不会卡住什么都不做
+        private async void UpdateBadge_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
-            if (string.IsNullOrEmpty(_updateReleaseUrl)) return;
+            if (_updateInProgress || _updateInfo == null) return;
+
+            if (string.IsNullOrEmpty(_updateInfo.InstallerDownloadUrl))
+            {
+                try { Process.Start(new ProcessStartInfo(_updateInfo.ReleaseUrl) { UseShellExecute = true }); } catch { }
+                return;
+            }
+
+            _updateInProgress = true;
+            TxtUpdateBadge.Text = "⬇ 下载中... 0%";
 
             try
             {
-                Process.Start(new ProcessStartInfo(_updateReleaseUrl) { UseShellExecute = true });
+                var progress = new Progress<double>(p =>
+                {
+                    TxtUpdateBadge.Text = $"⬇ 下载中... {(int)(p * 100)}%";
+                });
+
+                string installerPath = await UpdateChecker.DownloadInstallerAsync(
+                    _updateInfo.InstallerDownloadUrl, _httpClient, progress, CancellationToken.None);
+
+                TxtUpdateBadge.Text = "✅ 正在安装...";
+                UpdateChecker.LaunchInstallerAndExit(installerPath);
             }
-            catch { /* 打不开浏览器也不该崩程序 */ }
+            catch
+            {
+                _updateInProgress = false;
+                TxtUpdateBadge.Text = "⚠️ 下载失败，点击重试";
+            }
         }
 
         // 皮肤：先把 6 套背景层 / 装饰层的显隐都摆对，再套上文字调色板
