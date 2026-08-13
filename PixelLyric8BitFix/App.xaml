@@ -1,0 +1,10 @@
+﻿<Application x:Class="PixelLyric8BitFix.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:PixelLyric8BitFix"
+             StartupUri="SettingsWindow.xaml"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+         
+    </Application.Resources>
+</Application>

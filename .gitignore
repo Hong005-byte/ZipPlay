@@ -1,0 +1,19 @@
+# Build output
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Publish output
+publish/
+*.pubxml.user
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Local Claude Code tooling config (not part of the app)
+.claude/
