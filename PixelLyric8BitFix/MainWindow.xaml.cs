@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
@@ -60,6 +61,8 @@ namespace PixelLyric8BitFix
         // App 用 ShutdownMode="OnExplicitShutdown"：这个窗口被关掉时，
         // 如果是"跳去设置页"这种正常流程就不退出程序，否则（双击 / 右键退出 / Alt+F4）才真退出。
         private bool _navigatingToSettings = false;
+
+        private string? _updateReleaseUrl;
 
         public MainWindow() : this(AppSettings.Load()) { }
 
@@ -122,6 +125,34 @@ namespace PixelLyric8BitFix
             settingsWindow.Show();
 
             Close();
+        }
+
+        // 启动几秒后在后台悄悄查一次有没有新版本，查不到 / 没网络都不影响正常使用
+        private async Task CheckForUpdateInBackgroundAsync()
+        {
+            var currentVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version ?? new Version(1, 0, 0);
+            var info = await UpdateChecker.CheckForUpdateAsync(currentVersion, _httpClient);
+            if (info == null) return;
+
+            Dispatcher.Invoke(() =>
+            {
+                _updateReleaseUrl = info.ReleaseUrl;
+                TxtUpdateBadge.Text = $"🎉 新版本 v{info.Version}";
+                UpdateBadge.Visibility = Visibility.Visible;
+            });
+        }
+
+        // 点新版本徽标：用系统默认浏览器打开 GitHub Release 页面
+        private void UpdateBadge_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (string.IsNullOrEmpty(_updateReleaseUrl)) return;
+
+            try
+            {
+                Process.Start(new ProcessStartInfo(_updateReleaseUrl) { UseShellExecute = true });
+            }
+            catch { /* 打不开浏览器也不该崩程序 */ }
         }
 
         // 皮肤：先把 6 套背景层 / 装饰层的显隐都摆对，再套上文字调色板
@@ -426,6 +457,8 @@ namespace PixelLyric8BitFix
                 await BindSessionEventsAsync(_sessionManager.GetCurrentSession());
 
                 _smoothTimer.Start();
+
+                _ = CheckForUpdateInBackgroundAsync();
             }
             catch (Exception ex)
             {
