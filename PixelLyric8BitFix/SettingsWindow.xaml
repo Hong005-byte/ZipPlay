@@ -4,7 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         mc:Ignorable="d"
-        Title="PixelLyric8Bit — 启动设置" Height="600" Width="440"
+        Title="ZipPlay — 启动设置" Height="600" Width="440"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
         Background="#1B1B1B">
@@ -109,7 +109,7 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0">
-            <TextBlock Text="PIXEL LYRIC" Foreground="White" FontSize="22" FontWeight="Bold"/>
+            <TextBlock Text="ZipPlay" Foreground="White" FontSize="22" FontWeight="Bold"/>
             <TextBlock Text="小型歌词播放器 · 先选好样式和尺寸再启动" Foreground="#999999" FontSize="11" Margin="0,2,0,0"/>
         </StackPanel>
 
@@ -304,6 +304,16 @@
 
                 <TextBlock Text="想改皮肤不用重启程序：主播放器窗口里右键 →「更改皮肤 / 设置」随时能回到这一页。"
                            Foreground="#777777" FontSize="10" TextWrapping="Wrap" Margin="0,14,0,0"/>
+
+                <TextBlock Text="关于" Style="{StaticResource SectionHeader}"/>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock x:Name="TxtCurrentVersion" Text="当前版本 v1.0.0" Foreground="#999999" FontSize="11" VerticalAlignment="Center"/>
+                    <Button x:Name="BtnCheckUpdate" Content="检查更新" Click="BtnCheckUpdate_Click"
+                            Margin="10,0,0,0" Padding="10,3" FontSize="11"
+                            Background="#2A2A2A" Foreground="White" BorderThickness="0" Cursor="Hand"/>
+                </StackPanel>
+                <TextBlock x:Name="TxtUpdateStatus" Text="" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"
+                           Visibility="Collapsed" MouseLeftButtonDown="TxtUpdateStatus_MouseLeftButtonDown"/>
 
             </StackPanel>
         </ScrollViewer>
