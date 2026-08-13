@@ -529,15 +529,17 @@ namespace PixelLyric8BitFix
             var cts = new CancellationTokenSource();
             _lyricFetchCts = cts;
 
-            // 3. 歌名数据清洗
+            // 3. 立刻按新 session 状态刷新一次锚点（避免残留上一首的进度），
+            //    顺便记下这首歌"官方"的真实时长——要放在抓词之前，因为抓词回来还要拿它校验版本对不对
+            if (_currentSession != null) RefreshAnchor(_currentSession);
+            TimeSpan expectedDuration = _totalDuration;
+
+            // 4. 歌名数据清洗
             string cleanTitle = Regex.Replace(title, @"\s*[\(\[][^\]\)]*(feat|with|remix|version|prod)[^\]\)]*[\)\]]", "", RegexOptions.IgnoreCase).Trim();
             string cleanArtist = artist.Split(new[] { ',', ';', '/' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() ?? artist;
 
-            // 4. 核心：四个免费歌词源并发抓取，谁先给出有效结果就用谁，主线程完全不等待
-            _ = Task.Run(() => FetchLyricsAnyEngineAsync(cleanTitle, cleanArtist, trackId, cts.Token));
-
-            // 5. 立刻按新 session 状态刷新一次锚点（避免残留上一首的进度）
-            if (_currentSession != null) RefreshAnchor(_currentSession);
+            // 5. 核心：四个免费歌词源并发抓取，谁先给出有效结果就用谁，主线程完全不等待
+            _ = Task.Run(() => FetchLyricsAnyEngineAsync(cleanTitle, cleanArtist, trackId, expectedDuration, cts.Token));
         }
 
         // 只在系统真正广播新状态时调用：记录一个“锚点”，其余时间靠本地插值
@@ -589,7 +591,7 @@ namespace PixelLyric8BitFix
         }
 
         // ── 多引擎并发抓词：LRCLIB / 网易云 / QQ音乐 / 酷狗，谁先成功用谁 ──────
-        private async Task FetchLyricsAnyEngineAsync(string title, string artist, string trackId, CancellationToken token)
+        private async Task FetchLyricsAnyEngineAsync(string title, string artist, string trackId, TimeSpan expectedDuration, CancellationToken token)
         {
             var pending = new List<Task<string?>>
             {
@@ -609,15 +611,19 @@ namespace PixelLyric8BitFix
                 string? lrc = null;
                 try { lrc = await finished; } catch { /* 单引擎异常已在内部吞掉，这里兜底 */ }
 
-                if (!string.IsNullOrEmpty(lrc))
-                {
-                    if (token.IsCancellationRequested || trackId != _lastTrackId) return; // 双重保险
-                    ParseLrcText(lrc);
-                    return;
-                }
+                if (string.IsNullOrEmpty(lrc)) continue;
+
+                // 网上同一首歌常常有好几个版本的 LRC（原版/加速版/Remix/电台剪辑），
+                // 抓错版本的话时长对不上，歌词会越走越偏。拿系统报告的真实播放时长交叉校验一下，
+                // 明显对不上就当这个引擎没抓到，换下一个，而不是硬塞一份会跑偏的歌词。
+                if (!IsDurationPlausible(lrc, expectedDuration)) continue;
+
+                if (token.IsCancellationRequested || trackId != _lastTrackId) return; // 双重保险
+                ParseLrcText(lrc);
+                return;
             }
 
-            // 四个引擎全部没找到
+            // 四个引擎全部没找到（或者找到的版本时长都对不上）
             if (!token.IsCancellationRequested && trackId == _lastTrackId)
             {
                 Dispatcher.Invoke(() =>
@@ -628,6 +634,40 @@ namespace PixelLyric8BitFix
                     }
                 });
             }
+        }
+
+        // 用 LRC 里最后一句歌词的时间戳粗略估算"这份歌词是多长的版本"，
+        // 跟系统报告的真实播放时长做个交叉验证。放宽到 75%，是为了不误伤那些
+        // 最后一句歌词离结尾还有一段纯音乐尾奏的正常歌曲。
+        private static bool IsDurationPlausible(string lrcContent, TimeSpan expectedDuration)
+        {
+            if (expectedDuration <= TimeSpan.Zero) return true; // 系统没报时长，没法校验，别拦
+
+            var lastTimestamp = GetLastLyricTimestamp(lrcContent);
+            if (lastTimestamp == null || lastTimestamp.Value <= TimeSpan.Zero) return true; // 解析不出来也别拦
+
+            double ratio = lastTimestamp.Value.TotalSeconds / expectedDuration.TotalSeconds;
+            return ratio >= 0.75;
+        }
+
+        private static readonly Regex LrcTimestampRegex = new(@"\[(?<min>\d+):(?<sec>\d+)[\.:](?<ms>\d+)\]", RegexOptions.Compiled);
+
+        private static TimeSpan? GetLastLyricTimestamp(string lrcContent)
+        {
+            int maxMs = -1;
+            foreach (Match m in LrcTimestampRegex.Matches(lrcContent))
+            {
+                int min = int.Parse(m.Groups["min"].Value);
+                int sec = int.Parse(m.Groups["sec"].Value);
+                string msStr = m.Groups["ms"].Value;
+                if (msStr.Length == 1) msStr += "00";
+                else if (msStr.Length == 2) msStr += "0";
+                int ms = int.Parse(msStr.Substring(0, 3));
+
+                int totalMs = (min * 60 + sec) * 1000 + ms;
+                if (totalMs > maxMs) maxMs = totalMs;
+            }
+            return maxMs >= 0 ? TimeSpan.FromMilliseconds(maxMs) : null;
         }
 
         // 1) LRCLIB —— 完全开放、免费、无需 key，同步歌词质量高，优先级最高
