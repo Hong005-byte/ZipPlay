@@ -11,7 +11,7 @@
 
 	<!-- 每发一个新版本，把这个号往上调，并在 GitHub Release 上打同名 tag（比如 v1.1.0），
 	     应用启动时会拿这个号跟 Release 里最新的 tag 比，比出来旧了就提示更新。 -->
-	<Version>1.0.0</Version>
+	<Version>1.1.0</Version>
 
 	<ApplicationIcon>Icon.ico</ApplicationIcon>
   </PropertyGroup>

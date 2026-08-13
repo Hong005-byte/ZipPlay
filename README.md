@@ -2,6 +2,8 @@
 
 一个 Windows 桌面小型歌词播放器（歌词浮窗）。跟随系统当前正在播放的媒体（Spotify、网易云音乐、浏览器播放等，只要接入了 Windows 系统媒体控制 SMTC 的都支持），自动抓取并实时同步显示歌词，支持 13 套可切换的像素/复古风格皮肤。
 
+![开场动画](docs/screenshots/splash.png)
+
 ![皮肤选择](docs/screenshots/skin-gallery.png)
 
 ## 下载安装
@@ -10,6 +12,7 @@
 
 ## 功能
 
+- **像素开场动画**：启动时一个像素小人从右边把 `ZIPPLAY` 的像素字拖进画面中央，黑底橙金配色，点一下可以跳过。
 - **实时歌词同步**：不依赖轮询系统 API，而是订阅 `TimelinePropertiesChanged` / `PlaybackInfoChanged` 事件打时间锚点，本地插值计算当前播放位置，准确且几乎不耗资源。
 - **多引擎免费歌词源**：同时向 [LRCLIB](https://lrclib.net)、网易云音乐、QQ音乐、酷狗音乐并发请求，谁先返回有效结果就用谁，切歌到歌词出现的等待时间取决于最快的那一个。
 - **13 套皮肤**，启动时或运行中随时可切换：
@@ -28,7 +31,8 @@
   - 📼 复古磁带机风（双卷盘转动的走带效果）
 - **窗口尺寸预设**（小 / 中 / 大），选定后锁定大小，不会被误拖成全屏。
 - **显示模式**：标准（标题 + 进度条 + 歌词）或极简（只显示当前歌词）。
-- 所有像素素材（Steve、小树、泥土纹理等）都是运行时用代码逐像素生成的 `WriteableBitmap`，不依赖任何外部图片文件。
+- **自动 + 手动检查更新**：启动时后台静默检查一次；设置页里也有一个"检查更新"按钮，随时手动查，不用重开 app。
+- 所有像素素材（Steve、小树、泥土纹理、ZIPPLAY 像素字等）都是运行时用代码逐像素生成的 `WriteableBitmap`，不依赖任何外部图片文件。
 
 ## 运行要求
 
@@ -50,11 +54,12 @@ dotnet run
 
 ```
 PixelLyric8BitFix/
+├── SplashWindow.xaml(.cs)   开场动画：像素小人拖 ZIPPLAY 字进场
 ├── MainWindow.xaml(.cs)     主播放器窗口：歌词同步、多引擎抓词、皮肤渲染
-├── SettingsWindow.xaml(.cs) 启动设置页：皮肤/尺寸/显示模式选择
+├── SettingsWindow.xaml(.cs) 启动设置页：皮肤/尺寸/显示模式选择、手动检查更新
 ├── AppSettings.cs           本地配置的读写与枚举定义
-├── PixelArt.cs              运行时生成像素素材（Steve、小树、篝火、咖啡杯等）
-├── UpdateChecker.cs         启动时查 GitHub Release 判断有没有新版本
+├── PixelArt.cs              运行时生成像素素材（Steve、小树、篝火、咖啡杯、ZIPPLAY 像素字等）
+├── UpdateChecker.cs         查 GitHub Release 判断有没有新版本（后台自动 + 设置页手动都用它）
 └── Icon.ico                 应用图标
 
 installer/

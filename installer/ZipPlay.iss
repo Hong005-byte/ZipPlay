@@ -8,7 +8,7 @@
 ; 这样应用内的更新检测（跟 GitHub Release 的 tag 比大小）才会准。
 
 #define MyAppName "ZipPlay"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "Hong005-byte"
 #define MyAppURL "https://github.com/Hong005-byte/ZipPlay"
 #define MyAppExeName "PixelLyric8BitFix.exe"
