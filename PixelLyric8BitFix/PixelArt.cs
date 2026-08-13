@@ -342,6 +342,341 @@ namespace PixelLyric8BitFix
             return Build(rows, palette);
         }
 
+        // ── Mini 模式小方块用的皮肤图标：每套皮肤一个 8x8 填色像素图标，配色尽量贴皮肤自己的主题色 ──
+
+        /// <summary>简约风：一个填色的八分音符。</summary>
+        public static BitmapSource CreateNoteIcon()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['#'] = Color.FromRgb(0x8A, 0xB4, 0xF8),
+                ['o'] = Colors.White,
+            };
+            string[] rows =
+            {
+                "...##...",
+                "...##...",
+                "...##...",
+                "...##o..",
+                "..###...",
+                ".#####..",
+                ".#o###..",
+                "..###...",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>CRT 复古终端风：像素小电视，屏幕带扫描线纹理。</summary>
+        public static BitmapSource CreateCrtIcon()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['B'] = Color.FromRgb(0x22, 0x22, 0x22),
+                ['G'] = Color.FromRgb(0x33, 0xFF, 0x66),
+                ['g'] = Color.FromRgb(0x1A, 0x66, 0x33),
+            };
+            string[] rows =
+            {
+                "BBBBBBBB",
+                "BGGGGGGB",
+                "BGgGgGgB",
+                "BGGGGGGB",
+                "BGgGgGgB",
+                "BGGGGGGB",
+                "BBBBBBBB",
+                "..BB....",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>赛博朋克风：粉青双色的霓虹闪电。</summary>
+        public static BitmapSource CreateBoltIcon()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['P'] = Color.FromRgb(0xFF, 0x2E, 0xD1),
+                ['C'] = Color.FromRgb(0x00, 0xF0, 0xFF),
+            };
+            string[] rows =
+            {
+                "...CP...",
+                "..CPP...",
+                ".CPP....",
+                "CPPPP...",
+                ".CPP....",
+                "..PPC...",
+                ".PPC....",
+                "PPC.....",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>黑胶唱片机风：黑胶唱片 + 金色唱片标签。</summary>
+        public static BitmapSource CreateVinylIcon()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['B'] = Color.FromRgb(0x14, 0x10, 0x0C),
+                ['G'] = Color.FromRgb(0xC9, 0xA2, 0x27),
+            };
+            string[] rows =
+            {
+                "..BBBB..",
+                ".BBBBBB.",
+                "BBBBBBBB",
+                "BBBGGBBB",
+                "BBBGGBBB",
+                "BBBBBBBB",
+                ".BBBBBB.",
+                "..BBBB..",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>玻璃拟态风：冰蓝色宝石，带一道白色高光。</summary>
+        public static BitmapSource CreateGemIcon()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['C'] = Color.FromRgb(0xD8, 0xF0, 0xFF),
+                ['W'] = Colors.White,
+            };
+            string[] rows =
+            {
+                "..CCCC..",
+                ".CCWWCC.",
+                "CCCWWCCC",
+                "CCCCCCCC",
+                ".CCCCCC.",
+                "..CCCC..",
+                "...CC...",
+                "........",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>极光雪夜风：满月 + 两粒小星星。</summary>
+        public static BitmapSource CreateMoonIcon()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['M'] = Color.FromRgb(0xE4, 0xF9, 0xF5),
+                ['*'] = Color.FromRgb(0x4F, 0xD8, 0xC4),
+            };
+            string[] rows =
+            {
+                "..MMMM..",
+                ".MMMMMM.",
+                "MMMMMMMM",
+                "MMMMMMMM",
+                "MMMMMMMM",
+                ".MMMMMM.",
+                "..MMMM..",
+                "..*...*.",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>雨夜窗景风：一滴带高光的水滴。</summary>
+        public static BitmapSource CreateRaindropIcon()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['#'] = Color.FromRgb(0xA8, 0xC5, 0xD6),
+                ['h'] = Color.FromRgb(0xE8, 0xF4, 0xFA),
+            };
+            string[] rows =
+            {
+                "...##...",
+                "..#h##..",
+                ".######.",
+                "########",
+                "########",
+                ".######.",
+                "..####..",
+                "...##...",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>星空太空风：四角闪光的星星。</summary>
+        public static BitmapSource CreateSparkleIcon()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['#'] = Color.FromRgb(0xC9, 0xD6, 0xFF),
+            };
+            string[] rows =
+            {
+                ".#.##.#.",
+                "..####..",
+                ".######.",
+                "########",
+                ".######.",
+                "..####..",
+                ".#.##.#.",
+                "........",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>樱花风：粉色四瓣花 + 花蕊。</summary>
+        public static BitmapSource CreateBlossomIcon()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['P'] = Color.FromRgb(0xF7, 0xA8, 0xC4),
+                ['K'] = Color.FromRgb(0xFF, 0xDF, 0xA0),
+            };
+            string[] rows =
+            {
+                "........",
+                "..P..P..",
+                ".PPPPPP.",
+                "PPPKKPPP",
+                "PPPKKPPP",
+                ".PPPPPP.",
+                "..P..P..",
+                "........",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>复古磁带机风：磁带机身 + 两个卷盘。</summary>
+        public static BitmapSource CreateCassetteIcon()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['#'] = Color.FromRgb(0x3A, 0x2E, 0x22),
+                ['T'] = Color.FromRgb(0xF0, 0xE6, 0xD2),
+                ['O'] = Color.FromRgb(0xC1, 0x44, 0x0E),
+            };
+            string[] rows =
+            {
+                "########",
+                "#T####T#",
+                "#TOOOOT#",
+                "#TO##OT#",
+                "#TOOOOT#",
+                "#T####T#",
+                "########",
+                "........",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>云朵漂浮风 Mini 图标：蓬松的双色像素云朵。</summary>
+        public static BitmapSource CreateCloudIcon()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['#'] = Colors.White,
+                ['c'] = Color.FromRgb(0xC8, 0xE6, 0xFF),
+            };
+            string[] rows =
+            {
+                "........",
+                "..##.##.",
+                ".#######",
+                "########",
+                "cccccccc",
+                "........",
+                "........",
+                "........",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>烛光冥想风：一根点燃的蜡烛，蜡身填色 + 双色火苗。RowDecor 装饰图和 Mini 图标共用这一份。</summary>
+        public static BitmapSource CreateCandle()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['o'] = Color.FromRgb(0xE8, 0x63, 0x0F),
+                ['y'] = Color.FromRgb(0xFF, 0xD2, 0x3F),
+                ['W'] = Color.FromRgb(0xF0, 0xE6, 0xC8),
+            };
+            string[] rows =
+            {
+                "...oo...",
+                "..oyyo..",
+                "..oyyo..",
+                "...oo...",
+                "..WWWW..",
+                "..WWWW..",
+                "..WWWW..",
+                "..WWWW..",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>绿植角落风：陶土花盆 + 双色叶片。RowDecor 装饰图和 Mini 图标共用这一份。</summary>
+        public static BitmapSource CreatePlant()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['l'] = Color.FromRgb(0x5E, 0x86, 0x4E),
+                ['L'] = Color.FromRgb(0x8F, 0xBC, 0x7A),
+                ['P'] = Color.FromRgb(0xB5, 0x65, 0x2F),
+                ['p'] = Color.FromRgb(0x8F, 0x4A, 0x22),
+            };
+            string[] rows =
+            {
+                "..l..L..",
+                ".LlLLlL.",
+                "..LlLl..",
+                "...LL...",
+                "..PPPP..",
+                ".PppppP.",
+                ".PPPPPP.",
+                "........",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>海边黄昏风 Mini 图标：夕阳 + 泛着微光的海面。</summary>
+        public static BitmapSource CreateSunsetIcon()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['#'] = Color.FromRgb(0xF9, 0xC7, 0x84),
+                ['w'] = Color.FromRgb(0x4A, 0x3B, 0x78),
+                ['R'] = Color.FromRgb(0xEA, 0x70, 0x93),
+            };
+            string[] rows =
+            {
+                "........",
+                "..####..",
+                ".######.",
+                "########",
+                "wwwwwwww",
+                "wRwwRwww",
+                "........",
+                "........",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>
+        /// 给客制化主题用的公开入口——用户在"自定义主题"页面填的 rows/palette 就是这个 Build 方法
+        /// 原本就在吃的格式，不用再单独设计一套客制化专属的画图逻辑。
+        /// </summary>
+        public static BitmapSource BuildCustomIcon(string[] rows, IReadOnlyDictionary<char, Color> palette) => Build(rows, palette);
+
         private static BitmapSource Build(string[] rows, IReadOnlyDictionary<char, Color> palette)
         {
             int height = rows.Length;

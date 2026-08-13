@@ -161,6 +161,40 @@
             <DoubleAnimation Storyboard.TargetName="ReelLeftRotate" Storyboard.TargetProperty="Angle" From="0" To="360" Duration="0:0:5" RepeatBehavior="Forever"/>
             <DoubleAnimation Storyboard.TargetName="ReelRightRotate" Storyboard.TargetProperty="Angle" From="0" To="360" Duration="0:0:3.4" RepeatBehavior="Forever"/>
         </Storyboard>
+
+        <!-- 云朵漂浮风：三朵云各自不同速度、错开时间从左飘到右，飘完瞬间重置回最左边再开始下一轮 -->
+        <Storyboard x:Key="CloudDriftAnimation">
+            <DoubleAnimation Storyboard.TargetName="CloudGroup1" Storyboard.TargetProperty="(Canvas.Left)" From="-60" To="330" Duration="0:0:14" RepeatBehavior="Forever"/>
+            <DoubleAnimation Storyboard.TargetName="CloudGroup2" Storyboard.TargetProperty="(Canvas.Left)" From="-60" To="330" Duration="0:0:19" BeginTime="0:0:2" RepeatBehavior="Forever"/>
+            <DoubleAnimation Storyboard.TargetName="CloudGroup3" Storyboard.TargetProperty="(Canvas.Left)" From="-60" To="330" Duration="0:0:24" BeginTime="0:0:5" RepeatBehavior="Forever"/>
+        </Storyboard>
+
+        <!-- 烛光冥想风：单支烛焰不规则地忽明忽暗，节奏比篝火慢很多，更安静 -->
+        <Storyboard x:Key="CandleFlickerAnimation">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="CandleGlow" Storyboard.TargetProperty="Opacity" RepeatBehavior="Forever">
+                <LinearDoubleKeyFrame Value="0.45" KeyTime="0:0:0"/>
+                <LinearDoubleKeyFrame Value="0.6" KeyTime="0:0:0.5"/>
+                <LinearDoubleKeyFrame Value="0.4" KeyTime="0:0:1.0"/>
+                <LinearDoubleKeyFrame Value="0.55" KeyTime="0:0:1.6"/>
+                <LinearDoubleKeyFrame Value="0.45" KeyTime="0:0:2.2"/>
+            </DoubleAnimationUsingKeyFrames>
+        </Storyboard>
+
+        <!-- 绿植角落风：叶片以盆底为轴心左右轻轻摇摆，像被风吹过 -->
+        <Storyboard x:Key="PlantSwayAnimation">
+            <DoubleAnimation Storyboard.TargetName="PlantSway" Storyboard.TargetProperty="Angle" From="-3" To="3" Duration="0:0:3.2" AutoReverse="True" RepeatBehavior="Forever">
+                <DoubleAnimation.EasingFunction>
+                    <SineEase EasingMode="EaseInOut"/>
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <!-- 海边黄昏风：夕阳缓慢明暗呼吸 + 两道海面波光反方向轻轻晃动，营造静谧感 -->
+        <Storyboard x:Key="SunsetGlowAnimation">
+            <DoubleAnimation Storyboard.TargetName="SunsetSun" Storyboard.TargetProperty="Opacity" From="0.75" To="1" Duration="0:0:2.6" AutoReverse="True" RepeatBehavior="Forever"/>
+            <DoubleAnimation Storyboard.TargetName="Wave1Transform" Storyboard.TargetProperty="X" From="-10" To="10" Duration="0:0:3.5" AutoReverse="True" RepeatBehavior="Forever"/>
+            <DoubleAnimation Storyboard.TargetName="Wave2Transform" Storyboard.TargetProperty="X" From="10" To="-10" Duration="0:0:4.2" AutoReverse="True" RepeatBehavior="Forever"/>
+        </Storyboard>
     </Window.Resources>
 
     <Grid>
@@ -168,7 +202,7 @@
             <TranslateTransform x:Name="MainBlockTransform" Y="0"/>
         </Grid.RenderTransform>
 
-        <Grid>
+        <Grid x:Name="MainContentGrid">
             <Grid.RowDefinitions>
                 <RowDefinition x:Name="RowDecor" Height="50"/>
                 <RowDefinition Height="*"/>
@@ -292,6 +326,39 @@
                     <Line X1="1" Y1="8" X2="15" Y2="8" Stroke="#5A4632" StrokeThickness="1"/>
                     <Ellipse Width="4" Height="4" Canvas.Left="6" Canvas.Top="6" Fill="#3A2E22"/>
                 </Canvas>
+            </Canvas>
+
+            <!-- 烛光冥想皮肤专属装饰：一支蜡烛，烛焰自带不规则闪烁的暖光 -->
+            <Canvas x:Name="CandleDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
+                <Image x:Name="ImgCandle" Width="18" Height="26" Canvas.Right="16" Canvas.Bottom="0" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor">
+                    <Image.Effect>
+                        <DropShadowEffect x:Name="CandleGlow" Color="#FFC966" BlurRadius="10" ShadowDepth="0" Opacity="0.55"/>
+                    </Image.Effect>
+                </Image>
+            </Canvas>
+
+            <!-- 绿植角落皮肤专属装饰：一盆小盆栽，叶片以盆底为轴心轻轻摇摆 -->
+            <Canvas x:Name="PlantDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
+                <Image x:Name="ImgPlant" Width="26" Height="30" Canvas.Right="12" Canvas.Bottom="0" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0.5,1">
+                    <Image.RenderTransform>
+                        <RotateTransform x:Name="PlantSway" Angle="0"/>
+                    </Image.RenderTransform>
+                </Image>
+            </Canvas>
+
+            <!-- 客制化主题的"单图标"动画专属（pulse / twinkle / sway / spin / flicker 都用这一个图标）：
+                 旋转和缩放共用同一个变换组，具体转多少度/晃多少度由代码按 animation.type 现场写 -->
+            <Canvas x:Name="CustomIconDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
+                <Image x:Name="CustomIcon" Width="24" Height="24" Canvas.Right="14" Canvas.Bottom="2" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0.5,0.5">
+                    <Image.RenderTransform>
+                        <RotateTransform x:Name="CustomIconRotate" Angle="0"/>
+                    </Image.RenderTransform>
+                    <Image.Effect>
+                        <DropShadowEffect x:Name="CustomIconGlow" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
+                    </Image.Effect>
+                </Image>
             </Canvas>
 
             <Grid Grid.Row="1">
@@ -541,6 +608,132 @@
                     </Border.Effect>
                 </Border>
 
+                <!-- 皮肤 14：云朵漂浮风（淡蓝天空，是继磁带机之后第二个浅色背景皮肤） -->
+                <Border x:Name="CloudSkinBg" BorderThickness="1" CornerRadius="12" Visibility="Collapsed">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#AEE1F2" Offset="0"/>
+                            <GradientStop Color="#7FB8DE" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <Border.BorderBrush>
+                        <SolidColorBrush Color="#FFFFFF"/>
+                    </Border.BorderBrush>
+                    <Border.Effect>
+                        <DropShadowEffect Color="#FFFFFF" BlurRadius="12" ShadowDepth="0" Opacity="0.4"/>
+                    </Border.Effect>
+                </Border>
+
+                <!-- 云朵漂浮专属：三朵云各自不同速度飘过 -->
+                <Viewbox x:Name="CloudOverlay" Stretch="Fill" IsHitTestVisible="False" Visibility="Collapsed">
+                    <Canvas Width="300" Height="150" ClipToBounds="True">
+                        <Canvas x:Name="CloudGroup1" Canvas.Left="-60" Canvas.Top="20">
+                            <Ellipse Width="34" Height="16" Fill="#DFFFFFFF" Canvas.Left="0" Canvas.Top="8"/>
+                            <Ellipse Width="20" Height="20" Fill="#DFFFFFFF" Canvas.Left="6" Canvas.Top="0"/>
+                            <Ellipse Width="18" Height="18" Fill="#DFFFFFFF" Canvas.Left="20" Canvas.Top="2"/>
+                        </Canvas>
+                        <Canvas x:Name="CloudGroup2" Canvas.Left="-60" Canvas.Top="55">
+                            <Ellipse Width="26" Height="12" Fill="#CCFFFFFF" Canvas.Left="0" Canvas.Top="6"/>
+                            <Ellipse Width="16" Height="16" Fill="#CCFFFFFF" Canvas.Left="4" Canvas.Top="0"/>
+                            <Ellipse Width="14" Height="14" Fill="#CCFFFFFF" Canvas.Left="15" Canvas.Top="1"/>
+                        </Canvas>
+                        <Canvas x:Name="CloudGroup3" Canvas.Left="-60" Canvas.Top="90">
+                            <Ellipse Width="30" Height="14" Fill="#B3FFFFFF" Canvas.Left="0" Canvas.Top="7"/>
+                            <Ellipse Width="18" Height="18" Fill="#B3FFFFFF" Canvas.Left="5" Canvas.Top="0"/>
+                            <Ellipse Width="16" Height="16" Fill="#B3FFFFFF" Canvas.Left="17" Canvas.Top="1"/>
+                        </Canvas>
+                    </Canvas>
+                </Viewbox>
+
+                <!-- 皮肤 15：烛光冥想风（暖调深棕渐变，安静的室内氛围） -->
+                <Border x:Name="CandleSkinBg" BorderThickness="1" CornerRadius="6" Visibility="Collapsed">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#2A2018" Offset="0"/>
+                            <GradientStop Color="#1A140E" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <Border.BorderBrush>
+                        <SolidColorBrush Color="#D9A648"/>
+                    </Border.BorderBrush>
+                    <Border.Effect>
+                        <DropShadowEffect Color="#D9A648" BlurRadius="12" ShadowDepth="0" Opacity="0.4"/>
+                    </Border.Effect>
+                </Border>
+
+                <!-- 皮肤 16：绿植角落风（暖木色渐变，居家绿植角落的感觉） -->
+                <Border x:Name="PlantSkinBg" BorderThickness="1" CornerRadius="6" Visibility="Collapsed">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#3E2F22" Offset="0"/>
+                            <GradientStop Color="#2A1F16" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <Border.BorderBrush>
+                        <SolidColorBrush Color="#7FA66B"/>
+                    </Border.BorderBrush>
+                    <Border.Effect>
+                        <DropShadowEffect Color="#7FA66B" BlurRadius="10" ShadowDepth="0" Opacity="0.35"/>
+                    </Border.Effect>
+                </Border>
+
+                <!-- 皮肤 17：海边黄昏风（橙粉到暮色紫的渐变天空） -->
+                <Border x:Name="SunsetSkinBg" BorderThickness="1" CornerRadius="10" Visibility="Collapsed">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#F2994A" Offset="0"/>
+                            <GradientStop Color="#EA7093" Offset="0.45"/>
+                            <GradientStop Color="#4A3B78" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <Border.BorderBrush>
+                        <SolidColorBrush Color="#F9C784"/>
+                    </Border.BorderBrush>
+                    <Border.Effect>
+                        <DropShadowEffect Color="#F9C784" BlurRadius="14" ShadowDepth="0" Opacity="0.4"/>
+                    </Border.Effect>
+                </Border>
+
+                <!-- 海边黄昏专属：夕阳 + 泛光的海面波纹 -->
+                <Viewbox x:Name="SunsetOverlay" Stretch="Fill" IsHitTestVisible="False" Visibility="Collapsed">
+                    <Canvas Width="300" Height="150" ClipToBounds="True">
+                        <Ellipse x:Name="SunsetSun" Width="34" Height="34" Fill="#FFF3B0" Canvas.Left="133" Canvas.Top="55"/>
+                        <Line X1="0" Y1="0" X2="300" Y2="0" Stroke="#66FFFFFF" StrokeThickness="1.5" Canvas.Top="110">
+                            <Line.RenderTransform>
+                                <TranslateTransform x:Name="Wave1Transform" X="0"/>
+                            </Line.RenderTransform>
+                        </Line>
+                        <Line X1="0" Y1="0" X2="300" Y2="0" Stroke="#44FFFFFF" StrokeThickness="1.5" Canvas.Top="122">
+                            <Line.RenderTransform>
+                                <TranslateTransform x:Name="Wave2Transform" X="0"/>
+                            </Line.RenderTransform>
+                        </Line>
+                    </Canvas>
+                </Viewbox>
+
+                <!-- 皮肤 18：客制化主题——背景/图标/动画全由用户自己那份 JSON 数据决定，
+                     不像前面 17 套那样每套都有专属的 XAML 块，这一套是通用的，代码里按数据现场拼 -->
+                <Border x:Name="CustomSkinBg" BorderThickness="1" CornerRadius="8" Visibility="Collapsed">
+                    <Border.Effect>
+                        <DropShadowEffect x:Name="CustomSkinGlow" BlurRadius="12" ShadowDepth="0" Opacity="0.4"/>
+                    </Border.Effect>
+                </Border>
+
+                <!-- 客制化"飘过型"动画专属（animation.type = drift）：同一张用户图标画三份，各自不同速度飘过 -->
+                <Viewbox x:Name="CustomDriftOverlay" Stretch="Fill" IsHitTestVisible="False" Visibility="Collapsed">
+                    <Canvas Width="300" Height="150" ClipToBounds="True">
+                        <Image x:Name="CustomDriftIcon1" Width="22" Height="22" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Top="15">
+                            <Image.RenderTransform><TranslateTransform x:Name="CustomDrift1Transform"/></Image.RenderTransform>
+                        </Image>
+                        <Image x:Name="CustomDriftIcon2" Width="18" Height="18" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Top="60">
+                            <Image.RenderTransform><TranslateTransform x:Name="CustomDrift2Transform"/></Image.RenderTransform>
+                        </Image>
+                        <Image x:Name="CustomDriftIcon3" Width="20" Height="20" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Top="100">
+                            <Image.RenderTransform><TranslateTransform x:Name="CustomDrift3Transform"/></Image.RenderTransform>
+                        </Image>
+                    </Canvas>
+                </Viewbox>
+
                 <!-- 内容层：所有皮肤共用，只是背景/文字颜色不同（由代码按皮肤设置） -->
                 <Grid Margin="12,6,12,12">
                     <Grid.RowDefinitions>
@@ -563,7 +756,8 @@
                         </ProgressBar>
                     </Grid>
 
-                    <Border x:Name="LyricBox" Grid.Row="2" Background="#D9111111" BorderBrush="#222222" BorderThickness="2" Padding="8,4,8,4">
+                    <Border x:Name="LyricBox" Grid.Row="2" Background="#D9111111" BorderBrush="#222222" BorderThickness="2" Padding="8,4,8,4"
+                            ToolTip="歌词跟不上？在这上面滚一下滚轮微调（每格 50ms）" MouseWheel="LyricBox_MouseWheel">
                         <TextBlock x:Name="TxtDynamicLyric"
                                    Text="📡 LINKING SPICETIFY..."
                                    FontFamily="Lucida Console"
@@ -591,14 +785,22 @@
 
         <ResizeGrip x:Name="WindowResizeGrip" HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="12" Height="12" Opacity="0.5" Margin="2"/>
 
-        <!-- 常驻的"返回设置"入口：右键菜单不够显眼，这个齿轮按钮才是主入口 -->
-        <Border x:Name="BtnSettings" Width="24" Height="24" CornerRadius="12"
-                Background="#99000000" BorderBrush="#33FFFFFF" BorderThickness="1"
-                HorizontalAlignment="Left" VerticalAlignment="Top" Margin="6,6,0,0"
-                Cursor="Hand" ToolTip="更改皮肤 / 设置"
-                MouseLeftButtonDown="BtnSettings_MouseLeftButtonDown">
-            <TextBlock Text="⚙" FontSize="12" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-        </Border>
+        <!-- 常驻的左上角入口：齿轮是"返回设置"，旁边挨着的是卡拉OK扫光效果开关 -->
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="6,6,0,0">
+            <Border x:Name="BtnSettings" Width="24" Height="24" CornerRadius="12"
+                    Background="#99000000" BorderBrush="#33FFFFFF" BorderThickness="1"
+                    Cursor="Hand" ToolTip="更改皮肤 / 设置"
+                    MouseLeftButtonDown="BtnSettings_MouseLeftButtonDown">
+                <TextBlock Text="⚙" FontSize="12" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+
+            <Border x:Name="BtnKaraokeToggle" Width="24" Height="24" CornerRadius="12" Margin="6,0,0,0"
+                    Background="#99000000" BorderBrush="#33FFFFFF" BorderThickness="1"
+                    Cursor="Hand" ToolTip="开关卡拉OK扫光效果（关了就是整行一次性切换，跟以前一样）"
+                    MouseLeftButtonDown="BtnKaraokeToggle_MouseLeftButtonDown">
+                <TextBlock x:Name="TxtKaraokeToggleIcon" Text="🎤" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+        </StackPanel>
 
         <!-- 有新版本时才出现的小徽标：点一下用默认浏览器打开 GitHub Release 页面 -->
         <Border x:Name="UpdateBadge" Visibility="Collapsed" CornerRadius="9" Background="#992E7D32" BorderBrush="#55FF55" BorderThickness="1"
@@ -606,6 +808,22 @@
                 Cursor="Hand" ToolTip="点击打开发布页下载新版本"
                 MouseLeftButtonDown="UpdateBadge_MouseLeftButtonDown">
             <TextBlock x:Name="TxtUpdateBadge" Text="🎉 新版本" FontSize="10" Foreground="White" FontWeight="Bold"/>
+        </Border>
+
+        <!-- 通用短提示条：歌词偏移、翻译开关都用这个弹一下当前状态，1.5 秒后自动收起 -->
+        <Border x:Name="ToastBadge" Visibility="Collapsed" CornerRadius="9" Background="#99000000" BorderBrush="#55FFFFFF" BorderThickness="1"
+                HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,6,0,0" Padding="8,3"
+                IsHitTestVisible="False">
+            <TextBlock x:Name="TxtToast" Text="" FontSize="10" Foreground="White" FontWeight="Bold"/>
+        </Border>
+
+        <!-- Mini 模式：双击窗口后不整个退出/隐藏，而是缩成一个贴着皮肤主题的小方块（还能拖着走），
+             再点一下（没有拖动的单纯点击）就变回原来的大小、原来的位置。图标/配色在代码里按当前皮肤动态设置。 -->
+        <Border x:Name="MiniBadge" Visibility="Collapsed" CornerRadius="14" BorderThickness="3"
+                Cursor="Hand" ToolTip="拖动可以移动；点一下（不拖动）展开"
+                MouseLeftButtonDown="MiniBadge_MouseLeftButtonDown">
+            <Image x:Name="MiniBadgeImage" Stretch="Uniform" Margin="10"
+                   RenderOptions.BitmapScalingMode="NearestNeighbor"/>
         </Border>
     </Grid>
 </Window>

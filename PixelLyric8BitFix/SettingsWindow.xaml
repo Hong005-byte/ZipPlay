@@ -290,7 +290,66 @@
                         <TextBlock Text="📼 复古磁带" Style="{StaticResource SkinCardLabelStyle}"/>
                     </RadioButton>
 
+                    <RadioButton Style="{StaticResource SkinCardStyle}" GroupName="Skin" Tag="Cloud">
+                        <RadioButton.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#AEE1F2" Offset="0"/>
+                                <GradientStop Color="#7FB8DE" Offset="1"/>
+                            </LinearGradientBrush>
+                        </RadioButton.Background>
+                        <RadioButton.BorderBrush>
+                            <SolidColorBrush Color="#FFFFFF"/>
+                        </RadioButton.BorderBrush>
+                        <TextBlock Text="☁️ 云朵漂浮" Style="{StaticResource SkinCardLabelStyle}"/>
+                    </RadioButton>
+
+                    <RadioButton Style="{StaticResource SkinCardStyle}" GroupName="Skin" Tag="Candle">
+                        <RadioButton.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#2A2018" Offset="0"/>
+                                <GradientStop Color="#1A140E" Offset="1"/>
+                            </LinearGradientBrush>
+                        </RadioButton.Background>
+                        <RadioButton.BorderBrush>
+                            <SolidColorBrush Color="#D9A648"/>
+                        </RadioButton.BorderBrush>
+                        <TextBlock Text="🕯️ 烛光冥想" Style="{StaticResource SkinCardLabelStyle}"/>
+                    </RadioButton>
+
+                    <RadioButton Style="{StaticResource SkinCardStyle}" GroupName="Skin" Tag="Plant">
+                        <RadioButton.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#3E2F22" Offset="0"/>
+                                <GradientStop Color="#2A1F16" Offset="1"/>
+                            </LinearGradientBrush>
+                        </RadioButton.Background>
+                        <RadioButton.BorderBrush>
+                            <SolidColorBrush Color="#7FA66B"/>
+                        </RadioButton.BorderBrush>
+                        <TextBlock Text="🪴 绿植角落" Style="{StaticResource SkinCardLabelStyle}"/>
+                    </RadioButton>
+
+                    <RadioButton Style="{StaticResource SkinCardStyle}" GroupName="Skin" Tag="Sunset">
+                        <RadioButton.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#F2994A" Offset="0"/>
+                                <GradientStop Color="#EA7093" Offset="0.45"/>
+                                <GradientStop Color="#4A3B78" Offset="1"/>
+                            </LinearGradientBrush>
+                        </RadioButton.Background>
+                        <RadioButton.BorderBrush>
+                            <SolidColorBrush Color="#F9C784"/>
+                        </RadioButton.BorderBrush>
+                        <TextBlock Text="🌊 海边黄昏" Style="{StaticResource SkinCardLabelStyle}"/>
+                    </RadioButton>
+
                 </WrapPanel>
+
+                <Button x:Name="BtnManageCustomThemes" Content="🎨 自定义主题…" Click="BtnManageCustomThemes_Click"
+                        Padding="10,4" FontSize="11" HorizontalAlignment="Left" Margin="0,4,0,0"
+                        Background="#2A2A2A" Foreground="White" BorderThickness="0" Cursor="Hand"/>
+                <TextBlock Text="不是代码，是纯数据——填颜色/渐变/像素图标，挑一种内置动画，最多能存 5 个。"
+                           Foreground="#777777" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
 
                 <TextBlock Text="窗口尺寸" Style="{StaticResource SectionHeader}"/>
                 <RadioButton x:Name="RbSizeSmall" Content="小　（400 × 170）" GroupName="Size"/>
@@ -304,6 +363,10 @@
 
                 <TextBlock Text="想改皮肤不用重启程序：主播放器窗口里右键 →「更改皮肤 / 设置」随时能回到这一页。"
                            Foreground="#777777" FontSize="10" TextWrapping="Wrap" Margin="0,14,0,0"/>
+                <TextBlock Text="全局快捷键：Ctrl + Alt + L 随时显示/隐藏播放器，就算窗口被其它程序挡住或者已经收进系统托盘也能用。"
+                           Foreground="#777777" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                <TextBlock Text="左上角齿轮旁边有个 🎤 小开关，能关掉卡拉OK扫光效果，退回最早那种整行一次性切换的显示方式。"
+                           Foreground="#777777" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
 
                 <TextBlock Text="关于" Style="{StaticResource SectionHeader}"/>
                 <StackPanel Orientation="Horizontal">
@@ -314,6 +377,28 @@
                 </StackPanel>
                 <TextBlock x:Name="TxtUpdateStatus" Text="" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"
                            Visibility="Collapsed" MouseLeftButtonDown="TxtUpdateStatus_MouseLeftButtonDown"/>
+
+                <TextBlock Text="本地缓存" Style="{StaticResource SectionHeader}"/>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock x:Name="TxtCacheInfo" Text="暂无缓存" Foreground="#999999" FontSize="11" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                    <Button x:Name="BtnOpenCacheFolder" Content="打开缓存文件夹" Click="BtnOpenCacheFolder_Click"
+                            Padding="10,3" FontSize="11"
+                            Background="#2A2A2A" Foreground="White" BorderThickness="0" Cursor="Hand"/>
+                    <Button x:Name="BtnClearCache" Content="清空歌词缓存" Click="BtnClearCache_Click"
+                            Margin="8,0,0,0" Padding="10,3" FontSize="11"
+                            Background="#2A2A2A" Foreground="White" BorderThickness="0" Cursor="Hand"/>
+                </StackPanel>
+                <TextBlock Text="抓到过的歌词会存一份在本地（每首歌一个 .lrc 文件），同一首歌下次再播就不用重新联网抓词。不放心的话可以先点「打开缓存文件夹」自己看一眼里面只有歌词文件；「清空」也只会删这一个文件夹里的内容，不会碰到其它设置，清空后不影响正常使用，只是下次播到的歌要重新抓一遍。"
+                           Foreground="#777777" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
+
+                <TextBlock Text="诊断" Style="{StaticResource SectionHeader}"/>
+                <Button x:Name="BtnOpenLog" Content="打开日志文件" Click="BtnOpenLog_Click"
+                        Padding="10,3" FontSize="11" HorizontalAlignment="Left"
+                        Background="#2A2A2A" Foreground="White" BorderThickness="0" Cursor="Hand"/>
+                <TextBlock Text="遇到问题（崩溃、托盘图标不出现、热键不生效之类）时，这个文件里可能记了点线索，反馈问题时可以带上它。正常使用不影响，最多占 1MB 空间。"
+                           Foreground="#777777" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
 
             </StackPanel>
         </ScrollViewer>
