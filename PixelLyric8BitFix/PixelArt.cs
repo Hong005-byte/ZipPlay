@@ -75,6 +75,158 @@ namespace PixelLyric8BitFix
             return Build(rows, StevePalette);
         }
 
+        // 开场动画用的跑步小人：跟 Steve 用同一副骨架，但换成单色剪影（绿色，跟 app 图标呼应），
+        // 不画细节是因为开场就那么一两秒，剪影反而比塞满细节的贴图更清楚有力。
+        private static readonly Dictionary<char, Color> RunnerPalette = new()
+        {
+            ['.'] = Transparent,
+            ['H'] = Color.FromRgb(0x55, 0xFF, 0x55),
+            ['S'] = Color.FromRgb(0x55, 0xFF, 0x55),
+            ['E'] = Color.FromRgb(0x0A, 0x2A, 0x0A),
+            ['C'] = Color.FromRgb(0x55, 0xFF, 0x55),
+            ['P'] = Color.FromRgb(0x2E, 0xB8, 0x2E),
+            ['B'] = Color.FromRgb(0x1A, 0x66, 0x1A),
+        };
+
+        public static BitmapSource CreateRunnerFrame1()
+        {
+            string[] rows =
+            {
+                "........",
+                ".HHHHHH.",
+                "HHSSSSHH",
+                "HSSEESSH",
+                ".SSSSSS.",
+                "..CCCC..",
+                ".CCCCCC.",
+                "SCCCCCCS",
+                ".CCCCCC.",
+                ".CCCCCC.",
+                "..PPPP..",
+                ".PP..PP.",
+                ".PP..PP.",
+                ".PP..PP.",
+                ".BB..BB.",
+                "........",
+            };
+            return Build(rows, RunnerPalette);
+        }
+
+        public static BitmapSource CreateRunnerFrame2()
+        {
+            string[] rows =
+            {
+                "........",
+                ".HHHHHH.",
+                "HHSSSSHH",
+                "HSSEESSH",
+                ".SSSSSS.",
+                "..CCCC..",
+                ".CCCCCC.",
+                "SCCCCCCS",
+                ".CCCCCC.",
+                ".CCCCCC.",
+                "..PPPP..",
+                "..PPPP..",
+                "..PPPP..",
+                "..PPPP..",
+                "..BBBB..",
+                "........",
+            };
+            return Build(rows, RunnerPalette);
+        }
+
+        // 5x7 点阵字体，够用的字母就先只画这几个（进场动画只需要拼 "ZIPPLAY"）
+        private static readonly Dictionary<char, string[]> PixelFont5x7 = new()
+        {
+            ['Z'] = new[]
+            {
+                "#####",
+                "....#",
+                "...#.",
+                "..#..",
+                ".#...",
+                "#....",
+                "#####",
+            },
+            ['I'] = new[]
+            {
+                ".###.",
+                "..#..",
+                "..#..",
+                "..#..",
+                "..#..",
+                "..#..",
+                ".###.",
+            },
+            ['P'] = new[]
+            {
+                "####.",
+                "#...#",
+                "#...#",
+                "####.",
+                "#....",
+                "#....",
+                "#....",
+            },
+            ['L'] = new[]
+            {
+                "#....",
+                "#....",
+                "#....",
+                "#....",
+                "#....",
+                "#....",
+                "#####",
+            },
+            ['A'] = new[]
+            {
+                ".###.",
+                "#...#",
+                "#...#",
+                "#####",
+                "#...#",
+                "#...#",
+                "#...#",
+            },
+            ['Y'] = new[]
+            {
+                "#...#",
+                "#...#",
+                ".#.#.",
+                "..#..",
+                "..#..",
+                "..#..",
+                "..#..",
+            },
+        };
+
+        /// <summary>开场动画用的像素字 "ZIPPLAY"，橙金色，用简易 5x7 点阵字体逐字母拼出来。</summary>
+        public static BitmapSource CreateZipPlayLogo()
+        {
+            const string word = "ZIPPLAY";
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['#'] = Color.FromRgb(0xF2, 0xA5, 0x3D), // 橙金色
+            };
+
+            const int glyphHeight = 7;
+            var rows = new string[glyphHeight];
+            for (int r = 0; r < glyphHeight; r++)
+            {
+                var sb = new System.Text.StringBuilder();
+                for (int i = 0; i < word.Length; i++)
+                {
+                    sb.Append(PixelFont5x7[word[i]][r]);
+                    if (i < word.Length - 1) sb.Append('.'); // 字母间留 1 像素空隙
+                }
+                rows[r] = sb.ToString();
+            }
+
+            return Build(rows, palette);
+        }
+
         public static BitmapSource CreateTree()
         {
             var palette = new Dictionary<char, Color>

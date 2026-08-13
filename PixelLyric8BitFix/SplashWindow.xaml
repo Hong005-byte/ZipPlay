@@ -1,0 +1,33 @@
+<Window x:Class="PixelLyric8BitFix.SplashWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ZipPlay" Height="260" Width="620"
+        WindowStyle="None"
+        Background="Black"
+        Topmost="True"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        MouseLeftButtonDown="Splash_MouseLeftButtonDown">
+
+    <!-- 开场动画：一个像素小人从窗口右边跑进来，身后用一根小绳"拖着" ZIPPLAY 的像素字一起被拉到画面中央。
+         黑底 + 橙金色字，点一下任意位置可以跳过直接进设置页。 -->
+    <Grid x:Name="RootGrid">
+        <StackPanel x:Name="ContentGroup" Orientation="Horizontal"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+            <StackPanel.RenderTransform>
+                <TranslateTransform x:Name="GroupTransform" X="700"/>
+            </StackPanel.RenderTransform>
+
+            <Image x:Name="ImgRunner" Width="50" Height="80" Stretch="Uniform"
+                   RenderOptions.BitmapScalingMode="NearestNeighbor"
+                   VerticalAlignment="Bottom" Margin="0,0,0,6"/>
+
+            <Rectangle x:Name="RopeLine" Width="24" Height="3" Fill="#F2A53D"
+                       VerticalAlignment="Bottom" Margin="2,0,2,32"/>
+
+            <Image x:Name="ImgLogo" Width="320" Height="56" Stretch="Uniform"
+                   RenderOptions.BitmapScalingMode="NearestNeighbor"
+                   VerticalAlignment="Center"/>
+        </StackPanel>
+    </Grid>
+</Window>
