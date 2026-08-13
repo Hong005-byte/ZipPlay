@@ -11,6 +11,9 @@ obj/
 publish/
 *.pubxml.user
 
+# Installer build output (the compiled Setup.exe goes to GitHub Releases, not the repo)
+installer/output/
+
 # OS files
 Thumbs.db
 .DS_Store

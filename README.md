@@ -1,8 +1,12 @@
-# Pixel Lyric
+# ZipPlay
 
 一个 Windows 桌面小型歌词播放器（歌词浮窗）。跟随系统当前正在播放的媒体（Spotify、网易云音乐、浏览器播放等，只要接入了 Windows 系统媒体控制 SMTC 的都支持），自动抓取并实时同步显示歌词，支持 13 套可切换的像素/复古风格皮肤。
 
 ![皮肤选择](docs/screenshots/skin-gallery.png)
+
+## 下载安装
+
+前往 [Releases](https://github.com/Hong005-byte/ZipPlay/releases) 页面下载最新的 `ZipPlay-Setup-x.x.x.exe`，双击安装即可（装在当前用户目录下，不需要管理员权限，不会弹 UAC）。安装完成后打开程序，每次启动都会自动检查有没有更新，右上角会提示新版本。
 
 ## 功能
 
@@ -29,13 +33,14 @@
 ## 运行要求
 
 - Windows 10 1809 (build 17763) 或更高版本（需要系统媒体控制 SMTC 支持）
-- [.NET 8 SDK](https://dotnet.microsoft.com/download) （从源码构建/运行需要；后续会提供免安装 .NET 的独立安装包）
+- 用上面的安装包不需要额外装 .NET——是自包含发布，运行时已经打包在里面了
+- 从源码构建/运行需要 [.NET 8 SDK](https://dotnet.microsoft.com/download)
 
 ## 从源码运行
 
 ```bash
-git clone https://github.com/<your-username>/PixelLyric8Bit.git
-cd PixelLyric8Bit/PixelLyric8BitFix
+git clone https://github.com/Hong005-byte/ZipPlay.git
+cd ZipPlay/PixelLyric8BitFix
 dotnet run
 ```
 
@@ -45,11 +50,32 @@ dotnet run
 
 ```
 PixelLyric8BitFix/
-├── MainWindow.xaml(.cs)   主播放器窗口：歌词同步、多引擎抓词、皮肤渲染
+├── MainWindow.xaml(.cs)     主播放器窗口：歌词同步、多引擎抓词、皮肤渲染
 ├── SettingsWindow.xaml(.cs) 启动设置页：皮肤/尺寸/显示模式选择
-├── AppSettings.cs         本地配置的读写与枚举定义
-└── PixelArt.cs            运行时生成像素素材（Steve、小树、篝火、咖啡杯等）
+├── AppSettings.cs           本地配置的读写与枚举定义
+├── PixelArt.cs              运行时生成像素素材（Steve、小树、篝火、咖啡杯等）
+├── UpdateChecker.cs         启动时查 GitHub Release 判断有没有新版本
+└── Icon.ico                 应用图标
+
+installer/
+└── ZipPlay.iss              Inno Setup 打包脚本
 ```
+
+## 发布新版本（给维护者看）
+
+1. 改代码，把 [PixelLyric8BitFix.csproj](PixelLyric8BitFix/PixelLyric8BitFix.csproj) 里的 `<Version>` 往上调（比如 `1.1.0`）
+2. 自包含单文件发布：
+   ```bash
+   cd PixelLyric8BitFix
+   dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+   ```
+3. 把 [installer/ZipPlay.iss](installer/ZipPlay.iss) 里的 `MyAppVersion` 也改成一样的号，然后用 Inno Setup 编译：
+   ```bash
+   "C:\Program Files\Inno Setup 7\ISCC.exe" installer\ZipPlay.iss
+   ```
+   产物在 `installer\output\ZipPlay-Setup-x.x.x.exe`
+4. 在 GitHub 上发一个新 Release，tag 打成 `v1.1.0`（要跟 csproj 里的版本号对上，`UpdateChecker` 是拿 tag 名字去比大小的），把上一步的安装包作为附件传上去
+5. 所有已经装过旧版本的人，下次打开 app 就会看到右上角的更新提示
 
 ## 免责声明
 
