@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- 得跟主项目的 TFM 对上（net8.0-windows10.0.22621）才能引用它——虽然这几个测试类本身完全不碰
+         WPF/WinForms，但项目引用的兼容性检查是按 TFM 走的，不是按"用没用到 Windows API"走的。 -->
+    <TargetFramework>net8.0-windows10.0.22621</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 只需要引用主项目里那几个不碰 UI/网络的纯逻辑类（LrcParser / KaraokeTiming / LyricsFetcher.IsDurationPlausible），
+         它们都是 internal，能编译进来全靠主项目 AssemblyInfo.cs 里那条 InternalsVisibleTo。 -->
+    <ProjectReference Include="..\PixelLyric8BitFix\PixelLyric8BitFix.csproj" />
+  </ItemGroup>
+
+</Project>
