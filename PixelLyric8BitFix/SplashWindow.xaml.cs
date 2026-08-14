@@ -61,7 +61,7 @@ namespace PixelLyric8BitFix
             GroupTransform.BeginAnimation(TranslateTransform.XProperty, pullIn);
         }
 
-        // 拉到中间之后，停顿一下让人看清 "ZIPPLAY"，再淡出切到设置页
+        // 拉到中间之后，停顿一下让人看清 "ZIPPLAY"，再淡出切到下一步
         private void BeginExitSequence()
         {
             var pause = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(550) };
@@ -69,28 +69,41 @@ namespace PixelLyric8BitFix
             {
                 pause.Stop();
                 var fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(320));
-                fadeOut.Completed += (s2, e2) => GoToSettings();
+                fadeOut.Completed += (s2, e2) => ProceedAfterSplash();
                 RootGrid.BeginAnimation(UIElement.OpacityProperty, fadeOut);
             };
             pause.Start();
         }
 
-        private void GoToSettings()
+        // 开场动画放完之后去哪：本地已经有存档、且用户没关掉"跳过启动设置页"这个勾选框时，
+        // 直接拿上次的皮肤/尺寸/显示模式进播放器；否则（第一次打开，或者用户就是想每次都手动选）走原来的设置页。
+        // 想改皮肤随时能在主播放器窗口里右键 / 点齿轮回到设置页，不会因为跳过这一页就再也找不到入口。
+        private void ProceedAfterSplash()
         {
             _proceeding = true;
 
-            var settings = new SettingsWindow();
-            Application.Current.MainWindow = settings;
-            settings.Show();
+            var settings = AppSettings.Load();
+            if (AppSettings.HasSavedConfig && settings.SkipStartupSettings)
+            {
+                var main = new MainWindow(settings);
+                Application.Current.MainWindow = main;
+                main.Show();
+            }
+            else
+            {
+                var settingsWindow = new SettingsWindow();
+                Application.Current.MainWindow = settingsWindow;
+                settingsWindow.Show();
+            }
 
             Close();
         }
 
-        // 点一下跳过动画，直接进设置页——等不及看完整个开场也没关系
+        // 点一下跳过动画，直接进下一步——等不及看完整个开场也没关系
         private void Splash_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             _runTimer?.Stop();
-            GoToSettings();
+            ProceedAfterSplash();
         }
     }
 }

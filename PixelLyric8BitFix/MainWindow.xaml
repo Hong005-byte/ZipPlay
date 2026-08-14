@@ -758,15 +758,27 @@
 
                     <Border x:Name="LyricBox" Grid.Row="2" Background="#D9111111" BorderBrush="#222222" BorderThickness="2" Padding="8,4,8,4"
                             ToolTip="歌词跟不上？在这上面滚一下滚轮微调（每格 50ms）" MouseWheel="LyricBox_MouseWheel">
-                        <TextBlock x:Name="TxtDynamicLyric"
-                                   Text="📡 LINKING SPICETIFY..."
-                                   FontFamily="Lucida Console"
-                                   Foreground="#FFFF55"
-                                   FontSize="14"
-                                   TextWrapping="Wrap"
-                                   TextAlignment="Center"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"/>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock x:Name="TxtDynamicLyric"
+                                       Text="📡 LINKING SPICETIFY..."
+                                       FontFamily="Lucida Console"
+                                       Foreground="#FFFF55"
+                                       FontSize="14"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"
+                                       HorizontalAlignment="Center"/>
+                            <!-- 双语歌词的翻译行：只有网易云引擎抓到翻译、且设置里开着双语开关时才会有内容/可见，
+                                 平时（没翻译/开关关了）折叠掉，不占位置 -->
+                            <TextBlock x:Name="TxtTranslationLyric"
+                                       Text=""
+                                       Visibility="Collapsed"
+                                       FontFamily="Lucida Console"
+                                       Foreground="#AAFFFF88"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,3,0,0"/>
+                        </StackPanel>
                     </Border>
                 </Grid>
 
@@ -785,8 +797,10 @@
 
         <ResizeGrip x:Name="WindowResizeGrip" HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="12" Height="12" Opacity="0.5" Margin="2"/>
 
-        <!-- 常驻的左上角入口：齿轮是"返回设置"，旁边挨着的是卡拉OK扫光效果开关 -->
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="6,6,0,0">
+        <!-- 常驻的左上角入口：齿轮是"返回设置"，旁边挨着的是卡拉OK扫光/双语歌词开关。
+             整个面板在 Mini 模式下会被收起来（见 MainWindow.MiniMode.cs），小方块那么点地方，
+             齿轮 + 两个开关图标堆一起太挤，而且这几个功能缩起来之后本来就用不上。 -->
+        <StackPanel x:Name="TopLeftIconsPanel" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="6,6,0,0">
             <Border x:Name="BtnSettings" Width="24" Height="24" CornerRadius="12"
                     Background="#99000000" BorderBrush="#33FFFFFF" BorderThickness="1"
                     Cursor="Hand" ToolTip="更改皮肤 / 设置"
@@ -794,11 +808,28 @@
                 <TextBlock Text="⚙" FontSize="12" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
 
+            <!-- 卡拉OK开关：图标是矢量画的麦克风，不是 emoji——emoji 在 Windows 上是彩色字形，
+                 Foreground 改了也不会变色，之前用 Opacity 区分开/关不够明显，现在直接换实心颜色：
+                 白色=开启，黑色=关闭，一眼就能看出状态 -->
             <Border x:Name="BtnKaraokeToggle" Width="24" Height="24" CornerRadius="12" Margin="6,0,0,0"
                     Background="#99000000" BorderBrush="#33FFFFFF" BorderThickness="1"
-                    Cursor="Hand" ToolTip="开关卡拉OK扫光效果（关了就是整行一次性切换，跟以前一样）"
+                    Cursor="Hand" ToolTip="开关卡拉OK扫光效果：图标白色=开启，黑色=关闭"
                     MouseLeftButtonDown="BtnKaraokeToggle_MouseLeftButtonDown">
-                <TextBlock x:Name="TxtKaraokeToggleIcon" Text="🎤" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <Canvas Width="16" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Border x:Name="KaraokeIconHead" Width="6" Height="8" CornerRadius="3" Canvas.Left="5" Canvas.Top="0" Background="White"/>
+                    <Path x:Name="KaraokeIconStand" Data="M 3,8 C 3,12 6,14 8,14 C 10,14 13,12 13,8"
+                          Stroke="White" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                    <Line x:Name="KaraokeIconPole" X1="8" Y1="14" X2="8" Y2="17" Stroke="White" StrokeThickness="1.4" StrokeStartLineCap="Round"/>
+                </Canvas>
+            </Border>
+
+            <!-- 双语歌词开关：只有抓到的歌词带翻译行时才有实际效果，开关本身随时可点，
+                 灰/白同一套"实心颜色区分开关状态"的手法，跟旁边卡拉OK开关保持一致 -->
+            <Border x:Name="BtnBilingualToggle" Width="24" Height="24" CornerRadius="12" Margin="6,0,0,0"
+                    Background="#99000000" BorderBrush="#33FFFFFF" BorderThickness="1"
+                    Cursor="Hand" ToolTip="开关双语歌词（只有抓到翻译的歌才会显示）"
+                    MouseLeftButtonDown="BtnBilingualToggle_MouseLeftButtonDown">
+                <TextBlock x:Name="TxtBilingualIcon" Text="🌐" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
         </StackPanel>
 
@@ -817,9 +848,19 @@
             <TextBlock x:Name="TxtToast" Text="" FontSize="10" Foreground="White" FontWeight="Bold"/>
         </Border>
 
+        <!-- Mini 模式的像素粒子环：围着方块摆两圈同心圆，抓的是系统正在输出的真实音频（WASAPI 回环采集，
+             见 AudioVisualizer.cs），不是估算出来的。内圈跟着整体响度一直呼吸（正常播放就能看到），
+             外圈平时不显示，只有鼓点或者高音突然冲高时才会多冒出这一圈——不是每颗粒子各绑一个频段
+             那种容易看着杂乱的做法。方块本身没变大，只是 Mini 状态下窗口比方块本身大一整圈，
+             多出来的地方放这两圈；具体每一颗粒子的位置在代码里按圆周角度生成，不写死在 XAML 里
+             （跟客制化主题图标是同一个"数据驱动现场拼"的思路）。
+             IsHitTestVisible=False：这两圈只负责好看，拖动/点击展开都还是靠下面的 MiniBadge。 -->
+        <Canvas x:Name="MiniVisualizerCanvas" Visibility="Collapsed" IsHitTestVisible="False"/>
+
         <!-- Mini 模式：双击窗口后不整个退出/隐藏，而是缩成一个贴着皮肤主题的小方块（还能拖着走），
              再点一下（没有拖动的单纯点击）就变回原来的大小、原来的位置。图标/配色在代码里按当前皮肤动态设置。 -->
         <Border x:Name="MiniBadge" Visibility="Collapsed" CornerRadius="14" BorderThickness="3"
+                Width="64" Height="64" HorizontalAlignment="Center" VerticalAlignment="Center"
                 Cursor="Hand" ToolTip="拖动可以移动；点一下（不拖动）展开"
                 MouseLeftButtonDown="MiniBadge_MouseLeftButtonDown">
             <Image x:Name="MiniBadgeImage" Stretch="Uniform" Margin="10"
