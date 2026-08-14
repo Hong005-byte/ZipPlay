@@ -23,6 +23,11 @@ namespace PixelLyric8BitFix
         private bool _proceeding = false;
 
         private readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
+
+        // 查版本（小 JSON 请求）跟下安装包（几十 MB 的文件）不能共用同一个短超时的 HttpClient——
+        // HttpClient.Timeout 管的是整个请求（包括读响应体），4~6 秒对一个大文件下载来说太容易半路被打断。
+        // 详见 MainWindow.xaml.cs 里同样的两个 HttpClient 的注释。
+        private readonly HttpClient _downloadHttpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
         private UpdateInfo? _foundUpdate;
         private bool _updateInProgress;
 
@@ -36,6 +41,9 @@ namespace PixelLyric8BitFix
             // GitHub API 强制要求请求带 User-Agent，不带会直接 403——之前漏配过这个，
             // 403 被 UpdateChecker 当成"没有更新"处理，导致明明有新版本却显示"已是最新版本"
             _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("ZipPlay-UpdateChecker");
+            _downloadHttpClient.DefaultRequestHeaders.UserAgent.ParseAdd("ZipPlay-UpdateChecker");
+
+            Closed += (s, e) => _downloadHttpClient.Dispose();
 
             Closed += (s, e) =>
             {
@@ -59,6 +67,17 @@ namespace PixelLyric8BitFix
 
             RbModeStandard.IsChecked = settings.DisplayMode == PlayerDisplayMode.Standard;
             RbModeMinimal.IsChecked = settings.DisplayMode == PlayerDisplayMode.Minimal;
+
+            RbFontSmall.IsChecked = settings.FontSize == LyricFontSize.Small;
+            RbFontMedium.IsChecked = settings.FontSize == LyricFontSize.Medium;
+            RbFontLarge.IsChecked = settings.FontSize == LyricFontSize.Large;
+
+            ChkMiniVisualizerEnabled.IsChecked = settings.MiniVisualizerEnabled;
+            RbVisualizerLow.IsChecked = settings.VisualizerSensitivity == VisualizerSensitivity.Low;
+            RbVisualizerMedium.IsChecked = settings.VisualizerSensitivity == VisualizerSensitivity.Medium;
+            RbVisualizerHigh.IsChecked = settings.VisualizerSensitivity == VisualizerSensitivity.High;
+
+            ChkSkipStartupSettings.IsChecked = settings.SkipStartupSettings;
 
             var currentVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(1, 0, 0);
             TxtCurrentVersion.Text = $"当前版本 v{currentVersion.ToString(3)}";
@@ -148,6 +167,14 @@ namespace PixelLyric8BitFix
                           : RbSizeLarge.IsChecked == true ? PlayerSize.Large
                           : PlayerSize.Medium;
             settings.DisplayMode = RbModeMinimal.IsChecked == true ? PlayerDisplayMode.Minimal : PlayerDisplayMode.Standard;
+            settings.FontSize = RbFontSmall.IsChecked == true ? LyricFontSize.Small
+                               : RbFontLarge.IsChecked == true ? LyricFontSize.Large
+                               : LyricFontSize.Medium;
+            settings.MiniVisualizerEnabled = ChkMiniVisualizerEnabled.IsChecked == true;
+            settings.VisualizerSensitivity = RbVisualizerLow.IsChecked == true ? VisualizerSensitivity.Low
+                                            : RbVisualizerHigh.IsChecked == true ? VisualizerSensitivity.High
+                                            : VisualizerSensitivity.Medium;
+            settings.SkipStartupSettings = ChkSkipStartupSettings.IsChecked == true;
             settings.Save();
 
             _proceeding = true;
@@ -219,7 +246,7 @@ namespace PixelLyric8BitFix
                 });
 
                 string installerPath = await UpdateChecker.DownloadInstallerAsync(
-                    _foundUpdate.InstallerDownloadUrl, _httpClient, progress, CancellationToken.None);
+                    _foundUpdate.InstallerDownloadUrl, _downloadHttpClient, progress, CancellationToken.None);
 
                 TxtUpdateStatus.Text = "✅ 正在安装...";
                 _proceeding = true; // 接下来是主动退出去装新版本，不是意外关闭

@@ -361,11 +361,32 @@
                 <RadioButton x:Name="RbModeStandard" Content="标准（标题 + 进度条 + 歌词）" GroupName="Mode" IsChecked="True"/>
                 <RadioButton x:Name="RbModeMinimal" Content="极简（只显示当前歌词）" GroupName="Mode"/>
 
+                <TextBlock Text="歌词字号" Style="{StaticResource SectionHeader}"/>
+                <RadioButton x:Name="RbFontSmall" Content="小" GroupName="FontSize"/>
+                <RadioButton x:Name="RbFontMedium" Content="中（默认）" GroupName="FontSize" IsChecked="True"/>
+                <RadioButton x:Name="RbFontLarge" Content="大" GroupName="FontSize"/>
+
+                <TextBlock Text="Mini 模式律动效果" Style="{StaticResource SectionHeader}"/>
+                <CheckBox x:Name="ChkMiniVisualizerEnabled" Content="开启（双击窗口缩成小方块时，周围会有像素粒子跟着系统音频跳动）"
+                          Foreground="#CCCCCC" FontSize="11" IsChecked="True"/>
+                <TextBlock Text="纯本地实时分析系统正在播放的声音，不联网、不录制、不保存任何音频数据；关掉这个开关后 Mini 模式下完全不会启动音频采集。"
+                           Foreground="#777777" FontSize="10" TextWrapping="Wrap" Margin="0,2,0,8"/>
+                <TextBlock Text="灵敏度" Foreground="#CCCCCC" FontSize="11" Margin="0,0,0,2"/>
+                <StackPanel Orientation="Horizontal">
+                    <RadioButton x:Name="RbVisualizerLow" Content="低" GroupName="VisualizerSensitivity" Margin="0,0,14,0"/>
+                    <RadioButton x:Name="RbVisualizerMedium" Content="中（默认）" GroupName="VisualizerSensitivity" IsChecked="True" Margin="0,0,14,0"/>
+                    <RadioButton x:Name="RbVisualizerHigh" Content="高" GroupName="VisualizerSensitivity"/>
+                </StackPanel>
+                <TextBlock Text="每个人电脑的系统音量、常听的音乐类型都不一样，觉得粒子太安静/太吵可以自己调这一档。"
+                           Foreground="#777777" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
+
                 <TextBlock Text="想改皮肤不用重启程序：主播放器窗口里右键 →「更改皮肤 / 设置」随时能回到这一页。"
                            Foreground="#777777" FontSize="10" TextWrapping="Wrap" Margin="0,14,0,0"/>
                 <TextBlock Text="全局快捷键：Ctrl + Alt + L 随时显示/隐藏播放器，就算窗口被其它程序挡住或者已经收进系统托盘也能用。"
                            Foreground="#777777" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
                 <TextBlock Text="左上角齿轮旁边有个 🎤 小开关，能关掉卡拉OK扫光效果，退回最早那种整行一次性切换的显示方式。"
+                           Foreground="#777777" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                <TextBlock Text="旁边还有个 🌐 双语歌词开关：只有网易云那个引擎抓到翻译的歌才会显示翻译行，不是每首歌都有。"
                            Foreground="#777777" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
 
                 <TextBlock Text="关于" Style="{StaticResource SectionHeader}"/>
@@ -403,8 +424,15 @@
             </StackPanel>
         </ScrollViewer>
 
-        <Button Grid.Row="2" x:Name="BtnStart" Content="开始播放 ▶" Click="BtnStart_Click"
-                Height="38" Margin="0,16,0,0" FontWeight="Bold" FontSize="14"
-                Background="#2E7D32" Foreground="White" BorderThickness="0" Cursor="Hand"/>
+        <StackPanel Grid.Row="2">
+            <CheckBox x:Name="ChkSkipStartupSettings" Content="下次启动跳过这个页面，直接用当前选择进入播放器"
+                      Foreground="#AAAAAA" FontSize="11" Margin="0,14,0,0" IsChecked="True"/>
+            <TextBlock Text="想改皮肤/设置随时能从主播放器窗口右键菜单或者齿轮图标回来，不会因为跳过这一页就找不到入口。"
+                       Foreground="#777777" FontSize="10" TextWrapping="Wrap" Margin="0,2,0,0"/>
+
+            <Button x:Name="BtnStart" Content="开始播放 ▶" Click="BtnStart_Click"
+                    Height="38" Margin="0,10,0,0" FontWeight="Bold" FontSize="14"
+                    Background="#2E7D32" Foreground="White" BorderThickness="0" Cursor="Hand"/>
+        </StackPanel>
     </Grid>
 </Window>

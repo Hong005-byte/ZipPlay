@@ -39,6 +39,21 @@ namespace PixelLyric8BitFix
         Standard,  // 标题 + 艺人 + 时间 + 进度条 + 歌词
     }
 
+    public enum LyricFontSize
+    {
+        Small,
+        Medium,
+        Large,
+    }
+
+    /// <summary>Mini 模式那两圈像素粒子对系统音频的敏感程度，见 AudioVisualizer.ApplySensitivity。</summary>
+    public enum VisualizerSensitivity
+    {
+        Low,
+        Medium,
+        High,
+    }
+
     /// <summary>
     /// 启动设置页选出的偏好，落地为本地 JSON 文件，下次启动记住上次的选择。
     /// 不涉及账号/登录，纯本地小组件不需要那一套。
@@ -66,10 +81,44 @@ namespace PixelLyric8BitFix
         /// <summary>只有 Skin == PlayerSkin.Custom 时才有意义：指向 custom_themes 文件夹里具体是哪一份 JSON。</summary>
         public string? CustomThemeFile { get; set; }
 
+        /// <summary>歌词字号。默认中，跟原来的行为保持一致。</summary>
+        public LyricFontSize FontSize { get; set; } = LyricFontSize.Medium;
+
+        /// <summary>
+        /// 双语歌词开关（左上角 🌐）。默认开启；只有网易云那个引擎抓到的歌词才可能带翻译行，
+        /// 抓到的是纯原文（LRCLIB/QQ音乐/酷狗，或者网易云本身没有翻译）时这个开关不起作用，
+        /// 单纯是"有翻译就显示"的意愿开关，不代表这首歌一定有翻译。
+        /// </summary>
+        public bool BilingualLyricsEnabled { get; set; } = true;
+
+        /// <summary>
+        /// 启动设置页最下面那个"下次启动跳过这个页面"勾选框。默认开启：只要之前完整跑过一次流程
+        /// （<see cref="HasSavedConfig"/> 为 true，即本地已经有 settings.json），开场动画放完就直接
+        /// 拿上次的皮肤/尺寸/显示模式进播放器，不用每次都手动点一下"开始播放"。
+        /// 全新安装、还没有任何存档时不受这个字段影响，一定会先看到设置页——不能让人第一次打开
+        /// 就直接跳过 18 套皮肤选择，那样根本不知道还有别的皮肤/客制化主题这些功能。
+        /// 想改皮肤随时能从主播放器窗口右键 / 齿轮图标回到设置页，这个勾选框只影响"启动的时候要不要先经过这一页"。
+        /// </summary>
+        public bool SkipStartupSettings { get; set; } = true;
+
+        /// <summary>
+        /// Mini 模式那两圈像素粒子的开关。默认开启。关掉之后进 Mini 模式完全不会启动系统音频采集——
+        /// 这个功能是纯本地 WASAPI 回环采集 + FFT，不联网、不录制、不保存任何音频数据，但"一个 app
+        /// 在分析系统正在播放的声音"这件事本身，对隐私敏感的用户来说最好是能自己关掉、也清楚知道
+        /// 在发生什么，而不是默默地做。
+        /// </summary>
+        public bool MiniVisualizerEnabled { get; set; } = true;
+
+        /// <summary>律动灵敏度档位，默认中。见 AudioVisualizer.ApplySensitivity 具体每档改了哪几个参数。</summary>
+        public VisualizerSensitivity VisualizerSensitivity { get; set; } = VisualizerSensitivity.Medium;
+
         private static string ConfigPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "PixelLyric8BitFix",
             "settings.json");
+
+        /// <summary>本地是不是已经有存档——判断"这是不是第一次打开"就靠这个，跟 SkipStartupSettings 搭配用。</summary>
+        public static bool HasSavedConfig => File.Exists(ConfigPath);
 
         public static AppSettings Load()
         {
@@ -109,6 +158,14 @@ namespace PixelLyric8BitFix
             PlayerSize.Small => (400, 170),
             PlayerSize.Large => (760, 340),
             _ => (580, 260), // Medium
+        };
+
+        /// <summary>歌词行的字号（磅值）。原来写死是 14（对应 Medium），小/大各加减 3。</summary>
+        public double GetLyricFontSizePt() => FontSize switch
+        {
+            LyricFontSize.Small => 11,
+            LyricFontSize.Large => 17,
+            _ => 14, // Medium
         };
     }
 }
