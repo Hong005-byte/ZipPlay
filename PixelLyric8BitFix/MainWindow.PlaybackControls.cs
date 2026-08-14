@@ -107,6 +107,23 @@ namespace PixelLyric8BitFix
             UpdateSeekPreview(e.GetPosition(ProgressRow).X);
         }
 
+        // 拖动过程中鼠标捕获被意外抢走（比如还按着左键的时候右键弹出了窗口自己的右键菜单、或者切走了窗口）
+        // 时会触发这个——正常松手走的是 MouseLeftButtonUp，那边会先把 _isDraggingSeek 设成 false 再主动释放
+        // 捕获，所以这里再触发一次是安全的空操作；真正要兜底的是"没走 MouseLeftButtonUp 就丢了捕获"这种情况。
+        // 不光要清掉标志（不然 SmoothTimer_Tick 会一直以为用户还在拖，进度条/时间文字/拖拽图标从此再也不跟着
+        // 真实播放进度走），还要把拖到一半的目标位置真正提交出去——不然用户手上这次拖动就白拖了：
+        // 界面会在下一 tick 悄悄弹回真实播放位置，跳转命令却根本没发出去，观感上是"拖了但没生效"。
+        private async void ProgressRow_LostMouseCapture(object sender, MouseEventArgs e)
+        {
+            if (!_isDraggingSeek) return;
+            _isDraggingSeek = false;
+
+            // 这里已经没有鼠标位置可用了（捕获都丢了），只能用拖动预览里最后停留的那个位置——
+            // 也就是 UpdateSeekPreview 最后一次写进 LyricProgressBar 的值，跟正常松手时的落点是一致的
+            double ratio = LyricProgressBar.Maximum > 0 ? LyricProgressBar.Value / LyricProgressBar.Maximum : 0;
+            await CommitSeekAsync(ratio);
+        }
+
         private async void ProgressRow_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
             if (!_isDraggingSeek) return;
@@ -114,6 +131,14 @@ namespace PixelLyric8BitFix
             ProgressRow.ReleaseMouseCapture();
 
             double ratio = Math.Clamp(e.GetPosition(ProgressRow).X / Math.Max(1, ProgressRow.ActualWidth), 0, 1);
+            await CommitSeekAsync(ratio);
+        }
+
+        // 把"拖到的比例"真正变成一次跳转：本地锚点先拨过去 + 尝试通知播放源。
+        // ProgressRow_MouseLeftButtonUp（正常松手）和 ProgressRow_LostMouseCapture（拖到一半被打断）共用，
+        // 两边落点来源不同（鼠标位置 vs. 最后一次预览的位置），但提交逻辑是同一套。
+        private async Task CommitSeekAsync(double ratio)
+        {
             var newPosition = TimeSpan.FromMilliseconds(_totalDuration.TotalMilliseconds * ratio);
 
             // 先在本地把锚点直接拨到新位置——不等播放源确认。大部分播放源要几十到几百毫秒才会
@@ -131,7 +156,7 @@ namespace PixelLyric8BitFix
                 }
                 catch (Exception ex)
                 {
-                    AppLog.Error("ProgressRow_MouseLeftButtonUp (seek)", ex);
+                    AppLog.Error("CommitSeekAsync", ex);
                 }
             }
         }
@@ -146,7 +171,17 @@ namespace PixelLyric8BitFix
             double ratio = Math.Clamp(mouseX / trackWidth, 0, 1);
             LyricProgressBar.Value = LyricProgressBar.Maximum * ratio;
             PositionSeekThumb(ratio, trackWidth);
+
+            // 时间文字也跟着拖动预览走，不然它还按真实播放位置涨，跟正在拖的进度条对不上，
+            // 让用户以为拖错了地方（SmoothTimer_Tick 那边拖动时不写这个文字，见那边的 _isDraggingSeek 判断）
+            var previewPosition = TimeSpan.FromMilliseconds(_totalDuration.TotalMilliseconds * ratio);
+            TxtTime.Text = FormatPositionText(previewPosition, _totalDuration);
         }
+
+        // SmoothTimer_Tick（真实播放进度）和 UpdateSeekPreview（拖动预览）共用同一个时间文字格式，
+        // 保证两边切换的时候文字格式看起来是同一样东西，不会一边多个空格一边少个 0
+        private static string FormatPositionText(TimeSpan position, TimeSpan total) =>
+            $"[{position.Minutes:D2}:{position.Seconds:D2} / {total.Minutes:D2}:{total.Seconds:D2}]";
 
         // 非拖动状态下，每 tick 跟着真实播放进度挪动图标；拖动状态下由 UpdateSeekPreview 直接控制，
         // 这里不要跟它打架（SmoothTimer_Tick 里已经用 _isDraggingSeek 挡住了，不会同时调用两边）

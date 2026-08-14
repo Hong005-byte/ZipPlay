@@ -810,12 +810,15 @@
                              同一张），不是普通的滑块把手。点哪就跳到哪、拖着放手也会跳，拖动过程中先在本地
                              立刻挪动（不等系统播放源确认，减少"跳过去又跳回来"的观感），松手才真的发命令
                              给播放源。鼠标事件挂在 ProgressRow 这个 Grid 本身上，点击区域是整条进度条，
-                             不用精确点在小图标上。具体逻辑见 MainWindow.PlaybackControls.cs 里的
-                             ProgressRow_MouseLeftButtonDown/MouseMove/MouseLeftButtonUp。 -->
+                             不用精确点在小图标上。LostMouseCapture 是兜底：拖动过程中如果捕获被意外抢走
+                             （比如右键弹出了窗口自己的右键菜单），不靠它清掉拖动标志的话进度条会卡死不再
+                             跟随真实播放进度。具体逻辑见 MainWindow.PlaybackControls.cs 里的
+                             ProgressRow_MouseLeftButtonDown/MouseMove/MouseLeftButtonUp/LostMouseCapture。 -->
                         <Grid x:Name="ProgressRow" Grid.Row="1" Margin="0,6,0,6" Cursor="Hand"
                               MouseLeftButtonDown="ProgressRow_MouseLeftButtonDown"
                               MouseMove="ProgressRow_MouseMove"
-                              MouseLeftButtonUp="ProgressRow_MouseLeftButtonUp">
+                              MouseLeftButtonUp="ProgressRow_MouseLeftButtonUp"
+                              LostMouseCapture="ProgressRow_LostMouseCapture">
                             <ProgressBar x:Name="LyricProgressBar" Height="6" Background="#111111" Foreground="#55FF55" BorderThickness="1" BorderBrush="#333333" Minimum="0" Maximum="100" Value="0">
                                 <ProgressBar.Effect>
                                     <DropShadowEffect Color="#55FF55" BlurRadius="5" ShadowDepth="0"/>

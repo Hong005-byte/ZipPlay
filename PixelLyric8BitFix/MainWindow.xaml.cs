@@ -413,13 +413,14 @@ namespace PixelLyric8BitFix
             if (position > _totalDuration) position = _totalDuration;
             if (position < TimeSpan.Zero) position = TimeSpan.Zero;
 
-            TxtTime.Text = $"[{position.Minutes:D2}:{position.Seconds:D2} / {_totalDuration.Minutes:D2}:{_totalDuration.Seconds:D2}]";
             LyricProgressBar.Maximum = _totalDuration.TotalMilliseconds > 0 ? _totalDuration.TotalMilliseconds : 100;
 
-            // 拖动进度条的时候不要用播放位置覆盖进度条/图标——那是用户手上正在控制的东西，
-            // 覆盖了就会跟拖动手势打架（松手前进度条自己先跳回真实播放位置，很难看）
+            // 拖动进度条的时候不要用播放位置覆盖进度条/图标/时间文字——那些是用户手上正在控制、正在看的东西，
+            // 覆盖了就会跟拖动手势打架（时间文字按真实播放位置涨，进度条却停在拖动目标，两边对不上；
+            // 松手前进度条自己先跳回真实播放位置，很难看）。拖动时的时间文字由 UpdateSeekPreview 自己写。
             if (!_isDraggingSeek)
             {
+                TxtTime.Text = FormatPositionText(position, _totalDuration);
                 LyricProgressBar.Value = position.TotalMilliseconds;
                 UpdateSeekThumbPosition();
             }
