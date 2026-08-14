@@ -49,7 +49,7 @@ namespace PixelLyric8BitFix
 
     public sealed class CustomThemeAnimation
     {
-        public string? Type { get; set; }  // pulse / twinkle / drift / sway / spin / flicker
+        public string? Type { get; set; }  // pulse / twinkle / drift / fall / bob / sway / spin / flicker
         public double? Duration { get; set; } // 秒，不填就用每种招式自己的默认值
     }
 
@@ -59,7 +59,7 @@ namespace PixelLyric8BitFix
     /// </summary>
     public static class CustomThemeValidator
     {
-        public static readonly string[] ValidAnimationTypes = { "pulse", "twinkle", "drift", "sway", "spin", "flicker" };
+        public static readonly string[] ValidAnimationTypes = { "pulse", "twinkle", "drift", "fall", "bob", "sway", "spin", "flicker" };
 
         public static (CustomTheme? Theme, List<string> Errors) ParseAndValidate(string json)
         {

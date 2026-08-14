@@ -302,6 +302,13 @@
                 </Ellipse>
             </Canvas>
 
+            <!-- 樱花皮肤专属装饰：一棵樱花树立在右边，跟 Minecraft 那棵树同一个像素形状、换成粉白配色。
+                 花瓣飘落用的还是下面 SakuraOverlay 那一套（在卡片主体那层，不是这一层），
+                 树立在卡片顶部这条装饰行，花瓣从卡片顶部飘下来，视觉上就像是从这棵树上落下来的。 -->
+            <Canvas x:Name="SakuraDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
+                <Image x:Name="ImgSakuraTree" Width="36" Height="45" Canvas.Right="16" Canvas.Bottom="0" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+            </Canvas>
+
             <!-- 复古磁带机皮肤专属装饰：磁带壳里两个转动的卷盘，十字辐条打破旋转对称性，转动才看得出来 -->
             <Canvas x:Name="CassetteDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
                 <Border Width="70" Height="34" CornerRadius="4" Background="#3A2E22" BorderBrush="#8A6A4A" BorderThickness="1"
@@ -347,13 +354,38 @@
                 </Image>
             </Canvas>
 
-            <!-- 客制化主题的"单图标"动画专属（pulse / twinkle / sway / spin / flicker 都用这一个图标）：
-                 旋转和缩放共用同一个变换组，具体转多少度/晃多少度由代码按 animation.type 现场写 -->
+            <!-- 云朵漂浮皮肤专属装饰：一只热气球立在右边，跟樱花树/篝火那些是同一套"顶部装饰行 + 右侧图标"
+                 的做法，不再是嵌在云朵那层背景里飘——上下浮动用的是 bob 这个动作 -->
+            <Canvas x:Name="CloudDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
+                <Image x:Name="ImgBalloon" Width="24" Height="30" Canvas.Right="14" Canvas.Bottom="0" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor">
+                    <Image.RenderTransform>
+                        <TranslateTransform x:Name="BalloonBobTransform" Y="0"/>
+                    </Image.RenderTransform>
+                </Image>
+            </Canvas>
+
+            <!-- 海边黄昏皮肤专属装饰：一艘帆船立在右边，同样是"顶部装饰行 + 右侧图标"，上下浮动用 bob -->
+            <Canvas x:Name="SunsetDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
+                <Image x:Name="ImgSailboat" Width="26" Height="32" Canvas.Right="14" Canvas.Bottom="0" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor">
+                    <Image.RenderTransform>
+                        <TranslateTransform x:Name="SailboatBobTransform" Y="0"/>
+                    </Image.RenderTransform>
+                </Image>
+            </Canvas>
+
+            <!-- 客制化主题的"单图标"动画专属（pulse / twinkle / sway / spin / flicker / bob 都用这一个图标）：
+                 旋转和位移分开两个变换（TransformGroup 里各管各的），具体转多少度/摆多少/浮多高
+                 由代码按 animation.type 现场写 -->
             <Canvas x:Name="CustomIconDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
                 <Image x:Name="CustomIcon" Width="24" Height="24" Canvas.Right="14" Canvas.Bottom="2" Stretch="Uniform"
                        RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0.5,0.5">
                     <Image.RenderTransform>
-                        <RotateTransform x:Name="CustomIconRotate" Angle="0"/>
+                        <TransformGroup>
+                            <RotateTransform x:Name="CustomIconRotate" Angle="0"/>
+                            <TranslateTransform x:Name="CustomIconBob" Y="0"/>
+                        </TransformGroup>
                     </Image.RenderTransform>
                     <Image.Effect>
                         <DropShadowEffect x:Name="CustomIconGlow" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
@@ -734,52 +766,129 @@
                     </Canvas>
                 </Viewbox>
 
-                <!-- 内容层：所有皮肤共用，只是背景/文字颜色不同（由代码按皮肤设置） -->
+                <!-- 客制化"飘落型"动画专属（animation.type = fall）：同一张用户图标画三份，各自从卡片顶部
+                     往下飘落，飘到底瞬间重置回最上面，下落过程中叠加一点左右轻摆——跟内置的樱花/极光雪花
+                     那几个皮肤是同一套手法，只是这里图标是用户自己给的，不是写死的花瓣/雪花形状 -->
+                <Viewbox x:Name="CustomFallOverlay" Stretch="Fill" IsHitTestVisible="False" Visibility="Collapsed">
+                    <Canvas Width="300" Height="150" ClipToBounds="True">
+                        <Image x:Name="CustomFallIcon1" Width="20" Height="20" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Left="40">
+                            <Image.RenderTransform><TranslateTransform x:Name="CustomFall1Transform"/></Image.RenderTransform>
+                        </Image>
+                        <Image x:Name="CustomFallIcon2" Width="16" Height="16" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Left="150">
+                            <Image.RenderTransform><TranslateTransform x:Name="CustomFall2Transform"/></Image.RenderTransform>
+                        </Image>
+                        <Image x:Name="CustomFallIcon3" Width="18" Height="18" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Left="250">
+                            <Image.RenderTransform><TranslateTransform x:Name="CustomFall3Transform"/></Image.RenderTransform>
+                        </Image>
+                    </Canvas>
+                </Viewbox>
+
+                <!-- 内容层：所有皮肤共用，只是背景/文字颜色不同（由代码按皮肤设置）。
+                     右边多一列播放控制（上一首/播放暂停/下一首），跟标题/进度条/歌词那一大块并排，
+                     不是塞进某一行里——这样不管标准还是极简模式，这一列的可见性都能单独控制，
+                     不用跟着某一行的显隐被连带影响。 -->
                 <Grid Margin="12,6,12,12">
-                    <Grid.RowDefinitions>
-                        <RowDefinition x:Name="RowTitle" Height="Auto"/>
-                        <RowDefinition x:Name="RowProgress" Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
 
-                    <StackPanel x:Name="TitleRow" Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center">
-                        <TextBlock x:Name="TxtSongTitle" Text="LOADING..." FontFamily="Lucida Console" Foreground="#FFFFFF" FontSize="15" FontWeight="Bold"/>
-                        <TextBlock x:Name="TxtArtist" Text=" - ARTIST" FontFamily="Lucida Console" Foreground="#DDD" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="TxtTime" Text="[00:00 / 00:00]" FontFamily="Lucida Console" Foreground="#DDD" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                    </StackPanel>
+                    <Grid Grid.Column="0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition x:Name="RowTitle" Height="Auto"/>
+                            <RowDefinition x:Name="RowProgress" Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
 
-                    <Grid x:Name="ProgressRow" Grid.Row="1" Margin="0,6,0,6">
-                        <ProgressBar x:Name="LyricProgressBar" Height="6" Background="#111111" Foreground="#55FF55" BorderThickness="1" BorderBrush="#333333" Minimum="0" Maximum="100" Value="0">
-                            <ProgressBar.Effect>
-                                <DropShadowEffect Color="#55FF55" BlurRadius="5" ShadowDepth="0"/>
-                            </ProgressBar.Effect>
-                        </ProgressBar>
+                        <StackPanel x:Name="TitleRow" Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center">
+                            <TextBlock x:Name="TxtSongTitle" Text="LOADING..." FontFamily="Lucida Console" Foreground="#FFFFFF" FontSize="15" FontWeight="Bold"/>
+                            <TextBlock x:Name="TxtArtist" Text=" - ARTIST" FontFamily="Lucida Console" Foreground="#DDD" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="TxtTime" Text="[00:00 / 00:00]" FontFamily="Lucida Console" Foreground="#DDD" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+
+                        <!-- 进度条 + 可拖拽的进度图标：图标本体是当前皮肤的那个小图标（跟 Mini 小方块用的是
+                             同一张），不是普通的滑块把手。点哪就跳到哪、拖着放手也会跳，拖动过程中先在本地
+                             立刻挪动（不等系统播放源确认，减少"跳过去又跳回来"的观感），松手才真的发命令
+                             给播放源。鼠标事件挂在 ProgressRow 这个 Grid 本身上，点击区域是整条进度条，
+                             不用精确点在小图标上。具体逻辑见 MainWindow.PlaybackControls.cs 里的
+                             ProgressRow_MouseLeftButtonDown/MouseMove/MouseLeftButtonUp。 -->
+                        <Grid x:Name="ProgressRow" Grid.Row="1" Margin="0,6,0,6" Cursor="Hand"
+                              MouseLeftButtonDown="ProgressRow_MouseLeftButtonDown"
+                              MouseMove="ProgressRow_MouseMove"
+                              MouseLeftButtonUp="ProgressRow_MouseLeftButtonUp">
+                            <ProgressBar x:Name="LyricProgressBar" Height="6" Background="#111111" Foreground="#55FF55" BorderThickness="1" BorderBrush="#333333" Minimum="0" Maximum="100" Value="0">
+                                <ProgressBar.Effect>
+                                    <DropShadowEffect Color="#55FF55" BlurRadius="5" ShadowDepth="0"/>
+                                </ProgressBar.Effect>
+                            </ProgressBar>
+                            <Canvas x:Name="SeekThumbCanvas" Height="14" VerticalAlignment="Center" IsHitTestVisible="False">
+                                <Image x:Name="SeekThumbIcon" Width="14" Height="14" Stretch="Uniform"
+                                       RenderOptions.BitmapScalingMode="NearestNeighbor" Visibility="Collapsed"/>
+                            </Canvas>
+                        </Grid>
+
+                        <Border x:Name="LyricBox" Grid.Row="2" Background="#D9111111" BorderBrush="#222222" BorderThickness="2" Padding="8,4,8,4"
+                                ToolTip="歌词跟不上？在这上面滚一下滚轮微调（每格 50ms）" MouseWheel="LyricBox_MouseWheel">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock x:Name="TxtDynamicLyric"
+                                           Text="📡 LINKING SPICETIFY..."
+                                           FontFamily="Lucida Console"
+                                           Foreground="#FFFF55"
+                                           FontSize="14"
+                                           TextWrapping="Wrap"
+                                           TextAlignment="Center"
+                                           HorizontalAlignment="Center"/>
+                                <!-- 双语歌词的翻译行：只有网易云引擎抓到翻译、且设置里开着双语开关时才会有内容/可见，
+                                     平时（没翻译/开关关了）折叠掉，不占位置 -->
+                                <TextBlock x:Name="TxtTranslationLyric"
+                                           Text=""
+                                           Visibility="Collapsed"
+                                           FontFamily="Lucida Console"
+                                           Foreground="#AAFFFF88"
+                                           TextWrapping="Wrap"
+                                           TextAlignment="Center"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,3,0,0"/>
+                            </StackPanel>
+                        </Border>
                     </Grid>
 
-                    <Border x:Name="LyricBox" Grid.Row="2" Background="#D9111111" BorderBrush="#222222" BorderThickness="2" Padding="8,4,8,4"
-                            ToolTip="歌词跟不上？在这上面滚一下滚轮微调（每格 50ms）" MouseWheel="LyricBox_MouseWheel">
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock x:Name="TxtDynamicLyric"
-                                       Text="📡 LINKING SPICETIFY..."
-                                       FontFamily="Lucida Console"
-                                       Foreground="#FFFF55"
-                                       FontSize="14"
-                                       TextWrapping="Wrap"
-                                       TextAlignment="Center"
-                                       HorizontalAlignment="Center"/>
-                            <!-- 双语歌词的翻译行：只有网易云引擎抓到翻译、且设置里开着双语开关时才会有内容/可见，
-                                 平时（没翻译/开关关了）折叠掉，不占位置 -->
-                            <TextBlock x:Name="TxtTranslationLyric"
-                                       Text=""
-                                       Visibility="Collapsed"
-                                       FontFamily="Lucida Console"
-                                       Foreground="#AAFFFF88"
-                                       TextWrapping="Wrap"
-                                       TextAlignment="Center"
-                                       HorizontalAlignment="Center"
-                                       Margin="0,3,0,0"/>
-                        </StackPanel>
-                    </Border>
+                    <!-- 播放控制：上一首 / 播放-暂停 / 下一首，从上到下竖排在右侧。图标颜色跟着皮肤的
+                         强调色走（在 ApplySkinPalette 里设置），按钮底色固定用半透明黑，不管强调色是
+                         深是浅、皮肤背景是深是浅，图标都能看清。极简模式下这一列整体隐藏（见 ApplyDisplayMode）。
+                         播放/暂停按钮的图标（三角形/双竖条）跟真实播放状态走，不是个死图标，见 UpdatePlayPauseIcon。
+                         不是每个播放源都实现了全部命令（比如不少浏览器标签页只支持暂停、不支持跳歌），
+                         点了没反应就是那个命令被拒绝了，不代表按钮坏了。 -->
+                    <StackPanel x:Name="PlaybackControlsPanel" Grid.Column="1" Orientation="Vertical"
+                                VerticalAlignment="Center" Margin="10,0,0,0">
+                        <Border x:Name="BtnPrevTrack" Width="26" Height="26" CornerRadius="13"
+                                Background="#33000000" Cursor="Hand" ToolTip="上一首"
+                                MouseLeftButtonDown="BtnPrevTrack_MouseLeftButtonDown">
+                            <Canvas Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Rectangle x:Name="PrevIconBar" Width="2" Height="14" Fill="White"/>
+                                <Polygon x:Name="PrevIconTriangle" Points="14,1 3,7 14,13" Fill="White"/>
+                            </Canvas>
+                        </Border>
+
+                        <Border x:Name="BtnPlayPause" Width="30" Height="30" CornerRadius="15" Margin="0,8,0,8"
+                                Background="#33000000" Cursor="Hand" ToolTip="播放 / 暂停"
+                                MouseLeftButtonDown="BtnPlayPause_MouseLeftButtonDown">
+                            <Canvas Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Polygon x:Name="PlayIcon" Points="2,1 15,8 2,15" Fill="White"/>
+                                <Rectangle x:Name="PauseIconBar1" Width="4" Height="15" Canvas.Left="1.5" Canvas.Top="0.5" Fill="White" Visibility="Collapsed"/>
+                                <Rectangle x:Name="PauseIconBar2" Width="4" Height="15" Canvas.Left="10.5" Canvas.Top="0.5" Fill="White" Visibility="Collapsed"/>
+                            </Canvas>
+                        </Border>
+
+                        <Border x:Name="BtnNextTrack" Width="26" Height="26" CornerRadius="13"
+                                Background="#33000000" Cursor="Hand" ToolTip="下一首"
+                                MouseLeftButtonDown="BtnNextTrack_MouseLeftButtonDown">
+                            <Canvas Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Polygon x:Name="NextIconTriangle" Points="0,1 11,7 0,13" Fill="White"/>
+                                <Rectangle x:Name="NextIconBar" Width="2" Height="14" Canvas.Left="12" Fill="White"/>
+                            </Canvas>
+                        </Border>
+                    </StackPanel>
                 </Grid>
 
                 <!-- CRT 皮肤专属：扫描线叠加层，铺在最上面，不拦截鼠标事件 -->

@@ -105,9 +105,12 @@ namespace PixelLyric8BitFix
             VinylDecorCanvas.Visibility = Visibility.Collapsed;
             LofiDecorCanvas.Visibility = Visibility.Collapsed;
             CampfireDecorCanvas.Visibility = Visibility.Collapsed;
+            SakuraDecorCanvas.Visibility = Visibility.Collapsed;
             CassetteDecorCanvas.Visibility = Visibility.Collapsed;
             CandleDecorCanvas.Visibility = Visibility.Collapsed;
             PlantDecorCanvas.Visibility = Visibility.Collapsed;
+            CloudDecorCanvas.Visibility = Visibility.Collapsed;
+            SunsetDecorCanvas.Visibility = Visibility.Collapsed;
             CustomIconDecorCanvas.Visibility = Visibility.Collapsed;
             AuroraSnowOverlay.Visibility = Visibility.Collapsed;
             RainOverlay.Visibility = Visibility.Collapsed;
@@ -117,6 +120,7 @@ namespace PixelLyric8BitFix
             CloudOverlay.Visibility = Visibility.Collapsed;
             SunsetOverlay.Visibility = Visibility.Collapsed;
             CustomDriftOverlay.Visibility = Visibility.Collapsed;
+            CustomFallOverlay.Visibility = Visibility.Collapsed;
 
             // 只有需要顶部那条装饰行的皮肤才留出这一行，其余皮肤更简洁，不留空行；
             // 云朵/海边黄昏的装饰是铺满整个卡片的天空/海面，不是角落小图标，所以不用占这一行；
@@ -124,7 +128,8 @@ namespace PixelLyric8BitFix
             RowDecor.Height = (skin == PlayerSkin.Minecraft || skin == PlayerSkin.Vinyl ||
                                 skin == PlayerSkin.Lofi || skin == PlayerSkin.Campfire ||
                                 skin == PlayerSkin.Cassette || skin == PlayerSkin.Candle ||
-                                skin == PlayerSkin.Plant)
+                                skin == PlayerSkin.Plant || skin == PlayerSkin.Sakura ||
+                                skin == PlayerSkin.Cloud || skin == PlayerSkin.Sunset)
                 ? new GridLength(50) : new GridLength(0);
 
             switch (skin)
@@ -188,6 +193,8 @@ namespace PixelLyric8BitFix
                 case PlayerSkin.Sakura:
                     SakuraSkinBg.Visibility = Visibility.Visible;
                     SakuraOverlay.Visibility = Visibility.Visible;
+                    SakuraDecorCanvas.Visibility = Visibility.Visible;
+                    ImgSakuraTree.Source = PixelArt.CreateSakuraTree();
                     break;
 
                 case PlayerSkin.Cassette:
@@ -198,6 +205,9 @@ namespace PixelLyric8BitFix
                 case PlayerSkin.Cloud:
                     CloudSkinBg.Visibility = Visibility.Visible;
                     CloudOverlay.Visibility = Visibility.Visible;
+                    CloudDecorCanvas.Visibility = Visibility.Visible;
+                    ImgBalloon.Source = PixelArt.CreateHotAirBalloon();
+                    StartBobAnimation(BalloonBobTransform, 3.2, 4);
                     break;
 
                 case PlayerSkin.Candle:
@@ -215,6 +225,9 @@ namespace PixelLyric8BitFix
                 case PlayerSkin.Sunset:
                     SunsetSkinBg.Visibility = Visibility.Visible;
                     SunsetOverlay.Visibility = Visibility.Visible;
+                    SunsetDecorCanvas.Visibility = Visibility.Visible;
+                    ImgSailboat.Source = PixelArt.CreateSailboat();
+                    StartBobAnimation(SailboatBobTransform, 2.6, 3);
                     break;
 
                 case PlayerSkin.Custom:
@@ -293,6 +306,17 @@ namespace PixelLyric8BitFix
                 StartCustomDriftAnimation(CustomDrift2Transform, (customDuration ?? 14) * 1.35, 2);
                 StartCustomDriftAnimation(CustomDrift3Transform, (customDuration ?? 14) * 1.7, 5);
             }
+            else if (animType == "fall")
+            {
+                RowDecor.Height = new GridLength(0);
+                CustomFallOverlay.Visibility = Visibility.Visible;
+                CustomFallIcon1.Source = iconBitmap;
+                CustomFallIcon2.Source = iconBitmap;
+                CustomFallIcon3.Source = iconBitmap;
+                StartCustomFallAnimation(CustomFall1Transform, customDuration ?? 6, 0, -6, 8);
+                StartCustomFallAnimation(CustomFall2Transform, (customDuration ?? 6) * 1.3, 1.5, 4, -10);
+                StartCustomFallAnimation(CustomFall3Transform, (customDuration ?? 6) * 1.6, 3, -8, 6);
+            }
             else
             {
                 RowDecor.Height = new GridLength(50);
@@ -315,6 +339,49 @@ namespace PixelLyric8BitFix
                 RepeatBehavior = RepeatBehavior.Forever,
             };
             transform.BeginAnimation(TranslateTransform.XProperty, anim);
+        }
+
+        // "飘落型"：同一个图标从卡片顶部飘到底部，飘到头瞬间重置回最上面，叠加一点左右轻摆（比纯直线
+        // 下落更自然）——跟内置的樱花/极光雪花那几个皮肤是同一套手法。摇摆的时长故意比下落短很多
+        // （下落时长的 1/3.5），来回摆好几下才落地一次，摆动感才看得出来，不会显得像在匀速平移。
+        private void StartCustomFallAnimation(TranslateTransform transform, double durationSeconds, double beginDelaySeconds, double swayFrom, double swayTo)
+        {
+            double fallSeconds = SafeDuration(durationSeconds, 6);
+
+            var fallAnim = new DoubleAnimation
+            {
+                From = -20,
+                To = 170,
+                Duration = TimeSpan.FromSeconds(fallSeconds),
+                BeginTime = TimeSpan.FromSeconds(beginDelaySeconds),
+                RepeatBehavior = RepeatBehavior.Forever,
+            };
+            transform.BeginAnimation(TranslateTransform.YProperty, fallAnim);
+
+            var swayAnim = new DoubleAnimation
+            {
+                From = swayFrom,
+                To = swayTo,
+                Duration = TimeSpan.FromSeconds(fallSeconds / 3.5),
+                BeginTime = TimeSpan.FromSeconds(beginDelaySeconds),
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+            };
+            transform.BeginAnimation(TranslateTransform.XProperty, swayAnim);
+        }
+
+        // "浮动型"（bob）：纯粹的位置上下浮动，缓入缓出——跟 sway（绕轴心转角度摆动）是两个不同的动作。
+        // 海边黄昏的帆船停在海面上、云朵漂浮的热气球飘在天上，都用这同一个方法，只是幅度/时长不同；
+        // 这个动作也加进了客制化主题的第 8 种可选招式，见 StartCustomIconAnimation 里的 "bob" 分支。
+        private void StartBobAnimation(TranslateTransform transform, double durationSeconds, double amplitude)
+        {
+            var anim = new DoubleAnimation(-amplitude, amplitude, TimeSpan.FromSeconds(SafeDuration(durationSeconds, 3)))
+            {
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+            };
+            transform.BeginAnimation(TranslateTransform.YProperty, anim);
         }
 
         // CustomThemeValidator 已经要求 duration 必须 > 0，但这里再兜底一层：万一是加校验之前存的老文件
@@ -377,6 +444,10 @@ namespace PixelLyric8BitFix
                         CustomIconGlow.BeginAnimation(DropShadowEffect.OpacityProperty, frames);
                         break;
                     }
+                case "bob": // 上下轻轻浮动，跟海边黄昏的帆船、云朵漂浮的热气球同一套手法——纯位置浮动，
+                            // 不是旋转摆动（那是 sway），振幅比内置那两个稍大一点，客制化图标通常比装饰物更显眼一些
+                    StartBobAnimation(CustomIconBob, customDuration ?? 3, 5);
+                    break;
             }
         }
 
@@ -423,6 +494,21 @@ namespace PixelLyric8BitFix
             _lastKaraokeSungChars = -1;
 
             UpdateKaraokeToggleIcon();
+
+            // 播放控制那三个图标（上一首/播放-暂停/下一首）用皮肤的强调色，跟进度条同一个颜色，
+            // 视觉上是一组的；按钮底色是固定的半透明黑，不跟着变，保证图标颜色深浅都看得清
+            var playbackIconBrush = new SolidColorBrush(t.Accent);
+            PrevIconBar.Fill = playbackIconBrush;
+            PrevIconTriangle.Fill = playbackIconBrush;
+            PlayIcon.Fill = playbackIconBrush;
+            PauseIconBar1.Fill = playbackIconBrush;
+            PauseIconBar2.Fill = playbackIconBrush;
+            NextIconTriangle.Fill = playbackIconBrush;
+            NextIconBar.Fill = playbackIconBrush;
+
+            // 进度条上那个可拖拽的图标，用的是跟 Mini 小方块同一张皮肤图标——同一个视觉符号
+            // 在两个地方（Mini 小方块、进度条拖拽点）都出现，"这是当前这套皮肤的标志物"这件事更一致
+            SeekThumbIcon.Source = t.MiniIcon();
         }
 
         // Steve 来回走：范围按窗口实际宽度算，不再是写死的 20~420（小尺寸会走出界，大尺寸又用不满）
@@ -466,6 +552,9 @@ namespace PixelLyric8BitFix
             ProgressRow.Visibility = minimal ? Visibility.Collapsed : Visibility.Visible;
             RowTitle.Height = minimal ? new GridLength(0) : GridLength.Auto;
             RowProgress.Height = minimal ? new GridLength(0) : GridLength.Auto;
+
+            // 极简模式就是"什么都不要，只看歌词"，播放控制这一列也跟着收起来
+            PlaybackControlsPanel.Visibility = minimal ? Visibility.Collapsed : Visibility.Visible;
         }
     }
 }

@@ -69,6 +69,10 @@ namespace PixelLyric8BitFix
         private int _lyricOffsetMs;
         private DispatcherTimer? _syncBadgeHideTimer;
 
+        // ── 进度条拖拽跳转：拖动中这个是 true，SmoothTimer_Tick 那边就不再用播放位置覆盖进度图标的位置，
+        // 不然会跟用户的拖动手势打架，见 MainWindow.PlaybackControls.cs ──
+        private bool _isDraggingSeek;
+
         // ── 卡拉OK扫光效果：按行内估算进度，两种颜色的 Run 拼出"已唱/未唱"；左上角有开关，关了就整行切换 ──
         private int _lastKaraokeLineIndex = -1;
         private int _lastKaraokeSungChars = -1;
@@ -390,6 +394,7 @@ namespace PixelLyric8BitFix
                     _totalDuration = duration > TimeSpan.Zero ? duration : TimeSpan.Zero;
                     _isPlaying = playback?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
                     _playbackRate = (playback?.PlaybackRate is double r && r > 0) ? r : 1.0;
+                    UpdatePlayPauseIcon();
                 });
             }
             catch { }
@@ -410,7 +415,14 @@ namespace PixelLyric8BitFix
 
             TxtTime.Text = $"[{position.Minutes:D2}:{position.Seconds:D2} / {_totalDuration.Minutes:D2}:{_totalDuration.Seconds:D2}]";
             LyricProgressBar.Maximum = _totalDuration.TotalMilliseconds > 0 ? _totalDuration.TotalMilliseconds : 100;
-            LyricProgressBar.Value = position.TotalMilliseconds;
+
+            // 拖动进度条的时候不要用播放位置覆盖进度条/图标——那是用户手上正在控制的东西，
+            // 覆盖了就会跟拖动手势打架（松手前进度条自己先跳回真实播放位置，很难看）
+            if (!_isDraggingSeek)
+            {
+                LyricProgressBar.Value = position.TotalMilliseconds;
+                UpdateSeekThumbPosition();
+            }
 
             // + _lyricOffsetMs：用户在歌词框上滚轮调过的手动矫正量，正数让歌词提前显示
             UpdateLyricDisplay((int)position.TotalMilliseconds + _lyricOffsetMs);

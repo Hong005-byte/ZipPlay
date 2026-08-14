@@ -255,6 +255,92 @@ namespace PixelLyric8BitFix
             return Build(rows, palette);
         }
 
+        // 樱花皮肤专属：跟 CreateTree() 同一个树形轮廓（复用同一套已经调好看的形状），
+        // 只是把绿色树叶换成粉白樱花，配色跟这套皮肤别的地方（花瓣、边框）保持一致
+        public static BitmapSource CreateSakuraTree()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['P'] = Color.FromRgb(0xF7, 0xA8, 0xC4), // 樱花（亮），跟花瓣飘落用的同一个颜色
+                ['p'] = Color.FromRgb(0xD9, 0x88, 0xAE), // 樱花（暗，增加纹理）
+                ['T'] = Color.FromRgb(0x5A, 0x3C, 0x22), // 树干（暗）
+                ['t'] = Color.FromRgb(0x7A, 0x52, 0x30), // 树干（亮）
+            };
+
+            string[] rows =
+            {
+                "..PpPP..",
+                ".PPppPP.",
+                "PpPPPPpP",
+                "PPppPPPP",
+                ".PPPppP.",
+                "..PpPP..",
+                "...TT...",
+                "...tT...",
+                "...Tt...",
+                "........",
+            };
+
+            return Build(rows, palette);
+        }
+
+        // 海边黄昏皮肤专属：一艘小帆船的剪影，停在海平面上，帆的颜色用的是这套皮肤边框同一个暖橙色
+        public static BitmapSource CreateSailboat()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['S'] = Color.FromRgb(0xF9, 0xC7, 0x84), // 帆（亮），跟 SunsetSkinBg 边框同一个暖橙色
+                ['s'] = Color.FromRgb(0xE0, 0xA0, 0x5C), // 帆（暗，增加纹理）
+                ['H'] = Color.FromRgb(0x2A, 0x1F, 0x3D), // 船身，深色剪影，衬在暮色天空前才有"逆光剪影"的感觉
+            };
+
+            string[] rows =
+            {
+                "........",
+                "...S....",
+                "..SS....",
+                ".SsS....",
+                "SSsS....",
+                "..s.....",
+                ".HHHHH..",
+                "HHHHHHH.",
+                "........",
+                "........",
+            };
+
+            return Build(rows, palette);
+        }
+
+        // 云朵漂浮皮肤专属：一只热气球，暖色调（红/橙）跟浅蓝天空背景形成对比，一眼能看清
+        public static BitmapSource CreateHotAirBalloon()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['R'] = Color.FromRgb(0xE0, 0x6B, 0x4A), // 气球（亮）
+                ['r'] = Color.FromRgb(0xB8, 0x4A, 0x30), // 气球（暗，增加纹理）
+                ['B'] = Color.FromRgb(0x5A, 0x3C, 0x22), // 吊篮 + 连接绳
+            };
+
+            string[] rows =
+            {
+                "..RRRR..",
+                ".RRrrRR.",
+                "RRrRRrRR",
+                "RRRrrRRR",
+                ".RRrrRR.",
+                "..RRRR..",
+                "...BB...",
+                "...BB...",
+                "........",
+                "........",
+            };
+
+            return Build(rows, palette);
+        }
+
         public static BitmapSource CreateDirtTile()
         {
             var palette = new Dictionary<char, Color>

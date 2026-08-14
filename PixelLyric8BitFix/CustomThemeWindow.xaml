@@ -45,7 +45,7 @@
                 <TextBlock Foreground="#BBBBBB" FontSize="11" TextWrapping="Wrap">
                     每个主题是一份 JSON：name(名字) / font(字体) / colors(各处文字颜色) /
                     background(背景，纯色 solid 或渐变 gradient) / icon(8x8 像素图标，字符网格 + 调色板) /
-                    animation(动画招式，六选一：pulse 呼吸发光、twinkle 渐隐渐现、drift 飘过、sway 摇摆、spin 旋转、flicker 不规则闪烁)。
+                    animation(动画招式，八选一：pulse 呼吸发光、twinkle 渐隐渐现、drift 飘过、fall 飘落、bob 上下浮动、sway 摇摆、spin 旋转、flicker 不规则闪烁)。
                     颜色格式是 #RRGGBB 或带透明度的 #AARRGGBB。下面是一份完整示例，照着改就行：
                 </TextBlock>
 
