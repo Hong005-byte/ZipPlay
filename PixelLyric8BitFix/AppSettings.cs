@@ -24,6 +24,13 @@ namespace PixelLyric8BitFix
         Plant,      // 绿植角落风
         Sunset,     // 海边黄昏风
         Custom,     // 客制化主题：具体长什么样由 AppSettings.CustomThemeFile 指向的那份 JSON 决定
+
+        // Arcade 加在最后面、不是插进中间——这个枚举的序号会被序列化成 settings.json 里的整数存起来，
+        // 插进中间会让 Custom 和它后面的值序号全部往后挪一位，导致所有已经装过旧版本的用户，
+        // 存档里的皮肤选择在升级后全部错位（比如原本存的是"客制化"，升级后一读出来变成了别的皮肤）。
+        Arcade,     // 复古街机风
+        Invaders,   // 8-bit 太空侵略者风（同样加在最后面，理由同上）
+        City,       // 城市夜景/地铁风
     }
 
     public enum PlayerSize
@@ -109,8 +116,19 @@ namespace PixelLyric8BitFix
         /// </summary>
         public bool MiniVisualizerEnabled { get; set; } = true;
 
-        /// <summary>律动灵敏度档位，默认中。见 AudioVisualizer.ApplySensitivity 具体每档改了哪几个参数。</summary>
+        /// <summary>律动灵敏度档位，默认中。见 AudioVisualizer.ApplySensitivity 具体每档改了哪几个参数。
+        /// Mini 模式的像素粒子、下面这个"皮肤音乐律动"共用同一档灵敏度——都是同一份音频分析出来的数据，
+        /// 没必要让用户分两个地方各调一次。</summary>
         public VisualizerSensitivity VisualizerSensitivity { get; set; } = VisualizerSensitivity.Medium;
+
+        /// <summary>
+        /// "皮肤跟着音乐动"总开关：绝大多数内置皮肤（只有 lofi、烛光冥想两套刻意保持安静，不接入），
+        /// 加上勾了 musicReactive 的客制化主题，会跟着系统正在播的音乐响度/节奏实时变化（变速/闪光/
+        /// 跳一下/抖一下/晃一下，具体动作因皮肤而异，见 MainWindow.SkinInteractions.cs），不再是固定
+        /// 周期的循环。用的是跟 Mini 模式同一个 AudioVisualizer，同样是纯本地 WASAPI 回环采集，不联网、
+        /// 不录制、不保存音频；默认开启，关掉之后这些皮肤的动画退回固定节奏循环，且不会启动音频采集。
+        /// </summary>
+        public bool SkinAudioReactiveEnabled { get; set; } = true;
 
         private static string ConfigPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),

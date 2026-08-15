@@ -175,6 +175,37 @@ namespace PixelLyric8BitFix
                 MiniBg = Color.FromRgb(0xEA, 0x70, 0x93), MiniBorder = Color.FromRgb(0xF9, 0xC7, 0x84), MiniIcon = PixelArt.CreateSunsetIcon,
             },
 
+            // 金黄色招牌/按钮配深紫黑柜体，跟赛博朋克那套的青/品红故意区分开，
+            // 不然两套都是"暗色背景+霓虹发光"，放一起会显得像同一套皮肤的变体
+            PlayerSkin.Arcade => new SkinTheme
+            {
+                Font = new FontFamily("Consolas"),
+                Title = Colors.White, Artist = Color.FromRgb(0xC9, 0xA8, 0xE8), Accent = Color.FromRgb(0xFF, 0xC9, 0x3A),
+                Lyric = Color.FromRgb(0xFF, 0xC9, 0x3A), Glow = Color.FromRgb(0xFF, 0xC9, 0x3A), GlowBlur = 8,
+                LyricBoxBg = Color.FromArgb(0xCC, 0x14, 0x0C, 0x1C), LyricBoxBorder = Color.FromRgb(0xFF, 0xC9, 0x3A),
+                MiniBg = Color.FromRgb(0x24, 0x18, 0x32), MiniBorder = Color.FromRgb(0xFF, 0xC9, 0x3A), MiniIcon = PixelArt.CreateJoystickIcon,
+            },
+
+            // 荧光青柠绿配深蓝黑背景，跟 CRT 那套的纯绿、极光雪夜的冷蓝故意错开一点色相
+            PlayerSkin.Invaders => new SkinTheme
+            {
+                Font = new FontFamily("Consolas"),
+                Title = Colors.White, Artist = Color.FromRgb(0x8A, 0xB8, 0x9E), Accent = Color.FromRgb(0xAE, 0xFF, 0x3A),
+                Lyric = Color.FromRgb(0xAE, 0xFF, 0x3A), Glow = Color.FromRgb(0xAE, 0xFF, 0x3A), GlowBlur = 6,
+                LyricBoxBg = Color.FromArgb(0xCC, 0x0A, 0x05, 0x18), LyricBoxBorder = Color.FromRgb(0xAE, 0xFF, 0x3A),
+                MiniBg = Color.FromRgb(0x0A, 0x05, 0x18), MiniBorder = Color.FromRgb(0xAE, 0xFF, 0x3A), MiniIcon = PixelArt.CreateInvader,
+            },
+
+            // 暖黄车灯配冷紫夜色，都市夜景的"暖光源 + 冷背景"是这套皮肤的核心配色逻辑
+            PlayerSkin.City => new SkinTheme
+            {
+                Font = new FontFamily("Segoe UI"),
+                Title = Colors.White, Artist = Color.FromRgb(0xB8, 0xA8, 0xC8), Accent = Color.FromRgb(0xFF, 0xA9, 0x4A),
+                Lyric = Color.FromRgb(0xFF, 0xE0, 0xC0), Glow = Color.FromRgb(0xFF, 0xA9, 0x4A), GlowBlur = 5,
+                LyricBoxBg = Color.FromArgb(0xCC, 0x16, 0x10, 0x1F), LyricBoxBorder = Color.FromRgb(0xFF, 0xA9, 0x4A),
+                MiniBg = Color.FromRgb(0x16, 0x10, 0x1F), MiniBorder = Color.FromRgb(0xFF, 0xA9, 0x4A), MiniIcon = PixelArt.CreateTrain,
+            },
+
             _ => new SkinTheme // Minecraft（默认）
             {
                 Font = new FontFamily("Lucida Console"),

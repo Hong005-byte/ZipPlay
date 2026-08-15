@@ -51,6 +51,12 @@ namespace PixelLyric8BitFix
     {
         public string? Type { get; set; }  // pulse / twinkle / drift / fall / bob / sway / spin / flicker
         public double? Duration { get; set; } // 秒，不填就用每种招式自己的默认值
+
+        // 可选，不填默认 false。true 的话，不管上面 Type 选的是 8 种招式里的哪一种，这个动画的播放速度
+        // 都会跟着系统正在播的音乐响度/鼓点实时变化——跟内置皮肤（黑胶转速、Minecraft 走路变速……）
+        // 用的是同一套机制，见 MainWindow.SkinInteractions.cs 的 UpdateMusicReactiveSkin。
+        // 受设置页"皮肤音乐律动"这个总开关控制，那个开关关了的话这里勾了也不会生效。
+        public bool MusicReactive { get; set; }
     }
 
     /// <summary>

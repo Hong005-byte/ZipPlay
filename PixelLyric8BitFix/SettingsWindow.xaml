@@ -343,6 +343,45 @@
                         <TextBlock Text="🌊 海边黄昏" Style="{StaticResource SkinCardLabelStyle}"/>
                     </RadioButton>
 
+                    <RadioButton Style="{StaticResource SkinCardStyle}" GroupName="Skin" Tag="Arcade">
+                        <RadioButton.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#1E1030" Offset="0"/>
+                                <GradientStop Color="#0D0818" Offset="1"/>
+                            </LinearGradientBrush>
+                        </RadioButton.Background>
+                        <RadioButton.BorderBrush>
+                            <SolidColorBrush Color="#FFC93A"/>
+                        </RadioButton.BorderBrush>
+                        <TextBlock Text="🕹️ 复古街机" Style="{StaticResource SkinCardLabelStyle}"/>
+                    </RadioButton>
+
+                    <RadioButton Style="{StaticResource SkinCardStyle}" GroupName="Skin" Tag="Invaders">
+                        <RadioButton.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#0A0518" Offset="0"/>
+                                <GradientStop Color="#05030D" Offset="1"/>
+                            </LinearGradientBrush>
+                        </RadioButton.Background>
+                        <RadioButton.BorderBrush>
+                            <SolidColorBrush Color="#AEFF3A"/>
+                        </RadioButton.BorderBrush>
+                        <TextBlock Text="👾 太空侵略者" Style="{StaticResource SkinCardLabelStyle}"/>
+                    </RadioButton>
+
+                    <RadioButton Style="{StaticResource SkinCardStyle}" GroupName="Skin" Tag="City">
+                        <RadioButton.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#16101F" Offset="0"/>
+                                <GradientStop Color="#0A0712" Offset="1"/>
+                            </LinearGradientBrush>
+                        </RadioButton.Background>
+                        <RadioButton.BorderBrush>
+                            <SolidColorBrush Color="#FFA94A"/>
+                        </RadioButton.BorderBrush>
+                        <TextBlock Text="🚇 城市夜景" Style="{StaticResource SkinCardLabelStyle}"/>
+                    </RadioButton>
+
                 </WrapPanel>
 
                 <Button x:Name="BtnManageCustomThemes" Content="🎨 自定义主题…" Click="BtnManageCustomThemes_Click"
@@ -379,6 +418,12 @@
                 </StackPanel>
                 <TextBlock Text="每个人电脑的系统音量、常听的音乐类型都不一样，觉得粒子太安静/太吵可以自己调这一档。"
                            Foreground="#777777" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
+
+                <TextBlock Text="皮肤音乐律动" Style="{StaticResource SectionHeader}"/>
+                <CheckBox x:Name="ChkSkinAudioReactiveEnabled" Content="开启（支持的皮肤会跟着音乐变速/变化，具体动作因皮肤而异）"
+                          Foreground="#CCCCCC" FontSize="11" IsChecked="True"/>
+                <TextBlock Text="绝大多数皮肤都支持，加上勾了「跟着音乐律动」的客制化主题；只有 lofi、烛光冥想这两套刻意保持安静，不受这个开关影响。用的是跟上面 Mini 模式同一份音频分析（同一档灵敏度），纯本地，不联网、不录制。关掉之后这些皮肤的动画退回固定节奏循环。"
+                           Foreground="#777777" FontSize="10" TextWrapping="Wrap" Margin="0,2,0,0"/>
 
                 <TextBlock Text="想改皮肤不用重启程序：主播放器窗口里右键 →「更改皮肤 / 设置」随时能回到这一页。"
                            Foreground="#777777" FontSize="10" TextWrapping="Wrap" Margin="0,14,0,0"/>

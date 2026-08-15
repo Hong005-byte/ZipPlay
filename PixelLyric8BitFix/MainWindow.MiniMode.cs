@@ -88,12 +88,18 @@ namespace PixelLyric8BitFix
             SyncAudioVisualizerState();
         }
 
-        // 只有"设置页开着这个功能 且 处于 Mini 状态 且 窗口没被隐藏到托盘"这三个条件同时满足
-        // 才值得抓音频/算 FFT，缺一个都该停——省资源，跟这个 app 别的地方（SMTC 那套锚点插值、
-        // 抓词的短超时）一个思路；设置页把开关关掉的话，Mini 模式下压根不会启动系统音频采集
+        // 现在有两个可能想要音频数据的消费者：Mini 模式的像素粒子、皮肤音乐律动（黑胶/磁带机/篝火/
+        // Minecraft/星空/雨夜/极光雪夜/樱花/CRT/赛博朋克 + 客制化主题，见 MainWindow.SkinInteractions.cs）。
+        // 只要其中一个的开关开着、且各自要求的状态满足，加上窗口没被隐藏到托盘，就该抓；两个都不需要
+        // 的时候才停——省资源，跟这个 app 别的地方（SMTC 那套锚点插值、抓词的短超时）一个思路。
+        // 两个开关都关掉的话压根不会启动系统音频采集。
         private void SyncAudioVisualizerState()
         {
-            if (_settings.MiniVisualizerEnabled && _isMiniMode && IsVisible) _audioVisualizer.Start();
+            bool miniVisualizerWantsAudio = _settings.MiniVisualizerEnabled && _isMiniMode;
+            bool skinReactiveWantsAudio = _isMusicReactiveSkin && _settings.SkinAudioReactiveEnabled;
+            bool shouldRun = (miniVisualizerWantsAudio || skinReactiveWantsAudio) && IsVisible;
+
+            if (shouldRun) _audioVisualizer.Start();
             else _audioVisualizer.Stop();
         }
 

@@ -82,11 +82,14 @@ namespace PixelLyric8BitFix
             if (!_settings.BilingualLyricsEnabled) TxtTranslationLyric.Visibility = Visibility.Collapsed;
         }
 
-        // 双语开关是 emoji 图标，Foreground 对 emoji 不起作用（Windows 上 emoji 是自带颜色的彩色字形），
-        // 只能靠 Opacity 区分开/关，跟改用矢量图标之前的卡拉OK开关是同一个道理
+        // 白色=开启，黑色=关闭——矢量图标（不是 emoji）才能这样直接换实心颜色，一眼看出状态，
+        // 跟旁边卡拉OK开关（UpdateKaraokeToggleIcon）是同一个道理
         private void UpdateBilingualToggleIcon()
         {
-            TxtBilingualIcon.Opacity = _settings.BilingualLyricsEnabled ? 1.0 : 0.5;
+            var brush = _settings.BilingualLyricsEnabled ? Brushes.White : Brushes.Black;
+            BilingualIconOuter.Stroke = brush;
+            BilingualIconMeridian.Stroke = brush;
+            BilingualIconEquator.Stroke = brush;
         }
 
         private void BtnBilingualToggle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -135,12 +138,22 @@ namespace PixelLyric8BitFix
             string cleanArtist = artist.Split(new[] { ',', ';', '/' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() ?? artist;
 
             // 4.5 先查本地缓存：这首歌以前成功抓到过的话直接用，完全不用等网络。
-            //     缓存文件只存了原文那一份 LRC，没有翻译（翻译只在这次是新抓的、且正好是网易云赢了并发的时候才有），
-            //     所以缓存命中这条路走不出双语——这是个有意的取舍，不为了翻译放弃"缓存秒出"这个更重要的体验。
+            //     翻译单独存了一份缓存（LyricsCache.TryGetTranslation）：有就直接用，没有就在后台现场
+            //     翻一份（TryLiveTranslateAsync），翻完顺手存起来，下次这首歌缓存命中就能直接双语秒出了。
             string? cachedLrc = LyricsCache.TryGet(trackId);
             if (!string.IsNullOrEmpty(cachedLrc) && LyricsFetcher.IsDurationPlausible(cachedLrc, expectedDuration))
             {
                 ParseLrcText(cachedLrc);
+
+                string? cachedTranslation = LyricsCache.TryGetTranslation(trackId);
+                if (!string.IsNullOrEmpty(cachedTranslation))
+                {
+                    SetTranslation(cachedTranslation);
+                }
+                else
+                {
+                    _ = Task.Run(() => TryLiveTranslateAsync(cachedLrc, trackId, cts.Token));
+                }
                 return;
             }
 
@@ -152,7 +165,22 @@ namespace PixelLyric8BitFix
         // 或者拿不到结果就报个"没找到"
         private async Task FetchLyricsAnyEngineAsync(string title, string artist, string trackId, TimeSpan expectedDuration, CancellationToken token)
         {
-            var result = await _lyricsFetcher.FetchAsync(title, artist, expectedDuration, token);
+            // onLateTranslation：赢得原文的不是网易云时，它的翻译请求会在后台继续等，真等到了就从这里
+            // 回调进来——这时候 FetchLyricsAnyEngineAsync 本身可能早就跑完返回了，回调是独立触发的，
+            // 所以这里要重新检查一遍"还是不是当前这首歌"，跟下面 trackId != _lastTrackId 那个检查同理
+            var result = await _lyricsFetcher.FetchAsync(title, artist, expectedDuration, token,
+                onLateTranslation: translation =>
+                {
+                    if (token.IsCancellationRequested || trackId != _lastTrackId) return;
+                    // 网易云翻译"迟到"的时候，Google 那条现场翻译（TryLiveTranslateAsync）可能已经先一步
+                    // 翻完并显示了——两边都往同一个 trackId 写翻译，谁后到就把谁前面的覆盖掉，且只有
+                    // TryLiveTranslateAsync 那条路会存缓存，导致"这次显示的其实是网易云的，但缓存里存的
+                    // 是 Google 那份没被覆盖前的版本"，下次播放这首歌显示的翻译会跟这次看到的不一样。
+                    // 用 HasTranslation() 挡一下：谁先到就用谁的，后到的不再覆盖，避免这种显示/缓存对不上。
+                    if (HasTranslation()) return;
+                    SetTranslation(translation);
+                    LyricsCache.SaveTranslation(trackId, translation); // 之前这条路只显示不存缓存，下次这首歌还得重新翻一遍
+                });
 
             if (token.IsCancellationRequested || trackId != _lastTrackId) return; // 已经切歌了，这个结果作废
 
@@ -168,9 +196,53 @@ namespace PixelLyric8BitFix
                 return;
             }
 
-            LyricsCache.Save(trackId, result.Lrc); // 只缓存原文，见 HandleTrackChangeAsync 里的说明
+            LyricsCache.Save(trackId, result.Lrc);
             ParseLrcText(result.Lrc);
             SetTranslation(result.TranslationLrc);
+            // 同上：以前这条路（网易云直接赢了原文、自带翻译）只显示不存缓存，下次这首歌缓存命中了
+            // 原文却还是没有翻译，得重新翻一遍——现在跟 TryLiveTranslateAsync 一样顺手存一份
+            if (result.TranslationLrc != null)
+            {
+                LyricsCache.SaveTranslation(trackId, result.TranslationLrc);
+            }
+
+            // 网易云翻译源基本失效了（见 LyricsFetcher 里的说明），result.TranslationLrc 现在几乎总是
+            // null；onLateTranslation 那条路也大概率扑空。原文都已经抓到了，翻译就靠现场翻这条路兜底。
+            if (result.TranslationLrc == null)
+            {
+                await TryLiveTranslateAsync(result.Lrc, trackId, token); // 已经在 Task.Run 里了，直接 await 不卡 UI
+            }
+        }
+
+        // 当前 _translationLines 是不是已经有内容——onLateTranslation 和 TryLiveTranslateAsync 都可能
+        // 给同一首歌的翻译赋值，用这个判断"谁先到就用谁的"，后到的不再覆盖（见上面 onLateTranslation 里的注释）
+        private bool HasTranslation()
+        {
+            lock (_lyricLock)
+            {
+                return _translationLines.Count > 0;
+            }
+        }
+
+        // 网易云翻译源基本失效了，双语功能现在主要靠这个：本地没有翻译缓存、且用户开着双语开关的时候，
+        // 现场用 Google 翻译网页版接口翻一遍（LiveTranslator），翻完顺手存进缓存，下次同一首歌缓存命中
+        // 的时候能直接用，不用每次都重新翻。翻译失败/没必要翻（本来就是中文）都静默跳过，不影响原文显示。
+        //
+        // 注意：下面这行开关判断意味着上面 ToggleBilingualLyrics 那边"关了不代表没翻译，只是先不显示，
+        // 重新开回来下一 tick 立刻能看见"这句注释，现在只对网易云那条路（原文自带/onLateTranslation 补上）
+        // 成立——如果开关关着，这里的 Google 现场翻译根本不会发生，中途把开关打开也不会凭空冒出翻译，
+        // 得等切下一首歌才会真的去翻。这是刻意的取舍（开关关着的人不用白白多发翻译请求），不是漏加了 if。
+        private async Task TryLiveTranslateAsync(string lrc, string trackId, CancellationToken token)
+        {
+            if (!_settings.BilingualLyricsEnabled) return; // 没开双语开关就不用多发这个网络请求
+
+            string? translation = await LiveTranslator.TranslateLrcAsync(lrc, _httpClient, token);
+            if (translation == null) return;
+            if (token.IsCancellationRequested || trackId != _lastTrackId) return; // 翻完了才发现已经切歌，这份翻译作废
+            if (HasTranslation()) return; // 网易云 onLateTranslation 那条路先到了，不要覆盖（见那边的注释）
+
+            SetTranslation(translation);
+            LyricsCache.SaveTranslation(trackId, translation);
         }
 
         // 四个引擎都找不到时（小众歌/纯音乐之类）的兜底：手动选一个本地 .lrc 文件用上。

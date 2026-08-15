@@ -35,6 +35,33 @@
                              From="0.35" To="0.7" Duration="0:0:2.2" AutoReverse="True" RepeatBehavior="Forever"/>
         </Storyboard>
 
+        <!-- 复古街机风：招牌光"attract mode"式地忽明忽暗，接近老式霓虹招牌持续但不规律的明暗跳动，
+             跟下面赛博朋克那个"大部分时间稳定、偶尔闪一下"的节奏刻意区分开，不要显得是同一套皮肤的变体 -->
+        <Storyboard x:Key="ArcadeMarqueeAnimation">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="ArcadeSkinBg"
+                                            Storyboard.TargetProperty="(Border.Effect).(DropShadowEffect.Opacity)"
+                                            RepeatBehavior="Forever">
+                <LinearDoubleKeyFrame Value="0.4" KeyTime="0:0:0"/>
+                <LinearDoubleKeyFrame Value="0.75" KeyTime="0:0:0.5"/>
+                <LinearDoubleKeyFrame Value="0.35" KeyTime="0:0:1"/>
+                <LinearDoubleKeyFrame Value="0.7" KeyTime="0:0:1.5"/>
+                <LinearDoubleKeyFrame Value="0.4" KeyTime="0:0:2"/>
+            </DoubleAnimationUsingKeyFrames>
+        </Storyboard>
+
+        <!-- 太空侵略者风：边框光缓慢呼吸，主要的"游戏感"来自装饰行里两只小怪物的踏步移动
+             （StartInvadersMarch），这个只是给背景补一点不那么死板的呼吸感 -->
+        <Storyboard x:Key="InvadersPulseAnimation">
+            <DoubleAnimation Storyboard.TargetName="InvadersSkinBg" Storyboard.TargetProperty="(Border.Effect).(DropShadowEffect.Opacity)"
+                             From="0.3" To="0.6" Duration="0:0:1.4" AutoReverse="True" RepeatBehavior="Forever"/>
+        </Storyboard>
+
+        <!-- 城市夜景风：边框光缓慢呼吸，模拟远处霓虹灯招牌若隐若现的感觉 -->
+        <Storyboard x:Key="CityGlowAnimation">
+            <DoubleAnimation Storyboard.TargetName="CitySkinBg" Storyboard.TargetProperty="(Border.Effect).(DropShadowEffect.Opacity)"
+                             From="0.3" To="0.55" Duration="0:0:2.4" AutoReverse="True" RepeatBehavior="Forever"/>
+        </Storyboard>
+
         <!-- CRT 终端风：扫描线缓慢向下滚动 + 屏幕轻微闪烁，老显示器的感觉 -->
         <Storyboard x:Key="CrtFlickerAnimation">
             <DoubleAnimation Storyboard.TargetName="ScanlineTransform" Storyboard.TargetProperty="Y"
@@ -218,8 +245,12 @@
                     </Ellipse.RenderTransform>
                 </Ellipse>
 
+                <!-- 戳一下 Steve 会跳一下（见 MainWindow.SkinInteractions.cs 里的 ImgSteve_MouseLeftButtonDown）：
+                     跳跃用的是 SteveTransform 的 Y 分量，跟走路用的 X 分量是同一个 TranslateTransform 对象
+                     上两个不同的属性，互不打架 -->
                 <Image x:Name="ImgSteve" Width="20" Height="40" Canvas.Bottom="2" Stretch="Uniform"
-                       RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0.5,0.5">
+                       RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0.5,0.5"
+                       Cursor="Hand" MouseLeftButtonDown="ImgSteve_MouseLeftButtonDown">
                     <Image.RenderTransform>
                         <TransformGroup>
                             <!-- 走路朝向：往右走 ScaleX=1，往左走翻转成 -1，代码里按位移方向实时切换 -->
@@ -283,9 +314,17 @@
                 </Path>
             </Canvas>
 
-            <!-- 篝火露营皮肤专属装饰：篝火图标（自带闪烁发光）+ 两粒交替飘起的火星 -->
+            <!-- 篝火露营皮肤专属装饰：篝火图标（自带闪烁发光）+ 两粒交替飘起的火星。
+                 戳一下会有个一次性的"旺一下"缩放反馈（CampfirePokeScale，见 MainWindow.SkinInteractions.cs），
+                 特意用缩放而不是接着调 CampfireGlow.Opacity——那个属性已经被下面 CampfireAnimation
+                 那个 Forever 循环的 Storyboard 占着，硬要插一手会跟它打架，缩放是另一个互不相关的属性 -->
             <Canvas x:Name="CampfireDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
-                <Image x:Name="ImgCampfire" Width="22" Height="22" Canvas.Right="14" Canvas.Bottom="2" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor">
+                <Image x:Name="ImgCampfire" Width="22" Height="22" Canvas.Right="14" Canvas.Bottom="2" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0.5,0.5"
+                       Cursor="Hand" MouseLeftButtonDown="ImgCampfire_MouseLeftButtonDown">
+                    <Image.RenderTransform>
+                        <ScaleTransform x:Name="CampfirePokeScale"/>
+                    </Image.RenderTransform>
                     <Image.Effect>
                         <DropShadowEffect x:Name="CampfireGlow" Color="#FF8C00" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
                     </Image.Effect>
@@ -306,7 +345,14 @@
                  花瓣飘落用的还是下面 SakuraOverlay 那一套（在卡片主体那层，不是这一层），
                  树立在卡片顶部这条装饰行，花瓣从卡片顶部飘下来，视觉上就像是从这棵树上落下来的。 -->
             <Canvas x:Name="SakuraDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
-                <Image x:Name="ImgSakuraTree" Width="36" Height="45" Canvas.Right="16" Canvas.Bottom="0" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                <!-- SakuraTreePokeScale：音乐律动鼓点触发的"绽放"脉冲，平时是 1.0，跟篝火的 CampfirePokeScale 同一套手法；
+                     RenderTransformOrigin 定在底部中间，放大是从树根往上"长"，不是从中心膨胀 -->
+                <Image x:Name="ImgSakuraTree" Width="36" Height="45" Canvas.Right="16" Canvas.Bottom="0" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0.5,1">
+                    <Image.RenderTransform>
+                        <ScaleTransform x:Name="SakuraTreePokeScale" ScaleX="1" ScaleY="1"/>
+                    </Image.RenderTransform>
+                </Image>
             </Canvas>
 
             <!-- 复古磁带机皮肤专属装饰：磁带壳里两个转动的卷盘，十字辐条打破旋转对称性，转动才看得出来 -->
@@ -371,6 +417,127 @@
                        RenderOptions.BitmapScalingMode="NearestNeighbor">
                     <Image.RenderTransform>
                         <TranslateTransform x:Name="SailboatBobTransform" Y="0"/>
+                    </Image.RenderTransform>
+                </Image>
+            </Canvas>
+
+            <!-- 星空太空风专属装饰：一只小飞碟飞过夜空，横向飘过整条装饰行——飘的范围按窗口实际宽度算
+                 （StartUfoDrift 里，跟 Minecraft 皮肤 Steve 走路范围算法同一个道理），不写死免得小尺寸
+                 窗口飞出界、大尺寸窗口又飞不满 -->
+            <Canvas x:Name="StarryDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
+                <Image x:Name="ImgUfo" Width="28" Height="24" Canvas.Bottom="6" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor">
+                    <Image.RenderTransform>
+                        <TranslateTransform x:Name="UfoDriftTransform" X="0"/>
+                    </Image.RenderTransform>
+                </Image>
+            </Canvas>
+
+            <!-- 复古 CRT 终端风专属装饰：一台老式电视机摆在角落，平时静静立着不用动；
+                 开了音乐律动之后鼓点会让它画面"抖"一下（RetroTvShakeTransform），像信号故障 -->
+            <Canvas x:Name="CrtDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
+                <Image x:Name="ImgRetroTv" Width="26" Height="26" Canvas.Right="14" Canvas.Bottom="0" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor">
+                    <Image.RenderTransform>
+                        <TranslateTransform x:Name="RetroTvShakeTransform" X="0"/>
+                    </Image.RenderTransform>
+                </Image>
+            </Canvas>
+
+            <!-- 玻璃拟态风专属装饰：一颗悬浮的水晶，缓缓上下浮动，跟这套皮肤本身的通透质感呼应 -->
+            <Canvas x:Name="GlassDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
+                <Image x:Name="ImgCrystal" Width="24" Height="24" Canvas.Right="16" Canvas.Bottom="2" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor">
+                    <Image.RenderTransform>
+                        <TranslateTransform x:Name="CrystalBobTransform" Y="0"/>
+                    </Image.RenderTransform>
+                </Image>
+            </Canvas>
+
+            <!-- 极光雪夜风专属装饰：一只安静坐着的小北极狐，只带极轻微的呼吸感，不抢这套皮肤本来的静谧调性 -->
+            <Canvas x:Name="AuroraDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
+                <Image x:Name="ImgArcticFox" Width="26" Height="26" Canvas.Right="14" Canvas.Bottom="0" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor">
+                    <Image.RenderTransform>
+                        <TranslateTransform x:Name="ArcticFoxBobTransform" Y="0"/>
+                    </Image.RenderTransform>
+                </Image>
+            </Canvas>
+
+            <!-- 雨夜窗景风专属装饰：一只趴在窗台上的橘猫，同样只带极轻微的呼吸感 -->
+            <Canvas x:Name="RainDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
+                <Image x:Name="ImgWindowsillCat" Width="32" Height="32" Canvas.Right="12" Canvas.Bottom="0" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor">
+                    <Image.RenderTransform>
+                        <TranslateTransform x:Name="WindowsillCatBobTransform" Y="0"/>
+                    </Image.RenderTransform>
+                </Image>
+            </Canvas>
+
+            <!-- 霓虹赛博朋克风专属装饰：一个悬浮的全息小机器人，上下浮动 + 若隐若现的全息闪烁感 -->
+            <Canvas x:Name="CyberpunkDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
+                <!-- Y 是原本就有的上下 bob 浮动；X（HoloRobotShakeTransform）是音乐律动新加的鼓点抖动，
+                     两个属性各管各的，互不打架，跟 Steve 用同一个 TranslateTransform 分管 X/Y 是同一个道理 -->
+                <Image x:Name="ImgHoloRobot" Width="24" Height="21" Canvas.Right="14" Canvas.Bottom="2" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor">
+                    <Image.RenderTransform>
+                        <TransformGroup>
+                            <TranslateTransform x:Name="HoloRobotShakeTransform" X="0"/>
+                            <TranslateTransform x:Name="HoloRobotBobTransform" Y="0"/>
+                        </TransformGroup>
+                    </Image.RenderTransform>
+                </Image>
+            </Canvas>
+
+            <!-- 复古街机风专属装饰：一台街机柜立在右边；ArcadeCabinetWobble 是音乐律动新加的鼓点"晃一下"，
+                 轴心定在柜底，像被人撞了一下机身歪一下再回正 -->
+            <Canvas x:Name="ArcadeDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
+                <Image x:Name="ImgArcadeCabinet" Width="36" Height="32" Canvas.Right="14" Canvas.Bottom="0" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0.5,1">
+                    <Image.RenderTransform>
+                        <RotateTransform x:Name="ArcadeCabinetWobble" Angle="0"/>
+                    </Image.RenderTransform>
+                </Image>
+            </Canvas>
+
+            <!-- 8-bit 太空侵略者风专属装饰：两只小怪物并排站着，同步做小幅度的横向踏步移动
+                 （StartInvadersMarch，一步一步跳着走，不是平滑滑动——更贴近原作那种逐帧位移的机械感）。
+                 InvaderNPokeScale 是音乐律动新加的鼓点"puff"缩放，两只怪物用各自独立的 ScaleTransform，
+                 但由 UpdateMusicReactiveSkin 写同一个数值，看起来是同步"挨了一下"的效果 -->
+            <Canvas x:Name="InvadersDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
+                <Image x:Name="ImgInvader1" Width="20" Height="16" Canvas.Right="30" Canvas.Bottom="4" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor">
+                    <Image.RenderTransform>
+                        <TransformGroup>
+                            <TranslateTransform x:Name="Invader1MarchTransform" X="0"/>
+                            <ScaleTransform x:Name="Invader1PokeScale" ScaleX="1" ScaleY="1"/>
+                        </TransformGroup>
+                    </Image.RenderTransform>
+                </Image>
+                <Image x:Name="ImgInvader2" Width="20" Height="16" Canvas.Right="4" Canvas.Bottom="4" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor">
+                    <Image.RenderTransform>
+                        <TransformGroup>
+                            <TranslateTransform x:Name="Invader2MarchTransform" X="0"/>
+                            <ScaleTransform x:Name="Invader2PokeScale" ScaleX="1" ScaleY="1"/>
+                        </TransformGroup>
+                    </Image.RenderTransform>
+                </Image>
+            </Canvas>
+
+            <!-- 城市夜景/地铁风专属装饰：一节地铁车厢横向驶过整条装饰行，范围按窗口实际宽度算
+                 （StartTrainDrift，跟星空皮肤的飞碟、Minecraft 皮肤 Steve 走路是同一个道理）。
+                 TrainJoltTransform 是音乐律动新加的鼓点"突进一下"，跟 TrainDriftTransform 是两个独立的
+                 TranslateTransform、都作用在 X 上——TransformGroup 会把两边的位移直接相加，不用互相知道
+                 对方的存在，鼓点来的时候车厢在原有飘移的基础上再往前顿一下 -->
+            <Canvas x:Name="CityDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
+                <Image x:Name="ImgTrain" Width="42" Height="18" Canvas.Bottom="6" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor">
+                    <Image.RenderTransform>
+                        <TransformGroup>
+                            <TranslateTransform x:Name="TrainDriftTransform" X="0"/>
+                            <TranslateTransform x:Name="TrainJoltTransform" X="0"/>
+                        </TransformGroup>
                     </Image.RenderTransform>
                 </Image>
             </Canvas>
@@ -504,7 +671,9 @@
                         <SolidColorBrush Color="#4FD8C4"/>
                     </Border.BorderBrush>
                     <Border.Effect>
-                        <DropShadowEffect Color="#4FD8C4" BlurRadius="14" ShadowDepth="0" Opacity="0.4"/>
+                        <!-- Opacity 平时是静态的 0.4，没有被任何 Storyboard 占用——音乐律动的 BeatFlash
+                             鼓点闪光就落在这个属性上（AuroraSkinGlow），不会跟别的动画打架 -->
+                        <DropShadowEffect x:Name="AuroraSkinGlow" Color="#4FD8C4" BlurRadius="14" ShadowDepth="0" Opacity="0.4"/>
                     </Border.Effect>
                 </Border>
 
@@ -532,7 +701,9 @@
                         <SolidColorBrush Color="#4A6572"/>
                     </Border.BorderBrush>
                     <Border.Effect>
-                        <DropShadowEffect Color="#4A6572" BlurRadius="10" ShadowDepth="2" Opacity="0.4"/>
+                        <!-- 同上，Opacity 平时静态 0.4，没被 Storyboard 占用——音乐律动的 BeatFlash
+                             （像远处一道闪电）落在这个属性上（RainSkinGlow） -->
+                        <DropShadowEffect x:Name="RainSkinGlow" Color="#4A6572" BlurRadius="10" ShadowDepth="2" Opacity="0.4"/>
                     </Border.Effect>
                 </Border>
 
@@ -743,8 +914,56 @@
                     </Canvas>
                 </Viewbox>
 
-                <!-- 皮肤 18：客制化主题——背景/图标/动画全由用户自己那份 JSON 数据决定，
-                     不像前面 17 套那样每套都有专属的 XAML 块，这一套是通用的，代码里按数据现场拼 -->
+                <!-- 皮肤 18：复古街机风（深紫黑渐变，金黄色招牌光——跟品牌名字 PixelLyric8Bit 呼应） -->
+                <Border x:Name="ArcadeSkinBg" BorderThickness="1" CornerRadius="6" Visibility="Collapsed">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#1E1030" Offset="0"/>
+                            <GradientStop Color="#0D0818" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <Border.BorderBrush>
+                        <SolidColorBrush Color="#FFC93A"/>
+                    </Border.BorderBrush>
+                    <Border.Effect>
+                        <DropShadowEffect Color="#FFC93A" BlurRadius="14" ShadowDepth="0" Opacity="0.4"/>
+                    </Border.Effect>
+                </Border>
+
+                <!-- 皮肤 19：8-bit 太空侵略者风（深蓝黑渐变，荧光青柠绿边框） -->
+                <Border x:Name="InvadersSkinBg" BorderThickness="1" CornerRadius="4" Visibility="Collapsed">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#0A0518" Offset="0"/>
+                            <GradientStop Color="#05030D" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <Border.BorderBrush>
+                        <SolidColorBrush Color="#AEFF3A"/>
+                    </Border.BorderBrush>
+                    <Border.Effect>
+                        <DropShadowEffect Color="#AEFF3A" BlurRadius="10" ShadowDepth="0" Opacity="0.4"/>
+                    </Border.Effect>
+                </Border>
+
+                <!-- 皮肤 20：城市夜景/地铁风（冷紫夜色渐变，暖橙车灯色边框） -->
+                <Border x:Name="CitySkinBg" BorderThickness="1" CornerRadius="6" Visibility="Collapsed">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#16101F" Offset="0"/>
+                            <GradientStop Color="#0A0712" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <Border.BorderBrush>
+                        <SolidColorBrush Color="#FFA94A"/>
+                    </Border.BorderBrush>
+                    <Border.Effect>
+                        <DropShadowEffect Color="#FFA94A" BlurRadius="10" ShadowDepth="0" Opacity="0.4"/>
+                    </Border.Effect>
+                </Border>
+
+                <!-- 皮肤 21：客制化主题——背景/图标/动画全由用户自己那份 JSON 数据决定，
+                     不像前面几套那样每套都有专属的 XAML 块，这一套是通用的，代码里按数据现场拼 -->
                 <Border x:Name="CustomSkinBg" BorderThickness="1" CornerRadius="8" Visibility="Collapsed">
                     <Border.Effect>
                         <DropShadowEffect x:Name="CustomSkinGlow" BlurRadius="12" ShadowDepth="0" Opacity="0.4"/>
@@ -935,13 +1154,19 @@
                 </Canvas>
             </Border>
 
-            <!-- 双语歌词开关：只有抓到的歌词带翻译行时才有实际效果，开关本身随时可点，
-                 灰/白同一套"实心颜色区分开关状态"的手法，跟旁边卡拉OK开关保持一致 -->
+            <!-- 双语歌词开关：图标改成矢量画的小地球（圆形轮廓 + 一道竖着的经线 + 一道横着的赤道线），
+                 不再用 🌐 这个 emoji——Windows 上 emoji 是自带颜色的彩色字形，Foreground 改了不会变色，
+                 没法像卡拉OK开关那样直接换实心颜色。矢量图标跟卡拉OK开关、齿轮设置图标是同一个道理：
+                 白色=开启，黑色=关闭，一眼看出状态，不用靠透明度这种没那么明显的信号。 -->
             <Border x:Name="BtnBilingualToggle" Width="24" Height="24" CornerRadius="12" Margin="6,0,0,0"
                     Background="#99000000" BorderBrush="#33FFFFFF" BorderThickness="1"
-                    Cursor="Hand" ToolTip="开关双语歌词（只有抓到翻译的歌才会显示）"
+                    Cursor="Hand" ToolTip="开关双语歌词：图标白色=开启，黑色=关闭（只有抓到翻译的歌才会显示）"
                     MouseLeftButtonDown="BtnBilingualToggle_MouseLeftButtonDown">
-                <TextBlock x:Name="TxtBilingualIcon" Text="🌐" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <Canvas Width="15" Height="15" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Ellipse x:Name="BilingualIconOuter" Width="14" Height="14" Canvas.Left="0.5" Canvas.Top="0.5" Stroke="White" StrokeThickness="1.3"/>
+                    <Ellipse x:Name="BilingualIconMeridian" Width="6" Height="14" Canvas.Left="4.5" Canvas.Top="0.5" Stroke="White" StrokeThickness="1.1"/>
+                    <Line x:Name="BilingualIconEquator" X1="0.5" Y1="7.5" X2="14.5" Y2="7.5" Stroke="White" StrokeThickness="1.1"/>
+                </Canvas>
             </Border>
         </StackPanel>
 

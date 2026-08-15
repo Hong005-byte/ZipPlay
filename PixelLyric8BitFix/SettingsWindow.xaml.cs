@@ -76,6 +76,7 @@ namespace PixelLyric8BitFix
             RbVisualizerLow.IsChecked = settings.VisualizerSensitivity == VisualizerSensitivity.Low;
             RbVisualizerMedium.IsChecked = settings.VisualizerSensitivity == VisualizerSensitivity.Medium;
             RbVisualizerHigh.IsChecked = settings.VisualizerSensitivity == VisualizerSensitivity.High;
+            ChkSkinAudioReactiveEnabled.IsChecked = settings.SkinAudioReactiveEnabled;
 
             ChkSkipStartupSettings.IsChecked = settings.SkipStartupSettings;
 
@@ -174,6 +175,7 @@ namespace PixelLyric8BitFix
             settings.VisualizerSensitivity = RbVisualizerLow.IsChecked == true ? VisualizerSensitivity.Low
                                             : RbVisualizerHigh.IsChecked == true ? VisualizerSensitivity.High
                                             : VisualizerSensitivity.Medium;
+            settings.SkinAudioReactiveEnabled = ChkSkinAudioReactiveEnabled.IsChecked == true;
             settings.SkipStartupSettings = ChkSkipStartupSettings.IsChecked == true;
             settings.Save();
 

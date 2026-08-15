@@ -31,6 +31,8 @@ namespace PixelLyric8BitFix
     //   MainWindow.Skins.cs      —— 皮肤应用/调色板/客制化主题渲染/MC 皮肤 Steve 走路
     //   MainWindow.Lyrics.cs     —— 抓词/解析/歌词同步偏移/卡拉OK扫光/双语歌词
     //   MainWindow.Updates.cs    —— 检查更新 + 一键下载安装
+    //   MainWindow.PlaybackControls.cs —— 上一首/播放-暂停/下一首 + 进度条拖拽跳转
+    //   MainWindow.SkinInteractions.cs —— 皮肤音乐律动（黑胶/磁带机/篝火/Minecraft/星空/雨夜/极光雪夜/樱花/CRT/赛博朋克 + 客制化主题）+ 装饰物可点击反馈（Steve/篝火）
     // 拆开纯粹是文件组织，行为跟拆之前完全一样，只是不用再在一个 1300+ 行的文件里翻了。
     public partial class MainWindow : Window
     {
@@ -136,6 +138,15 @@ namespace PixelLyric8BitFix
         private readonly AudioVisualizer _audioVisualizer = new();
         private (System.Windows.Shapes.Rectangle Element, bool IsOuterRing)[]? _miniVisualizerParticles;
 
+        // ── 皮肤音乐律动：跟 Mini 模式共用同一个 _audioVisualizer，见 MainWindow.SkinInteractions.cs。
+        // _isMusicReactiveSkin 代表"当前这套皮肤（或客制化主题勾了 musicReactive）参与律动，该不该抓音频"；
+        // _musicReactiveStoryboards 里放的是所有"额外以 isControllable=true 方式启动、可以实时调 SpeedRatio"
+        // 的 Storyboard——可能是 0 个（比如只有 Steve 跳跃这种一次性动作、没有连续循环可调速的皮肤）、
+        // 1 个（大多数内置皮肤），也可能是好几个（客制化主题 drift/fall 那种一次起好几个独立图标的情况）。
+        // 用 List 而不是单个可空字段，就是为了让这几种情况共用同一套调速循环，不用分开写。
+        private bool _isMusicReactiveSkin;
+        private readonly List<Storyboard> _musicReactiveStoryboards = new();
+
         public MainWindow() : this(AppSettings.Load()) { }
 
         public MainWindow(AppSettings settings)
@@ -216,7 +227,9 @@ namespace PixelLyric8BitFix
 
             _lyricOffsetMs = _settings.LyricOffsetMs;
             InitTrayIcon();
-            UpdateBilingualToggleIcon();
+            // UpdateBilingualToggleIcon() 不用在这再调一遍——ApplySkin（构造函数前面已经调过）末尾的
+            // ApplySkinPalette 里现在会顺手调一次，保证发光颜色（跟着皮肤强调色）和亮不亮这两件事
+            // 用的是同一份最新状态，不用依赖"构造函数里两处调用顺序刚好对" 这种隐式约定
 
             // 50ms 只做本地插值计算 + UI 刷新，不再有系统调用，非常轻量
             _smoothTimer = new DispatcherTimer(DispatcherPriority.Render);
@@ -308,16 +321,53 @@ namespace PixelLyric8BitFix
                     PlayerSkin.Candle => "CandleFlickerAnimation",
                     PlayerSkin.Plant => "PlantSwayAnimation",
                     PlayerSkin.Sunset => "SunsetGlowAnimation",
+                    PlayerSkin.Arcade => "ArcadeMarqueeAnimation",
+                    PlayerSkin.Invaders => "InvadersPulseAnimation",
+                    PlayerSkin.City => "CityGlowAnimation",
                     _ => null,
                 };
+                // 皮肤音乐律动：跟着音乐"加速"这一类内置皮肤，加上 Minecraft（走路变速 + Steve 跳跃），
+                // 加上客制化主题勾了 musicReactive 开关的情况。lofi、烛光冥想两套刻意保持安静，不接进去。
+                // 见 MainWindow.SkinInteractions.cs 的 UpdateMusicReactiveSkin。
+                _isMusicReactiveSkin = _settings.Skin is PlayerSkin.Vinyl or PlayerSkin.Cassette
+                    or PlayerSkin.Campfire or PlayerSkin.Minecraft
+                    or PlayerSkin.Starry or PlayerSkin.Rain or PlayerSkin.Aurora
+                    or PlayerSkin.Sakura or PlayerSkin.Crt or PlayerSkin.Cyberpunk
+                    or PlayerSkin.Arcade or PlayerSkin.Invaders or PlayerSkin.City
+                    || (_settings.Skin == PlayerSkin.Custom && _customTheme?.Animation?.MusicReactive == true);
+
                 if (ambientAnimationKey != null)
                 {
-                    ((Storyboard)this.Resources[ambientAnimationKey]).Begin(this);
+                    var ambientStoryboard = (Storyboard)this.Resources[ambientAnimationKey];
+
+                    // 这几套的 ambient Storyboard 本身就是连续循环（转速/闪烁/飘落节奏……），
+                    // 需要跟着音乐实时调 SpeedRatio，得用 isControllable=true 启动；
+                    // 其余不参与律动的皮肤走原来的启动方式就行。
+                    bool needsControllableStoryboard = _settings.Skin is PlayerSkin.Vinyl or PlayerSkin.Cassette or PlayerSkin.Campfire
+                        or PlayerSkin.Starry or PlayerSkin.Rain or PlayerSkin.Aurora or PlayerSkin.Sakura
+                        or PlayerSkin.Crt or PlayerSkin.Cyberpunk
+                        or PlayerSkin.Arcade or PlayerSkin.Invaders or PlayerSkin.City;
+                    if (needsControllableStoryboard && _settings.SkinAudioReactiveEnabled)
+                    {
+                        ambientStoryboard.Begin(this, HandoffBehavior.SnapshotAndReplace, isControllable: true);
+                        _musicReactiveStoryboards.Add(ambientStoryboard);
+                    }
+                    else
+                    {
+                        ambientStoryboard.Begin(this);
+                    }
+                }
+
+                if (_isMusicReactiveSkin && _settings.SkinAudioReactiveEnabled)
+                {
+                    SyncAudioVisualizerState(); // 现在多了个理由要抓音频，跟 Mini 模式共用同一份判断逻辑
                 }
 
                 if (_settings.Skin == PlayerSkin.Minecraft)
                 {
-                    StartSteveWalking();
+                    // Steve 走路的速度也跟着音乐变——只有律动开关开着才用 isControllable 的方式起这个循环，
+                    // 关掉的时候走原来的写法，不多这一层开销
+                    StartSteveWalking(_isMusicReactiveSkin && _settings.SkinAudioReactiveEnabled);
                 }
 
                 _sessionManager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
@@ -436,6 +486,11 @@ namespace PixelLyric8BitFix
             if (_isMiniMode)
             {
                 UpdateMiniVisualizer();
+            }
+
+            if (_isMusicReactiveSkin && _settings.SkinAudioReactiveEnabled)
+            {
+                UpdateMusicReactiveSkin();
             }
         }
     }

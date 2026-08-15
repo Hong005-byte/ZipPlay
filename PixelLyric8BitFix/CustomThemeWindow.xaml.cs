@@ -57,7 +57,7 @@ namespace PixelLyric8BitFix
       ""........""
     ]
   },
-  ""animation"": { ""type"": ""pulse"", ""duration"": 2.6 }
+  ""animation"": { ""type"": ""pulse"", ""duration"": 2.6, ""musicReactive"": true }
 }";
 
         private void BtnCopyExample_Click(object sender, RoutedEventArgs e)

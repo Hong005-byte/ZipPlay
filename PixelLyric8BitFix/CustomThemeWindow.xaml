@@ -46,6 +46,8 @@
                     每个主题是一份 JSON：name(名字) / font(字体) / colors(各处文字颜色) /
                     background(背景，纯色 solid 或渐变 gradient) / icon(8x8 像素图标，字符网格 + 调色板) /
                     animation(动画招式，八选一：pulse 呼吸发光、twinkle 渐隐渐现、drift 飘过、fall 飘落、bob 上下浮动、sway 摇摆、spin 旋转、flicker 不规则闪烁)。
+                    animation 里还有个可选的 musicReactive(true/false，不填默认 false)：开了之后，不管选的是哪一种招式，
+                    播放速度都会跟着系统正在播的音乐响度/鼓点实时变化，跟设置页里"皮肤音乐律动"开关是同一套机制、共用同一个总开关。
                     颜色格式是 #RRGGBB 或带透明度的 #AARRGGBB。下面是一份完整示例，照着改就行：
                 </TextBlock>
 

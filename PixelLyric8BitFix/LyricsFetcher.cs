@@ -25,13 +25,24 @@ namespace PixelLyric8BitFix
             _httpClient = httpClient;
         }
 
-        // 四引擎并发抓词，谁先给出时长对得上的结果就用谁；全部落空（或者版本都对不上）返回 null
-        public async Task<LyricsFetchResult?> FetchAsync(string title, string artist, TimeSpan expectedDuration, CancellationToken token)
+        // 四引擎并发抓词，谁先给出时长对得上的结果就用谁；全部落空（或者版本都对不上）返回 null。
+        //
+        // 翻译这块单独处理：四个引擎里只有网易云会带翻译，其它三个接口本身不返回翻译。以前的写法是
+        // "谁先给出原文就直接返回谁的翻译字段"——如果网易云不是最先响应的那个（大概率不是，
+        // LRCLIB/QQ/酷狗随便一个先回来就直接用了），网易云就算随后确实抓到了翻译，也完全没人等它，
+        // 白白浪费掉，翻译功能因此经常"根本没出现过"，不是因为歌真的没有翻译。
+        // 现在改成：原文该多快出来还是多快出来（不拖慢主流程），但如果赢的不是网易云，
+        // 网易云那个请求不取消、放到后台继续等，真等到了（且版本对得上号）再通过 onLateTranslation
+        // 回调补一份翻译上去——原文显示速度完全不受影响，只是翻译不再白白被浪费。
+        public async Task<LyricsFetchResult?> FetchAsync(
+            string title, string artist, TimeSpan expectedDuration, CancellationToken token,
+            Action<string>? onLateTranslation = null)
         {
+            var neteaseTask = FetchFromNeteaseAsync(title, artist, token);
             var pending = new List<Task<(string? Lrc, string? Translation)>>
             {
                 FetchFromLrcLibAsync(title, artist, token),
-                FetchFromNeteaseAsync(title, artist, token),
+                neteaseTask,
                 FetchFromQQMusicAsync(title, artist, token),
                 FetchFromKugouAsync(title, artist, token),
             };
@@ -53,10 +64,42 @@ namespace PixelLyric8BitFix
                 // 明显对不上就当这个引擎没抓到，换下一个，而不是硬塞一份会跑偏的歌词。
                 if (!IsDurationPlausible(lrc, expectedDuration)) continue;
 
+                // 赢的不是网易云的话，它的翻译（如果有）单独放到后台继续等，不阻塞这里的返回
+                bool neteaseWon = finished == neteaseTask;
+                if (!neteaseWon)
+                {
+                    _ = AwaitLateTranslationAsync(neteaseTask, expectedDuration, token, onLateTranslation);
+                }
+
                 return new LyricsFetchResult(lrc, translation);
             }
 
             return null;
+        }
+
+        // 网易云翻译"迟到"了才会走这条路：原文早就用别的引擎抓到并显示了，这里只管把翻译单独补上去。
+        // 补之前要重新拿网易云自己那份 LRC 再校验一次时长——网易云抓到的可能是另一个版本（比如对方
+        // 库里收录的是加速版），翻译的时间戳是跟它自己那份原文对齐的，用在别的引擎给的原文上时间轴会错位，
+        // 版本对不上就宁可不要这份翻译，不能给一份会跑偏的双语显示。
+        private static async Task AwaitLateTranslationAsync(
+            Task<(string? Lrc, string? Translation)> neteaseTask, TimeSpan expectedDuration,
+            CancellationToken token, Action<string>? onLateTranslation)
+        {
+            if (onLateTranslation == null) return;
+            try
+            {
+                var (lrc, translation) = await neteaseTask;
+                if (token.IsCancellationRequested) return;
+                if (string.IsNullOrWhiteSpace(translation)) return;
+                if (string.IsNullOrEmpty(lrc) || !IsDurationPlausible(lrc, expectedDuration)) return;
+
+                onLateTranslation(translation);
+            }
+            catch
+            {
+                // 网易云这条后台请求本身失败/超时都不算事——原文早就用别的引擎显示出来了，
+                // 这里只是"锦上添花"的翻译补丁，补不上就算了，不影响正常播放
+            }
         }
 
         // 用 LRC 里最后一句歌词的时间戳粗略估算"这份歌词是多长的版本"，
@@ -104,7 +147,10 @@ namespace PixelLyric8BitFix
                 string? translation = obj["tlyric"]?["lyric"]?.ToString();
                 return (lrc, string.IsNullOrWhiteSpace(translation) ? null : translation);
             }
-            catch { return (null, null); }
+            catch
+            {
+                return (null, null);
+            }
         }
 
         // 3) QQ音乐（非官方接口）—— 需要带 Referer 否则会被拒绝

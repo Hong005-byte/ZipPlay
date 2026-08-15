@@ -757,6 +757,266 @@ namespace PixelLyric8BitFix
             return Build(rows, palette);
         }
 
+        /// <summary>星空太空风专属：一只小飞碟，飞过夜空。圆顶用发光的青绿色，跟满天星星的冷色调呼应。</summary>
+        public static BitmapSource CreateUfo()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['C'] = Color.FromRgb(0xB8, 0xC4, 0xCC), // 圆顶边框，银灰色
+                ['g'] = Color.FromRgb(0x7A, 0xF0, 0xC8), // 圆顶玻璃，发光青绿色
+                ['S'] = Color.FromRgb(0xD8, 0xDE, 0xE4), // 碟身上部，亮银色
+                ['s'] = Color.FromRgb(0x7C, 0x86, 0x92), // 碟身下部，暗银色
+                ['o'] = Color.FromRgb(0xE8, 0xFF, 0x8A), // 底部两颗指示灯，荧光黄绿色
+            };
+            string[] rows =
+            {
+                "........",
+                "..CggC..",
+                ".CggggC.",
+                "SSSSSSSS",
+                ".ssssss.",
+                "..o..o..",
+                "........",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>复古 CRT 终端风专属：一台老式电视机轮廓，天线 + 木纹机身 + 深色屏幕。
+        /// 真正的"画面"是下面歌词卡片本身，这个只是摆在角落的一台复古电视外壳装饰。</summary>
+        public static BitmapSource CreateRetroTv()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['A'] = Color.FromRgb(0x3A, 0x3A, 0x3A), // 天线
+                ['B'] = Color.FromRgb(0xB5, 0x8B, 0x5C), // 机身，木纹棕色
+                ['b'] = Color.FromRgb(0x8F, 0x6A, 0x3E), // 机身暗部/底座
+                ['S'] = Color.FromRgb(0x14, 0x1A, 0x22), // 屏幕，深色
+                ['g'] = Color.FromRgb(0x4E, 0xE0, 0x7A), // 电源指示灯，绿色
+            };
+            string[] rows =
+            {
+                "A......A",
+                ".BBBBBB.",
+                ".BSSSSB.",
+                ".BSSSSB.",
+                ".BSSSSB.",
+                ".BbbbbB.",
+                ".BBggBB.",
+                "..bbbb..",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>玻璃拟态风专属：一颗悬浮的水晶，跟这套皮肤本身"裂开又愈合"的质感呼应。</summary>
+        public static BitmapSource CreateCrystal()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['W'] = Color.FromRgb(0xF0, 0xF5, 0xFF), // 切面高光
+                ['C'] = Color.FromRgb(0xA8, 0xC0, 0xF0), // 水晶主体，亮
+                ['c'] = Color.FromRgb(0x74, 0x88, 0xD8), // 水晶主体，暗（增加切面感）
+            };
+            string[] rows =
+            {
+                "...WW...",
+                "..WCCW..",
+                ".WCcccW.",
+                "WCccccCW",
+                ".WCcccW.",
+                "..WCCW..",
+                "...WW...",
+                "........",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>极光雪夜风专属：一只坐着的小北极狐，白色毛皮配奶油色尾巴，安安静静蹲在角落。</summary>
+        public static BitmapSource CreateArcticFox()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['W'] = Color.FromRgb(0xF5, 0xF7, 0xFA), // 毛皮，亮白
+                ['w'] = Color.FromRgb(0xD4, 0xDC, 0xE8), // 毛皮暗部，淡蓝灰
+                ['T'] = Color.FromRgb(0xE8, 0xC9, 0x9C), // 尾巴，奶油色
+                ['N'] = Color.FromRgb(0x2A, 0x2A, 0x30), // 眼睛/鼻子
+            };
+            string[] rows =
+            {
+                ".W.W....",
+                ".WWW....",
+                "WWWWW...",
+                "WNWWWTT.",
+                ".WWWWTTT",
+                "..wwwTT.",
+                "..w..w..",
+                "........",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>雨夜窗景风专属：一只趴在窗台上的橘猫，暖色调跟窗外冷色调的雨形成对比。
+        /// 用的是正面"猫脸"构图（不是侧面剪影）——之前试过侧面剪影/趴姿在这么小的渲染尺寸下
+        /// 好几版都没做对（不是糊成一团就是变形），正面对称的脸 + 两只尖耳朵 + 两只眼睛，
+        /// 在小尺寸下反而更容易一眼认出"这是猫"，回退到这个更稳妥的版本。</summary>
+        public static BitmapSource CreateWindowsillCat()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['C'] = Color.FromRgb(0xD8, 0x8A, 0x4A), // 毛色，橘色
+                ['c'] = Color.FromRgb(0xA8, 0x5E, 0x2E), // 毛色暗部（脸颊阴影/尾巴）
+                ['N'] = Color.FromRgb(0x1A, 0x1A, 0x1E), // 眼睛
+                ['P'] = Color.FromRgb(0xE0, 0x7E, 0x92), // 鼻子，粉色
+                ['W'] = Color.FromRgb(0xF5, 0xE8, 0xD0), // 胸口白毛
+                ['L'] = Color.FromRgb(0x5A, 0x4A, 0x38), // 窗台，木色
+            };
+            string[] rows =
+            {
+                ".C........C.",
+                ".CC......CC.",
+                "CCC......CCC",
+                ".CCCCCCCCCC.",
+                "CCCCCCCCCCCC",
+                "CCNCCCCCCNCC",
+                "CCCCPPCCCCCC",
+                "CCCcCCcCCCCC",
+                ".CCCCCCCCCC.",
+                "..CWWWWWWC..",
+                "..CC....CCcc",
+                "LLLLLLLLLLLL",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>霓虹赛博朋克风专属：一个悬浮的全息小机器人，青色机身 + 品红色"眼睛"，配色跟这套皮肤的霓虹灯管同一路。</summary>
+        public static BitmapSource CreateHoloRobot()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['M'] = Color.FromRgb(0x3A, 0xE8, 0xE0), // 机身框架，青色
+                ['E'] = Color.FromRgb(0xFF, 0x3A, 0xC8), // "眼睛"，品红色
+                ['T'] = Color.FromRgb(0x3A, 0xE8, 0xE0), // 推进器光点，青色（跟机身同色，呼应"全息"的一体发光感）
+            };
+            string[] rows =
+            {
+                ".MMMMMM.",
+                "M......M",
+                "M.E..E.M",
+                "M......M",
+                ".MMMMMM.",
+                "..M..M..",
+                ".T....T.",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>复古街机风专属：一台街机柜——顶部发光招牌、屏幕、控制面板（摇杆+两个按钮）、底座。
+        /// 全是方方正正的形状（没有圆润的有机曲线），跟猫那几版翻车的教训一致：这种直上直下的
+        /// 造型在小尺寸下最不容易画走样，风险最低。</summary>
+        public static BitmapSource CreateArcadeCabinet()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['M'] = Color.FromRgb(0xFF, 0xC9, 0x3A), // 顶部招牌，金黄色发光
+                ['B'] = Color.FromRgb(0x24, 0x18, 0x32), // 柜体，深紫黑色
+                ['b'] = Color.FromRgb(0x14, 0x0C, 0x1C), // 底座，比柜体更暗
+                ['S'] = Color.FromRgb(0x1A, 0x2E, 0x3A), // 屏幕，暗青色（暗示"开着但没在放东西"的待机感）
+                ['J'] = Color.FromRgb(0xE8, 0x4A, 0x4A), // 摇杆球，红色
+                ['R'] = Color.FromRgb(0xFF, 0xC9, 0x3A), // 两颗按钮，跟招牌同色，呼应
+            };
+            string[] rows =
+            {
+                "..MMMMMM..",
+                ".BBBBBBBB.",
+                ".BSSSSSSB.",
+                ".BSSSSSSB.",
+                ".BSSSSSSB.",
+                ".BBBBBBBB.",
+                ".BBJ.RRBB.",
+                ".BBBBBBBB.",
+                "..bb..bb..",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>复古街机风 Mini 图标：摇杆球 + 底座，比装饰用的整台街机柜简化不少，8x8 小尺寸下够看清就行。</summary>
+        public static BitmapSource CreateJoystickIcon()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['J'] = Color.FromRgb(0xE8, 0x4A, 0x4A), // 摇杆球，红色
+                ['B'] = Color.FromRgb(0x24, 0x18, 0x32), // 摇杆杆身 + 底座
+            };
+            string[] rows =
+            {
+                "...J....",
+                "..JJJ...",
+                "...B....",
+                "...B....",
+                ".BBBBB..",
+                ".BBBBB..",
+                "........",
+                "........",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>8-bit 太空侵略者风专属：经典"螃蟹形"小怪物剪影——这个造型本身就是拿方块拼出来的
+        /// （不是我硬把一个有机形状塞进方格子），是这批新皮肤里画走样风险最低的一个。装饰行里会摆两只，
+        /// 同步做小幅度的横向踏步移动（见 MainWindow.Skins.cs 的 StartInvadersMarch）。
+        /// Mini 图标直接复用这张图，不用再单独画一份简化版。</summary>
+        public static BitmapSource CreateInvader()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['X'] = Color.FromRgb(0xAE, 0xFF, 0x3A), // 荧光青柠绿，跟 CRT 皮肤的纯绿故意区分开
+            };
+            string[] rows =
+            {
+                "..X....X..",
+                "...X..X...",
+                "..XXXXXX..",
+                ".XX.XX.XX.",
+                "XXXXXXXXXX",
+                "X.XXXXXX.X",
+                "X.X....X.X",
+                "..XX..XX..",
+            };
+            return Build(rows, palette);
+        }
+
+        /// <summary>城市夜景/地铁风专属：一节亮着灯的地铁车厢，横向驶过整条装饰行。
+        /// 车身是矩形 + 车窗是矩形 + 车轮是圆点，全是最基础的几何形状，同样是低风险造型。
+        /// Mini 图标直接复用这张图。</summary>
+        public static BitmapSource CreateTrain()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['M'] = Color.FromRgb(0x4A, 0x4A, 0x5E), // 车身，冷灰色金属感
+                ['W'] = Color.FromRgb(0xFF, 0xC9, 0x7A), // 车窗，暖黄色车厢灯光，跟车身冷色形成对比
+                ['O'] = Color.FromRgb(0x18, 0x16, 0x1E), // 车轮
+            };
+            string[] rows =
+            {
+                ".MMMMMMMMMMMM.",
+                "M.WW.WW.WW.WWM",
+                "M.WW.WW.WW.WWM",
+                "MMMMMMMMMMMMMM",
+                ".MMMMMMMMMMMM.",
+                "..OO......OO..",
+            };
+            return Build(rows, palette);
+        }
+
         /// <summary>
         /// 给客制化主题用的公开入口——用户在"自定义主题"页面填的 rows/palette 就是这个 Build 方法
         /// 原本就在吃的格式，不用再单独设计一套客制化专属的画图逻辑。
