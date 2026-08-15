@@ -8,7 +8,7 @@
 ; 这样应用内的更新检测（跟 GitHub Release 的 tag 比大小）才会准。
 
 #define MyAppName "ZipPlay"
-#define MyAppVersion "1.4.1"
+#define MyAppVersion "1.5.0"
 #define MyAppPublisher "Hong005-byte"
 #define MyAppURL "https://github.com/Hong005-byte/ZipPlay"
 #define MyAppExeName "PixelLyric8BitFix.exe"
@@ -20,6 +20,10 @@ AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}/releases
+; 跟 App.xaml.cs 里 SingleInstanceMutexName 那个常量必须一字不差保持一致——装的时候如果这把互斥锁
+; 还被占着（旧实例缩在托盘里没退），Inno Setup 会等它关掉再覆盖文件，不然静默更新可能覆盖不了
+; 正在被占用的 exe，装完新版本号却没变、还一直提示更新（app 内单实例保护是另一道保险，见那边的注释）
+AppMutex=ZipPlay_SingleInstance_73EB0A1A-DB8A-4ADF-B4ED-C58002CE5C9F
 ; 装到当前用户目录下，不需要管理员权限，不会弹 UAC——小工具类 app 更适合这种免打扰安装方式
 PrivilegesRequired=lowest
 DefaultDirName={localappdata}\Programs\{#MyAppName}
