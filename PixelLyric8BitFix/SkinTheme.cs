@@ -26,6 +26,36 @@ namespace PixelLyric8BitFix
         public required Color MiniBorder { get; init; }
         public required Func<BitmapSource> MiniIcon { get; init; } // 延迟到真正进 Mini 模式才生成贴图，用不到就不用画
 
+        /// <summary>内置皮肤在选择器里用的"表情符号 + 名字"，跟 SkinPickerWindow.xaml 里 21 张皮肤卡片
+        /// 上写的文字一字不差——分享卡片的"卡片风格"下拉框复用这份名字，不用再抄一遍。
+        /// PlayerSkin.Custom 不走这个方法：客制化主题的名字是用户自己在 JSON 里写的 Name 字段，
+        /// 调用方（ListeningStatsWindow）对 Custom 单独处理，这里给个保底文案不让它崩。</summary>
+        public static string GetDisplayName(PlayerSkin skin) => skin switch
+        {
+            PlayerSkin.Minecraft => "🧱 Minecraft",
+            PlayerSkin.Simple => "▬ 简约风",
+            PlayerSkin.Crt => "📺 CRT 终端",
+            PlayerSkin.Cyberpunk => "🌆 赛博朋克",
+            PlayerSkin.Vinyl => "💿 黑胶唱片",
+            PlayerSkin.Glass => "🧊 玻璃拟态",
+            PlayerSkin.Lofi => "☕ 复古咖啡馆",
+            PlayerSkin.Aurora => "🌙 极光雪夜",
+            PlayerSkin.Rain => "🌧️ 雨夜窗景",
+            PlayerSkin.Starry => "✨ 星空太空",
+            PlayerSkin.Campfire => "🏕️ 篝火露营",
+            PlayerSkin.Sakura => "🌸 樱花",
+            PlayerSkin.Cassette => "📼 复古磁带",
+            PlayerSkin.Cloud => "☁️ 云朵漂浮",
+            PlayerSkin.Candle => "🕯️ 烛光冥想",
+            PlayerSkin.Plant => "🪴 绿植角落",
+            PlayerSkin.Sunset => "🌊 海边黄昏",
+            PlayerSkin.Arcade => "🕹️ 复古街机",
+            PlayerSkin.Invaders => "👾 太空侵略者",
+            PlayerSkin.City => "🚇 城市夜景",
+            PlayerSkin.Crown => "👑 尊贵皇冠",
+            _ => "🎨 自定义主题",
+        };
+
         public static SkinTheme For(PlayerSkin skin) => skin switch
         {
             PlayerSkin.Crt => new SkinTheme
@@ -204,6 +234,18 @@ namespace PixelLyric8BitFix
                 Lyric = Color.FromRgb(0xFF, 0xE0, 0xC0), Glow = Color.FromRgb(0xFF, 0xA9, 0x4A), GlowBlur = 5,
                 LyricBoxBg = Color.FromArgb(0xCC, 0x16, 0x10, 0x1F), LyricBoxBorder = Color.FromRgb(0xFF, 0xA9, 0x4A),
                 MiniBg = Color.FromRgb(0x16, 0x10, 0x1F), MiniBorder = Color.FromRgb(0xFF, 0xA9, 0x4A), MiniIcon = PixelArt.CreateTrain,
+            },
+
+            // 第一套限定皮肤：深紫黑渐变 + 暖金强调色，故意跟赛博朋克的紫（冷调、配青色）、
+            // 复古街机的金（配深紫黑柜体、但金色更亮更"街机霓虹"）都区分开，走的是"暗夜里一点
+            // 低调的贵气"而不是霓虹灯那种张扬感——呼应它"很难拿到"的定位
+            PlayerSkin.Crown => new SkinTheme
+            {
+                Font = new FontFamily("Georgia"),
+                Title = Color.FromRgb(0xFF, 0xF3, 0xD6), Artist = Color.FromRgb(0xC9, 0xA8, 0x68), Accent = Color.FromRgb(0xE6, 0xB6, 0x55),
+                Lyric = Color.FromRgb(0xFF, 0xF0, 0xD0), Glow = Color.FromRgb(0xE6, 0xB6, 0x55), GlowBlur = 8,
+                LyricBoxBg = Color.FromArgb(0xCC, 0x16, 0x0B, 0x24), LyricBoxBorder = Color.FromRgb(0xE6, 0xB6, 0x55),
+                MiniBg = Color.FromRgb(0x1A, 0x0B, 0x2E), MiniBorder = Color.FromRgb(0xE6, 0xB6, 0x55), MiniIcon = PixelArt.CreateCrown,
             },
 
             _ => new SkinTheme // Minecraft（默认）

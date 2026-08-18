@@ -14,7 +14,7 @@ namespace PixelLyric8BitFix
     /// </summary>
     public partial class SplashWindow : Window
     {
-        private bool _proceeding = false;
+        private readonly WindowProceedGuard _nav;
         private DispatcherTimer? _runTimer;
         private BitmapSource? _runnerFrame1;
         private BitmapSource? _runnerFrame2;
@@ -23,10 +23,7 @@ namespace PixelLyric8BitFix
         {
             InitializeComponent();
 
-            Closed += (s, e) =>
-            {
-                if (!_proceeding) Application.Current.Shutdown();
-            };
+            _nav = new WindowProceedGuard(this);
 
             _runnerFrame1 = PixelArt.CreateRunnerFrame1();
             _runnerFrame2 = PixelArt.CreateRunnerFrame2();
@@ -75,28 +72,29 @@ namespace PixelLyric8BitFix
             pause.Start();
         }
 
-        // 开场动画放完之后去哪：本地已经有存档、且用户没关掉"跳过启动设置页"这个勾选框时，
-        // 直接拿上次的皮肤/尺寸/显示模式进播放器；否则（第一次打开，或者用户就是想每次都手动选）走原来的设置页。
-        // 想改皮肤随时能在主播放器窗口里右键 / 点齿轮回到设置页，不会因为跳过这一页就再也找不到入口。
+        // 开场动画放完之后去哪：
+        //   没填过用户名 → 先问一下名字（WelcomeWindow），填完它自己会去开首页。这一条故意排在最前面——
+        //   SkipStartupSettings 这个字段 1.x 就有、默认就是 true，老用户升级上来 UserName 是空的但
+        //   SkipStartupSettings 已经是 true，如果先判断"要不要跳过"，这批人会直接进 MainWindow，
+        //   永远走不到 WelcomeWindow，头像/昵称/分享卡片这些新功能等于白做
+        //   有存档 && 勾了"跳过启动首页" → 直接拿上次的皮肤/尺寸/显示模式进播放器（老用户该多快还是多快）
+        //   其它情况（比如手动关掉了"跳过"，但之前已经填过名字）→ 直接进首页（HomeWindow）
+        // 想改设置随时能在主播放器窗口里右键 / 点齿轮回到首页，不会因为跳过这一步就再也找不到入口。
         private void ProceedAfterSplash()
         {
-            _proceeding = true;
-
             var settings = AppSettings.Load();
-            if (AppSettings.HasSavedConfig && settings.SkipStartupSettings)
+            if (string.IsNullOrWhiteSpace(settings.UserName))
             {
-                var main = new MainWindow(settings);
-                Application.Current.MainWindow = main;
-                main.Show();
+                _nav.ProceedTo(new WelcomeWindow(isFirstRun: true));
+            }
+            else if (AppSettings.HasSavedConfig && settings.SkipStartupSettings)
+            {
+                _nav.ProceedTo(new MainWindow(settings));
             }
             else
             {
-                var settingsWindow = new SettingsWindow();
-                Application.Current.MainWindow = settingsWindow;
-                settingsWindow.Show();
+                _nav.ProceedTo(new HomeWindow());
             }
-
-            Close();
         }
 
         // 点一下跳过动画，直接进下一步——等不及看完整个开场也没关系

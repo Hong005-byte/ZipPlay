@@ -62,6 +62,13 @@
                              From="0.3" To="0.55" Duration="0:0:2.4" AutoReverse="True" RepeatBehavior="Forever"/>
         </Storyboard>
 
+        <!-- 限定"尊贵皇冠"风：边框金光比其它皮肤都要慢、都要"沉"一点地呼吸——不是霓虹灯那种张扬闪烁，
+             是暗夜里低调的贵气感，节奏故意跟 City/Arcade 这些拉开距离 -->
+        <Storyboard x:Key="CrownGlowAnimation">
+            <DoubleAnimation Storyboard.TargetName="CrownSkinBg" Storyboard.TargetProperty="(Border.Effect).(DropShadowEffect.Opacity)"
+                             From="0.35" To="0.6" Duration="0:0:3.2" AutoReverse="True" RepeatBehavior="Forever"/>
+        </Storyboard>
+
         <!-- CRT 终端风：扫描线缓慢向下滚动 + 屏幕轻微闪烁，老显示器的感觉 -->
         <Storyboard x:Key="CrtFlickerAnimation">
             <DoubleAnimation Storyboard.TargetName="ScanlineTransform" Storyboard.TargetProperty="Y"
@@ -542,6 +549,29 @@
                 </Image>
             </Canvas>
 
+            <!-- 限定"尊贵皇冠"皮肤专属装饰：皇冠图标（自带金色辉光呼吸）+ 背后一圈光环
+                 （CrownHaloRing，平时只是淡淡一圈，几乎看不出在动）。鼓点够强的时候会触发"加冕闪耀"——
+                 皇冠放大一截 + 辉光冲到最亮 + 光环快速转半圈再停住，三件事一起播，这个专属动作
+                 只有这套皮肤会用，见 MainWindow.SkinInteractions.cs 的 PlayCrownFlare -->
+            <Canvas x:Name="CrownDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
+                <Ellipse x:Name="CrownHaloRing" Width="40" Height="40" Canvas.Right="6" Canvas.Bottom="-6"
+                         Stroke="#E6B655" StrokeThickness="2" StrokeDashArray="3,2" Opacity="0.3"
+                         RenderTransformOrigin="0.5,0.5">
+                    <Ellipse.RenderTransform>
+                        <RotateTransform x:Name="CrownHaloRotate" Angle="0"/>
+                    </Ellipse.RenderTransform>
+                </Ellipse>
+                <Image x:Name="ImgCrown" Width="24" Height="24" Canvas.Right="14" Canvas.Bottom="2" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0.5,0.5">
+                    <Image.RenderTransform>
+                        <ScaleTransform x:Name="CrownPokeScale"/>
+                    </Image.RenderTransform>
+                    <Image.Effect>
+                        <DropShadowEffect x:Name="CrownGlow" Color="#E6B655" BlurRadius="10" ShadowDepth="0" Opacity="0.6"/>
+                    </Image.Effect>
+                </Image>
+            </Canvas>
+
             <!-- 客制化主题的"单图标"动画专属（pulse / twinkle / sway / spin / flicker / bob 都用这一个图标）：
                  旋转和位移分开两个变换（TransformGroup 里各管各的），具体转多少度/摆多少/浮多高
                  由代码按 animation.type 现场写 -->
@@ -959,6 +989,22 @@
                     </Border.BorderBrush>
                     <Border.Effect>
                         <DropShadowEffect Color="#FFA94A" BlurRadius="10" ShadowDepth="0" Opacity="0.4"/>
+                    </Border.Effect>
+                </Border>
+
+                <!-- 皮肤 21：限定"尊贵皇冠"风（深紫黑渐变，金色边框光）——目前唯一一套需要解锁才能用的皮肤 -->
+                <Border x:Name="CrownSkinBg" BorderThickness="1" CornerRadius="6" Visibility="Collapsed">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#1A0B2E" Offset="0"/>
+                            <GradientStop Color="#0A0512" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <Border.BorderBrush>
+                        <SolidColorBrush Color="#E6B655"/>
+                    </Border.BorderBrush>
+                    <Border.Effect>
+                        <DropShadowEffect Color="#E6B655" BlurRadius="12" ShadowDepth="0" Opacity="0.45"/>
                     </Border.Effect>
                 </Border>
 

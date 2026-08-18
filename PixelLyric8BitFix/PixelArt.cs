@@ -1023,6 +1023,31 @@ namespace PixelLyric8BitFix
         /// </summary>
         public static BitmapSource BuildCustomIcon(string[] rows, IReadOnlyDictionary<char, Color> palette) => Build(rows, palette);
 
+        // 限定"尊贵皇冠"皮肤的图标：三尖皇冠，主体用跟这套皮肤 Accent 同一个金色，
+        // 两颗红宝石点缀 + 几点浅金高光，风格上故意比其它皮肤的图标更"精致"一点（多用了一层高光色）
+        public static BitmapSource CreateCrown()
+        {
+            var palette = new Dictionary<char, Color>
+            {
+                ['.'] = Transparent,
+                ['G'] = Color.FromRgb(0xE6, 0xB6, 0x55), // 金色主体，跟 SkinTheme.Crown 的 Accent 同一个颜色
+                ['Y'] = Color.FromRgb(0xFF, 0xE8, 0xA0), // 浅金高光
+                ['R'] = Color.FromRgb(0xC8, 0x2A, 0x4A), // 红宝石
+            };
+            string[] rows =
+            {
+                ".G.G.G..",
+                ".GGGGGG.",
+                ".GYGYGG.",
+                ".GRGRGG.",
+                ".GGGGGG.",
+                "GGGGGGGG",
+                "GGGGGGGG",
+                ".GGGGGG.",
+            };
+            return Build(rows, palette);
+        }
+
         private static BitmapSource Build(string[] rows, IReadOnlyDictionary<char, Color> palette)
         {
             int height = rows.Length;

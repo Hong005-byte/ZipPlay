@@ -1,0 +1,54 @@
+<Window x:Class="PixelLyric8BitFix.AudioReactiveSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        mc:Ignorable="d"
+        Title="ZipPlay — 音频律动" Height="440" Width="420"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="{StaticResource WindowBackgroundBrush}">
+
+    <!-- RadioButton/CheckBox/SectionHeader 不再在这个窗口自己定义样式了，套的是 App.xaml 里那份全局共享样式 -->
+
+    <Grid Margin="20,16,20,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="🎵 音频律动" Foreground="#F2F5F1" FontSize="22" FontWeight="Bold"/>
+            <TextBlock Text="Mini 模式像素粒子 + 皮肤跟着音乐动，都是同一份本地音频分析" Foreground="{StaticResource MutedTextBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0"/>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" Margin="0,10,0,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+                <TextBlock Text="Mini 模式律动效果" Style="{StaticResource SectionHeader}"/>
+                <CheckBox x:Name="ChkMiniVisualizerEnabled" Content="开启（双击窗口缩成小方块时，周围会有像素粒子跟着系统音频跳动）"
+                          FontSize="11" IsChecked="True"/>
+                <TextBlock Text="纯本地实时分析系统正在播放的声音，不联网、不录制、不保存任何音频数据；关掉这个开关后 Mini 模式下完全不会启动音频采集。"
+                           Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,2,0,8"/>
+                <TextBlock Text="灵敏度" Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,0,0,2"/>
+                <StackPanel Orientation="Horizontal">
+                    <RadioButton x:Name="RbVisualizerLow" Content="低" GroupName="VisualizerSensitivity" Margin="0,0,14,0"/>
+                    <RadioButton x:Name="RbVisualizerMedium" Content="中（默认）" GroupName="VisualizerSensitivity" IsChecked="True" Margin="0,0,14,0"/>
+                    <RadioButton x:Name="RbVisualizerHigh" Content="高" GroupName="VisualizerSensitivity"/>
+                </StackPanel>
+                <TextBlock Text="每个人电脑的系统音量、常听的音乐类型都不一样，觉得粒子太安静/太吵可以自己调这一档。"
+                           Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
+
+                <TextBlock Text="皮肤音乐律动" Style="{StaticResource SectionHeader}"/>
+                <CheckBox x:Name="ChkSkinAudioReactiveEnabled" Content="开启（支持的皮肤会跟着音乐变速/变化，具体动作因皮肤而异）"
+                          FontSize="11" IsChecked="True"/>
+                <TextBlock Text="绝大多数皮肤都支持，加上勾了「跟着音乐律动」的客制化主题；只有 lofi、烛光冥想这两套刻意保持安静，不受这个开关影响。用的是跟上面 Mini 模式同一份音频分析（同一档灵敏度），纯本地，不联网、不录制。关掉之后这些皮肤的动画退回固定节奏循环。"
+                           Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,2,0,0"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Button Grid.Row="2" x:Name="BtnBack" Content="← 返回首页" Click="BtnBack_Click"
+                Style="{StaticResource PillButtonStyle}"
+                Height="38" HorizontalAlignment="Left" Margin="0,14,0,0" Padding="16,0" FontSize="13"/>
+    </Grid>
+</Window>

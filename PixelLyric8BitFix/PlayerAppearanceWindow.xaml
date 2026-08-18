@@ -1,0 +1,49 @@
+<Window x:Class="PixelLyric8BitFix.PlayerAppearanceWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        mc:Ignorable="d"
+        Title="ZipPlay — 窗口与显示" Height="440" Width="400"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="{StaticResource WindowBackgroundBrush}">
+
+    <!-- RadioButton/SectionHeader 不再在这个窗口自己定义样式了，套的是 App.xaml 里那份全局共享样式 -->
+
+    <Grid Margin="20,16,20,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="📐 窗口与显示" Foreground="#F2F5F1" FontSize="22" FontWeight="Bold"/>
+            <TextBlock Text="窗口尺寸、显示模式、歌词字号——改完自动保存" Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,2,0,0"/>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" Margin="0,10,0,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+                <TextBlock Text="窗口尺寸" Style="{StaticResource SectionHeader}"/>
+                <RadioButton x:Name="RbSizeSmall" Content="小　（400 × 170）" GroupName="Size"/>
+                <RadioButton x:Name="RbSizeMedium" Content="中　（580 × 260）" GroupName="Size" IsChecked="True"/>
+                <RadioButton x:Name="RbSizeLarge" Content="大　（760 × 340）" GroupName="Size"/>
+                <TextBlock Text="选定后主窗口会锁定该尺寸，不能再拖拽缩放，避免误拉成全屏。" Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
+
+                <TextBlock Text="显示模式" Style="{StaticResource SectionHeader}"/>
+                <RadioButton x:Name="RbModeStandard" Content="标准（标题 + 进度条 + 歌词）" GroupName="Mode" IsChecked="True"/>
+                <RadioButton x:Name="RbModeMinimal" Content="极简（只显示当前歌词）" GroupName="Mode"/>
+
+                <TextBlock Text="歌词字号" Style="{StaticResource SectionHeader}"/>
+                <RadioButton x:Name="RbFontSmall" Content="小" GroupName="FontSize"/>
+                <RadioButton x:Name="RbFontMedium" Content="中（默认）" GroupName="FontSize" IsChecked="True"/>
+                <RadioButton x:Name="RbFontLarge" Content="大" GroupName="FontSize"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Button Grid.Row="2" x:Name="BtnBack" Content="← 返回首页" Click="BtnBack_Click"
+                Style="{StaticResource PillButtonStyle}"
+                Height="38" HorizontalAlignment="Left" Margin="0,14,0,0" Padding="16,0" FontSize="13"/>
+    </Grid>
+</Window>

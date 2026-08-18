@@ -31,6 +31,10 @@ namespace PixelLyric8BitFix
         Arcade,     // 复古街机风
         Invaders,   // 8-bit 太空侵略者风（同样加在最后面，理由同上）
         City,       // 城市夜景/地铁风
+
+        // 第一套限定皮肤：不是免费的，得在成就墙（AchievementCalculator）点亮全部 7 个常规成就才解锁，
+        // 见 SkinPickerWindow.xaml.cs 里对 RbSkinCrown.IsEnabled 的判断。同样加在最后面，理由跟上面三个一致
+        Crown,      // 尊贵皇冠风（限定）
     }
 
     public enum PlayerSize
@@ -129,6 +133,13 @@ namespace PixelLyric8BitFix
         /// 不录制、不保存音频；默认开启，关掉之后这些皮肤的动画退回固定节奏循环，且不会启动音频采集。
         /// </summary>
         public bool SkinAudioReactiveEnabled { get; set; } = true;
+
+        /// <summary>
+        /// 用户自己填的称呼——首次启动问一次（WelcomeWindow），之后能在 HomeWindow 顶部的问候语上
+        /// 点一下改。纯本地展示用，不是账号，也不会传到任何地方；目前唯一的用途是分享卡片标题下面
+        /// 加一句"XXX 的"（见 ShareCardBuilder.Build），留空也完全不影响其它功能。
+        /// </summary>
+        public string? UserName { get; set; }
 
         private static string ConfigPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),

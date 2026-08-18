@@ -1,0 +1,54 @@
+<Window x:Class="PixelLyric8BitFix.AboutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        mc:Ignorable="d"
+        Title="ZipPlay — 关于与更新" Height="440" Width="420"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="{StaticResource WindowBackgroundBrush}">
+
+
+    <Grid Margin="20,16,20,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="ℹ️ 关于与更新" Foreground="#F2F5F1" FontSize="22" FontWeight="Bold"/>
+            <TextBlock Text="ZipPlay · 小型像素歌词播放器" Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,2,0,0"/>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" Margin="0,10,0,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+                <TextBlock Text="版本" Style="{StaticResource SectionHeader}"/>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock x:Name="TxtCurrentVersion" Text="当前版本 v1.0.0" Foreground="{StaticResource MutedTextBrush}" FontSize="11" VerticalAlignment="Center"/>
+                    <Button x:Name="BtnCheckUpdate" Content="检查更新" Click="BtnCheckUpdate_Click"
+                            Style="{StaticResource PillButtonStyle}" Margin="10,0,0,0" Padding="10,3" FontSize="11"/>
+                </StackPanel>
+                <TextBlock x:Name="TxtUpdateStatus" Text="" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"
+                           Visibility="Collapsed" MouseLeftButtonDown="TxtUpdateStatus_MouseLeftButtonDown"/>
+                <TextBlock Text="启动时也会在后台静默检查一次，发现新版本会在主播放器窗口右上角提示。"
+                           Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,6,0,0"/>
+
+                <TextBlock Text="使用小贴士" Style="{StaticResource SectionHeader}"/>
+                <TextBlock Text="想改皮肤/设置随时能从主播放器窗口右键菜单或者齿轮图标回到首页。"
+                           Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,0"/>
+                <TextBlock Text="全局快捷键：Ctrl + Alt + L 随时显示/隐藏播放器，就算窗口被其它程序挡住或者已经收进系统托盘也能用。"
+                           Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                <TextBlock Text="左上角齿轮旁边有个 🎤 小开关，能关掉卡拉OK扫光效果，退回最早那种整行一次性切换的显示方式。"
+                           Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                <TextBlock Text="旁边还有个 🌐 双语歌词开关：只有抓到翻译的歌才会显示翻译行，不是每首歌都有。"
+                           Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Button Grid.Row="2" x:Name="BtnBack" Content="← 返回首页" Click="BtnBack_Click"
+                Style="{StaticResource PillButtonStyle}"
+                Height="38" HorizontalAlignment="Left" Margin="0,14,0,0" Padding="16,0" FontSize="13"/>
+    </Grid>
+</Window>

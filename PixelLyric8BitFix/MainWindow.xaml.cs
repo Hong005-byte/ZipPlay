@@ -84,10 +84,19 @@ namespace PixelLyric8BitFix
         private string _lastTrackId = "";
         private CancellationTokenSource? _lyricFetchCts;
 
-        // 事件处理器要保留引用，换 session 时才能正确 -= 掉，防止叠加订阅
+        // ── 听歌统计：每天/每首歌听了多久，纯本地记录，用来生成月度/年度总结报告——
+        // 见 MainWindow.ListeningStats.cs（累加/flush 逻辑）、ListeningStatsWindow（报告页面）──
+        private ListeningStats _stats = new();
+        private double _pendingListenSeconds;
+        private DateTimeOffset _lastStatsTickTime = DateTimeOffset.Now;
+
+        // 事件处理器要保留引用，换 session 时才能正确 -= 掉，防止叠加订阅；
+        // Closed 事件里也要靠这几个引用把"跳去设置页"之后这个已关闭的实例彻底解绑掉，
+        // 见 Closed 那段注释
         private TypedEventHandler<GlobalSystemMediaTransportControlsSession, MediaPropertiesChangedEventArgs>? _mediaPropsHandler;
         private TypedEventHandler<GlobalSystemMediaTransportControlsSession, PlaybackInfoChangedEventArgs>? _playbackHandler;
         private TypedEventHandler<GlobalSystemMediaTransportControlsSession, TimelinePropertiesChangedEventArgs>? _timelineHandler;
+        private TypedEventHandler<GlobalSystemMediaTransportControlsSessionManager, CurrentSessionChangedEventArgs>? _currentSessionChangedHandler;
 
         private readonly AppSettings _settings;
 
@@ -154,6 +163,16 @@ namespace PixelLyric8BitFix
             InitializeComponent();
             _settings = settings ?? new AppSettings();
             _audioVisualizer.ApplySensitivity(_settings.VisualizerSensitivity);
+            _stats = ListeningStatsStore.Load();
+            _lastStatsTickTime = DateTimeOffset.Now;
+
+            // 50ms 只做本地插值计算 + UI 刷新，不再有系统调用，非常轻量。放在这里（Closed 事件注册之前）
+            // 赋值，而不是放在构造函数最后——下面 Closed 那个闭包里要调 _smoothTimer.Stop()，闭包定义的
+            // 时候如果 _smoothTimer 还没赋值过，编译器的可空分析看不出闭包真正执行时它已经有值了，
+            // 会报一个（无害但碍眼的）"可能为 null"警告
+            _smoothTimer = new DispatcherTimer(DispatcherPriority.Render);
+            _smoothTimer.Interval = TimeSpan.FromMilliseconds(50);
+            _smoothTimer.Tick += SmoothTimer_Tick;
 
             // 启动设置页选好的：尺寸预设、皮肤、显示模式
             var (w, h) = _settings.GetWindowSize();
@@ -178,6 +197,27 @@ namespace PixelLyric8BitFix
                 _settings.WindowLeft = Left;
                 _settings.WindowTop = Top;
                 _settings.Save();
+
+                FlushListeningStats(_lastTrackId); // 不丢关闭前那几秒还没攒够阈值的听歌时长
+
+                // "跳去设置页"这条路不会真退出程序（_navigatingToSettings=true，跳过下面的 Shutdown），
+                // 这个 MainWindow 实例本身却还活着——SMTC 的事件订阅、_smoothTimer 这些不会因为窗口
+                // "关闭"就自动停。之前这里漏了这一段：旧实例的 tick 还在后台悄悄跑，_lastTrackId/_isPlaying
+                // 这些字段还在跟着系统播放状态继续更新，UpdateListeningStats 每 50ms 一次照样在攒时长、
+                // 攒够阈值就把这个旧实例内存里那份"没清空前"的 _stats 存回磁盘——表现出来就是"设置页里
+                // 点了清空统计数据，回去点个播放，再回来数据又'复活'了"，其实是旧实例拿着清空前的
+                // 内存快照把刚清空的文件又盖回去了。彻底解绑掉，不让这个实例再对外产生任何副作用：
+                _smoothTimer.Stop();
+                if (_currentSession != null)
+                {
+                    if (_mediaPropsHandler != null) _currentSession.MediaPropertiesChanged -= _mediaPropsHandler;
+                    if (_playbackHandler != null) _currentSession.PlaybackInfoChanged -= _playbackHandler;
+                    if (_timelineHandler != null) _currentSession.TimelinePropertiesChanged -= _timelineHandler;
+                }
+                if (_sessionManager != null && _currentSessionChangedHandler != null)
+                {
+                    _sessionManager.CurrentSessionChanged -= _currentSessionChangedHandler;
+                }
 
                 _trayIconManager.Dispose();
 
@@ -231,11 +271,6 @@ namespace PixelLyric8BitFix
             // ApplySkinPalette 里现在会顺手调一次，保证发光颜色（跟着皮肤强调色）和亮不亮这两件事
             // 用的是同一份最新状态，不用依赖"构造函数里两处调用顺序刚好对" 这种隐式约定
 
-            // 50ms 只做本地插值计算 + UI 刷新，不再有系统调用，非常轻量
-            _smoothTimer = new DispatcherTimer(DispatcherPriority.Render);
-            _smoothTimer.Interval = TimeSpan.FromMilliseconds(50);
-            _smoothTimer.Tick += SmoothTimer_Tick;
-
             _httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
             _downloadHttpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
             _lyricsFetcher = new LyricsFetcher(_httpClient);
@@ -285,14 +320,14 @@ namespace PixelLyric8BitFix
             OpenSettingsAndClose();
         }
 
-        // 从主播放器窗口"返回"设置页：先开新窗口，再关自己，中间不会出现"零窗口"的瞬间
+        // 从主播放器窗口"返回"首页：先开新窗口，再关自己，中间不会出现"零窗口"的瞬间
         private void OpenSettingsAndClose()
         {
             _navigatingToSettings = true;
 
-            var settingsWindow = new SettingsWindow();
-            Application.Current.MainWindow = settingsWindow;
-            settingsWindow.Show();
+            var homeWindow = new HomeWindow();
+            Application.Current.MainWindow = homeWindow;
+            homeWindow.Show();
 
             Close();
         }
@@ -324,16 +359,20 @@ namespace PixelLyric8BitFix
                     PlayerSkin.Arcade => "ArcadeMarqueeAnimation",
                     PlayerSkin.Invaders => "InvadersPulseAnimation",
                     PlayerSkin.City => "CityGlowAnimation",
+                    PlayerSkin.Crown => "CrownGlowAnimation",
                     _ => null,
                 };
                 // 皮肤音乐律动：跟着音乐"加速"这一类内置皮肤，加上 Minecraft（走路变速 + Steve 跳跃），
                 // 加上客制化主题勾了 musicReactive 开关的情况。lofi、烛光冥想两套刻意保持安静，不接进去。
-                // 见 MainWindow.SkinInteractions.cs 的 UpdateMusicReactiveSkin。
+                // Crown（限定"尊贵皇冠"）除了跟其它皮肤一样的 SpeedRatio 呼吸节奏，鼓点够强的时候
+                // 还会触发只有它才有的"加冕闪耀"专属动作，见 MainWindow.SkinInteractions.cs 的
+                // PlayCrownFlare（跟 UpdateMusicReactiveSkin 一起看）。
                 _isMusicReactiveSkin = _settings.Skin is PlayerSkin.Vinyl or PlayerSkin.Cassette
                     or PlayerSkin.Campfire or PlayerSkin.Minecraft
                     or PlayerSkin.Starry or PlayerSkin.Rain or PlayerSkin.Aurora
                     or PlayerSkin.Sakura or PlayerSkin.Crt or PlayerSkin.Cyberpunk
                     or PlayerSkin.Arcade or PlayerSkin.Invaders or PlayerSkin.City
+                    or PlayerSkin.Crown
                     || (_settings.Skin == PlayerSkin.Custom && _customTheme?.Animation?.MusicReactive == true);
 
                 if (ambientAnimationKey != null)
@@ -346,7 +385,8 @@ namespace PixelLyric8BitFix
                     bool needsControllableStoryboard = _settings.Skin is PlayerSkin.Vinyl or PlayerSkin.Cassette or PlayerSkin.Campfire
                         or PlayerSkin.Starry or PlayerSkin.Rain or PlayerSkin.Aurora or PlayerSkin.Sakura
                         or PlayerSkin.Crt or PlayerSkin.Cyberpunk
-                        or PlayerSkin.Arcade or PlayerSkin.Invaders or PlayerSkin.City;
+                        or PlayerSkin.Arcade or PlayerSkin.Invaders or PlayerSkin.City
+                        or PlayerSkin.Crown;
                     if (needsControllableStoryboard && _settings.SkinAudioReactiveEnabled)
                     {
                         ambientStoryboard.Begin(this, HandoffBehavior.SnapshotAndReplace, isControllable: true);
@@ -372,10 +412,11 @@ namespace PixelLyric8BitFix
 
                 _sessionManager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
 
-                _sessionManager.CurrentSessionChanged += async (s, args) =>
+                _currentSessionChangedHandler = async (s, args) =>
                 {
                     await BindSessionEventsAsync(_sessionManager?.GetCurrentSession());
                 };
+                _sessionManager.CurrentSessionChanged += _currentSessionChangedHandler;
 
                 await BindSessionEventsAsync(_sessionManager.GetCurrentSession());
 
@@ -492,6 +533,8 @@ namespace PixelLyric8BitFix
             {
                 UpdateMusicReactiveSkin();
             }
+
+            UpdateListeningStats();
         }
     }
 }

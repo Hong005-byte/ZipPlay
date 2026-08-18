@@ -1,0 +1,90 @@
+<Window x:Class="PixelLyric8BitFix.HomeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        mc:Ignorable="d"
+        Title="ZipPlay" Height="680" Width="640"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="{StaticResource WindowBackgroundBrush}">
+
+    <Window.Resources>
+        <!-- 便当格子的卡片样式：深色圆角卡片，hover 的时候边框/底色跟着翡翠绿亮一点，暗示"这是能点的"——
+             配色跟 WelcomeWindow/App.xaml 里那套翡翠绿高级感是同一份，格子本身的排版（图标+标题+副标题
+             左上对齐、按列数均分宽度）是这个页面自己的事，所以样式还是留在这个窗口本地。
+             不再单独设 Width——格子统一交给外层 UniformGrid 按列数均分宽度，行与行之间的格子边缘
+             才能对整齐，不会因为 WrapPanel 按内容自然换行导致最后一行不满、跟上面对不齐 -->
+        <Style x:Key="TileButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#1B211C"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#2A332B"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,0,10,10"/>
+            <Setter Property="Padding" Value="16"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="VerticalContentAlignment" Value="Top"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="10">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                               HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                               VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#34D399"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#212820"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="24,20,24,20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Orientation="Horizontal">
+            <!-- 头像圆圈 + 问候语一起是"改个人资料"的入口，点哪个都行，不单独占一个格子 -->
+            <Grid Width="48" Height="48" Cursor="Hand" MouseLeftButtonDown="Profile_MouseLeftButtonDown">
+                <Ellipse Width="48" Height="48" Style="{StaticResource AvatarRingStyle}">
+                    <Ellipse.Fill>
+                        <ImageBrush x:Name="AvatarBrush" Stretch="UniformToFill"/>
+                    </Ellipse.Fill>
+                </Ellipse>
+                <TextBlock x:Name="TxtAvatarPlaceholder" Text="👤" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"/>
+            </Grid>
+            <StackPanel VerticalAlignment="Center" Margin="12,0,0,0" Cursor="Hand" MouseLeftButtonDown="Profile_MouseLeftButtonDown">
+                <TextBlock Text="ZipPlay" Foreground="#F2F5F1" FontSize="22" FontWeight="Bold"/>
+                <TextBlock x:Name="TxtGreeting" Text="你好 👋" Foreground="{StaticResource AccentBrush}" FontSize="12" FontWeight="Bold" Margin="0,2,0,0"/>
+            </StackPanel>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" Margin="0,14,0,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+                <UniformGrid x:Name="LargeTilePanel" Columns="2"/>
+                <UniformGrid x:Name="SmallTilePanel" Columns="3" Margin="0,4,0,0"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="2">
+            <CheckBox x:Name="ChkSkipStartupSettings" Content="下次启动跳过这个首页，直接用当前选择进入播放器"
+                      Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,10,0,0" IsChecked="True"/>
+            <TextBlock Text="想改设置随时能从主播放器窗口右键菜单或者齿轮图标回来，不会因为跳过这一页就找不到入口。"
+                       Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,2,0,0"/>
+
+            <Button x:Name="BtnStart" Content="开始播放 ▶" Click="BtnStart_Click"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    Height="42" Margin="0,10,0,0" FontWeight="Bold" FontSize="15"/>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -7,24 +7,8 @@
         Title="ZipPlay — 自定义主题" Height="680" Width="480"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
-        Background="#1B1B1B">
+        Background="{StaticResource WindowBackgroundBrush}">
 
-    <Window.Resources>
-        <Style TargetType="TextBlock" x:Key="SectionHeader">
-            <Setter Property="Foreground" Value="#55FF55"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Margin" Value="0,14,0,6"/>
-        </Style>
-        <Style TargetType="Button" x:Key="ActionButton">
-            <Setter Property="Padding" Value="10,4"/>
-            <Setter Property="FontSize" Value="11"/>
-            <Setter Property="Background" Value="#2A2A2A"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Cursor" Value="Hand"/>
-        </Style>
-    </Window.Resources>
 
     <Grid Margin="20,16,20,16">
         <Grid.RowDefinitions>
@@ -34,8 +18,8 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0">
-            <TextBlock Text="🎨 自定义主题" Foreground="White" FontSize="22" FontWeight="Bold"/>
-            <TextBlock Text="不是代码，是纯数据（颜色/渐变/像素图标/挑一种动画）——填错了会告诉你具体哪里错" Foreground="#999999" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0"/>
+            <TextBlock Text="🎨 自定义主题" Foreground="#F2F5F1" FontSize="22" FontWeight="Bold"/>
+            <TextBlock Text="不是代码，是纯数据（颜色/渐变/像素图标/挑一种动画）——填错了会告诉你具体哪里错" Foreground="{StaticResource MutedTextBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0"/>
         </StackPanel>
 
         <ScrollViewer Grid.Row="1" Margin="0,10,0,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -51,22 +35,22 @@
                     颜色格式是 #RRGGBB 或带透明度的 #AARRGGBB。下面是一份完整示例，照着改就行：
                 </TextBlock>
 
-                <Border Background="#111111" BorderBrush="#333333" BorderThickness="1" CornerRadius="4" Margin="0,8,0,0" Padding="8">
+                <Border Background="#1B211C" BorderBrush="#2A332B" BorderThickness="1" CornerRadius="6" Margin="0,8,0,0" Padding="8">
                     <TextBox x:Name="TxtExample" IsReadOnly="True" TextWrapping="NoWrap"
                              Background="Transparent" BorderThickness="0" Foreground="#8AB4F8"
                              FontFamily="Consolas" FontSize="11" Height="220"
                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
                 </Border>
-                <Button x:Name="BtnCopyExample" Content="📋 复制示例到剪贴板" Style="{StaticResource ActionButton}"
-                        HorizontalAlignment="Left" Margin="0,6,0,0" Click="BtnCopyExample_Click"/>
+                <Button x:Name="BtnCopyExample" Content="📋 复制示例到剪贴板" Style="{StaticResource PillButtonStyle}"
+                        HorizontalAlignment="Left" Padding="10,4" FontSize="11" Margin="0,6,0,0" Click="BtnCopyExample_Click"/>
 
                 <TextBlock x:Name="TxtThemeCount" Text="已保存的客制化主题 (0/5)" Style="{StaticResource SectionHeader}"/>
                 <StackPanel x:Name="ThemeListPanel"/>
-                <TextBlock x:Name="TxtNoThemes" Text="还没有存过任何客制化主题。" Foreground="#777777" FontSize="11" Margin="0,4,0,0"/>
+                <TextBlock x:Name="TxtNoThemes" Text="还没有存过任何客制化主题。" Foreground="{StaticResource HintTextBrush}" FontSize="11" Margin="0,4,0,0"/>
 
                 <TextBlock Text="粘贴 / 编辑你的 JSON" Style="{StaticResource SectionHeader}"/>
                 <TextBox x:Name="TxtInput" AcceptsReturn="True" TextWrapping="Wrap"
-                         Background="#111111" Foreground="#EEEEEE" BorderBrush="#333333" BorderThickness="1"
+                         Background="#1B211C" Foreground="#EEEEEE" BorderBrush="#2A332B" BorderThickness="1"
                          FontFamily="Consolas" FontSize="11" Height="180" Padding="6"
                          VerticalScrollBarVisibility="Auto"/>
 
@@ -90,12 +74,12 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <Button Grid.Column="0" x:Name="BtnBack" Content="← 返回设置页" Click="BtnBack_Click"
-                    Height="38" HorizontalAlignment="Left" Padding="16,0" FontSize="13"
-                    Background="#2A2A2A" Foreground="White" BorderThickness="0" Cursor="Hand"/>
+            <Button Grid.Column="0" x:Name="BtnBack" Content="← 返回首页" Click="BtnBack_Click"
+                    Style="{StaticResource PillButtonStyle}"
+                    Height="38" HorizontalAlignment="Left" Padding="16,0" FontSize="13"/>
             <Button Grid.Column="1" x:Name="BtnSave" Content="💾 保存这个主题" Click="BtnSave_Click"
-                    Height="38" Padding="16,0" FontWeight="Bold" FontSize="13"
-                    Background="#2E7D32" Foreground="White" BorderThickness="0" Cursor="Hand"/>
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    Height="38" Padding="16,0" FontWeight="Bold" FontSize="13"/>
         </Grid>
     </Grid>
 </Window>

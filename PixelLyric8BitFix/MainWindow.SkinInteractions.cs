@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 
 namespace PixelLyric8BitFix
 {
@@ -124,6 +125,13 @@ namespace PixelLyric8BitFix
         private bool _arcadeWobbleArmed = true;
         private bool _cityJoltArmed = true;
 
+        // 限定"尊贵皇冠"专属：触发阈值比其它皮肤的 BeatTriggerArmedThreshold（0.02f）更高一截——
+        // 故意让这个专属动作比其它皮肤的一次性反馈更难触发，只有鼓点真的很强的时候才会"加冕"，
+        // 呼应这套皮肤本身"很难拿到"的定位，不是随便一个小节奏就能看到
+        private const float CrownFlareArmedThreshold = 0.035f;
+        private const float CrownFlareDisarmThreshold = 0.012f;
+        private bool _crownFlareArmed = true;
+
         private void UpdateMusicReactiveSkin()
         {
             var snapshot = _audioVisualizer.GetSnapshot();
@@ -222,6 +230,14 @@ namespace PixelLyric8BitFix
                     PlayBeatBounce(TrainJoltTransform, TranslateTransform.XProperty, 10, 150);
                 }
             }
+
+            if (_settings.Skin == PlayerSkin.Crown)
+            {
+                if (TryArmBeatTrigger(ref _crownFlareArmed, snapshot.BeatPulse, CrownFlareArmedThreshold, CrownFlareDisarmThreshold))
+                {
+                    PlayCrownFlare();
+                }
+            }
         }
 
         // BeatBounce 动画本体：戳一下 Steve（鼠标点击）、鼓点触发（UpdateMusicReactiveSkin）共用同一个
@@ -273,6 +289,53 @@ namespace PixelLyric8BitFix
             frames.KeyFrames.Add(new LinearDoubleKeyFrame(-amount * 0.4, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(durationMs * 0.65))));
             frames.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(durationMs))));
             transform.BeginAnimation(RotateTransform.AngleProperty, frames);
+        }
+
+        // 限定"尊贵皇冠"专属动作："加冕闪耀"——鼓点够强的时候，皇冠瞬间放大一截 + 辉光冲到最亮 +
+        // 背后的光环亮起来快速转半圈。三件事在同一次触发里一起播，不是拿 BeatGrow/BeatFlash/BeatBounce
+        // 这些已有方法拼出来的——专门为这套限定皮肤写的一整套动画，别的皮肤不会调用这个方法，
+        // 也不共用这几个动画参数，是名副其实的"这个动作别的皮肤用不了"。
+        //
+        // CrownGlow（ImgCrown 自己的发光）和 CrownHaloRing 的透明度都没有被任何 Storyboard 占着
+        // （皮肤本身的呼吸辉光落在 CrownSkinBg 的效果上，是另一个对象），可以直接 BeginAnimation，
+        // 跟篝火那套"缩放不碰 CampfireGlow.Opacity 是因为那个被占着"是同一个道理、但这边反过来
+        // ——正因为没被占着，才可以直接用。
+        //
+        // 光环的旋转故意不用 AutoReverse：转过去就停在那，不弹回来，下一次触发从当前角度接着往前转，
+        // 是这个方法里唯一一个"不回弹"的动画，跟其它一次性反馈的手感刻意区分开
+        private void PlayCrownFlare()
+        {
+            var scaleAnim = new DoubleAnimation(1.0, 1.5, TimeSpan.FromMilliseconds(260))
+            {
+                AutoReverse = true,
+                FillBehavior = FillBehavior.Stop,
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
+            };
+            CrownPokeScale.BeginAnimation(ScaleTransform.ScaleXProperty, scaleAnim);
+            CrownPokeScale.BeginAnimation(ScaleTransform.ScaleYProperty, scaleAnim);
+
+            var glowAnim = new DoubleAnimation(CrownGlow.Opacity, 1.0, TimeSpan.FromMilliseconds(220))
+            {
+                AutoReverse = true,
+                FillBehavior = FillBehavior.Stop,
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
+            };
+            CrownGlow.BeginAnimation(DropShadowEffect.OpacityProperty, glowAnim);
+
+            var haloOpacityAnim = new DoubleAnimation(CrownHaloRing.Opacity, 1.0, TimeSpan.FromMilliseconds(180))
+            {
+                AutoReverse = true,
+                FillBehavior = FillBehavior.Stop,
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
+            };
+            CrownHaloRing.BeginAnimation(UIElement.OpacityProperty, haloOpacityAnim);
+
+            double fromAngle = CrownHaloRotate.Angle;
+            var rotateAnim = new DoubleAnimation(fromAngle, fromAngle + 180, TimeSpan.FromMilliseconds(320))
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
+            };
+            CrownHaloRotate.BeginAnimation(RotateTransform.AngleProperty, rotateAnim);
         }
 
         private void ImgSteve_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

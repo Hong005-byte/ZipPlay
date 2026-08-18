@@ -103,7 +103,9 @@ namespace PixelLyric8BitFix
             if (string.IsNullOrEmpty(title)) return;
             string trackId = $"{title}_{artist}";
             if (_lastTrackId == trackId) return;
+            string previousTrackId = _lastTrackId;
             _lastTrackId = trackId;
+            FlushListeningStats(previousTrackId); // 上一首歌剩下还没攒够阈值的零头秒数，切歌前先记到它名下
 
             // 1. 切歌一瞬间，UI 立刻响应，绝不等待网络
             Dispatcher.Invoke(() =>
@@ -136,6 +138,7 @@ namespace PixelLyric8BitFix
             // 4. 歌名数据清洗
             string cleanTitle = Regex.Replace(title, @"\s*[\(\[][^\]\)]*(feat|with|remix|version|prod)[^\]\)]*[\)\]]", "", RegexOptions.IgnoreCase).Trim();
             string cleanArtist = artist.Split(new[] { ',', ';', '/' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() ?? artist;
+            RegisterTrackInfo(trackId, cleanTitle, cleanArtist); // 听歌统计报告页面显示用这份"干净"名字，trackId 本身仍是原始未清洗的
 
             // 4.5 先查本地缓存：这首歌以前成功抓到过的话直接用，完全不用等网络。
             //     翻译单独存了一份缓存（LyricsCache.TryGetTranslation）：有就直接用，没有就在后台现场

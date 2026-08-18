@@ -1,0 +1,52 @@
+<Window x:Class="PixelLyric8BitFix.LocalDataWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        mc:Ignorable="d"
+        Title="ZipPlay — 本地数据" Height="400" Width="420"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="{StaticResource WindowBackgroundBrush}">
+
+
+    <Grid Margin="20,16,20,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="🗄️ 本地数据" Foreground="#F2F5F1" FontSize="22" FontWeight="Bold"/>
+            <TextBlock Text="歌词缓存 + 诊断日志——都存在这台电脑上，清空/打开都很安全" Foreground="{StaticResource MutedTextBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0"/>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" Margin="0,10,0,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+                <TextBlock Text="本地缓存" Style="{StaticResource SectionHeader}"/>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock x:Name="TxtCacheInfo" Text="暂无缓存" Foreground="{StaticResource MutedTextBrush}" FontSize="11" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                    <Button x:Name="BtnOpenCacheFolder" Content="打开缓存文件夹" Click="BtnOpenCacheFolder_Click"
+                            Style="{StaticResource PillButtonStyle}" Padding="10,3" FontSize="11"/>
+                    <Button x:Name="BtnClearCache" Content="清空歌词缓存" Click="BtnClearCache_Click"
+                            Style="{StaticResource PillButtonStyle}" Margin="8,0,0,0" Padding="10,3" FontSize="11"/>
+                </StackPanel>
+                <TextBlock Text="抓到过的歌词会存一份在本地（每首歌一个 .lrc 文件），同一首歌下次再播就不用重新联网抓词。不放心的话可以先点「打开缓存文件夹」自己看一眼里面只有歌词文件；「清空」也只会删这一个文件夹里的内容，不会碰到其它设置，清空后不影响正常使用，只是下次播到的歌要重新抓一遍。"
+                           Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
+
+                <TextBlock Text="诊断" Style="{StaticResource SectionHeader}"/>
+                <Button x:Name="BtnOpenLog" Content="打开日志文件" Click="BtnOpenLog_Click"
+                        Style="{StaticResource PillButtonStyle}" Padding="10,3" FontSize="11" HorizontalAlignment="Left"/>
+                <TextBlock Text="遇到问题（崩溃、托盘图标不出现、热键不生效之类）时，这个文件里可能记了点线索，反馈问题时可以带上它。正常使用不影响，最多占 1MB 空间。"
+                           Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Button Grid.Row="2" x:Name="BtnBack" Content="← 返回首页" Click="BtnBack_Click"
+                Style="{StaticResource PillButtonStyle}"
+                Height="38" HorizontalAlignment="Left" Margin="0,14,0,0" Padding="16,0" FontSize="13"/>
+    </Grid>
+</Window>

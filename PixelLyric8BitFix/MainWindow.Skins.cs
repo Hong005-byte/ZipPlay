@@ -43,7 +43,9 @@ namespace PixelLyric8BitFix
             return SkinTheme.For(skin);
         }
 
-        private static SkinTheme BuildSkinThemeFromCustom(CustomTheme custom)
+        // internal（不是 private）：ListeningStatsWindow 生成分享卡片时，"卡片风格"选了某个客制化主题
+        // 也要能拿到同一份 SkinTheme（配色 + 图标），不用为了那一个场景再重新实现一遍这个转换逻辑
+        internal static SkinTheme BuildSkinThemeFromCustom(CustomTheme custom)
         {
             var colors = custom.Colors!;
             CustomThemeValidator.TryParseHexColor(colors.Title!, out var title);
@@ -110,6 +112,7 @@ namespace PixelLyric8BitFix
             ArcadeSkinBg.Visibility = Visibility.Collapsed;
             InvadersSkinBg.Visibility = Visibility.Collapsed;
             CitySkinBg.Visibility = Visibility.Collapsed;
+            CrownSkinBg.Visibility = Visibility.Collapsed;
             CustomSkinBg.Visibility = Visibility.Collapsed;
             MinecraftDecorCanvas.Visibility = Visibility.Collapsed;
             VinylDecorCanvas.Visibility = Visibility.Collapsed;
@@ -130,6 +133,7 @@ namespace PixelLyric8BitFix
             ArcadeDecorCanvas.Visibility = Visibility.Collapsed;
             InvadersDecorCanvas.Visibility = Visibility.Collapsed;
             CityDecorCanvas.Visibility = Visibility.Collapsed;
+            CrownDecorCanvas.Visibility = Visibility.Collapsed;
             CustomIconDecorCanvas.Visibility = Visibility.Collapsed;
             AuroraSnowOverlay.Visibility = Visibility.Collapsed;
             RainOverlay.Visibility = Visibility.Collapsed;
@@ -153,7 +157,7 @@ namespace PixelLyric8BitFix
                                 skin == PlayerSkin.Glass || skin == PlayerSkin.Aurora ||
                                 skin == PlayerSkin.Rain || skin == PlayerSkin.Cyberpunk ||
                                 skin == PlayerSkin.Arcade || skin == PlayerSkin.Invaders ||
-                                skin == PlayerSkin.City)
+                                skin == PlayerSkin.City || skin == PlayerSkin.Crown)
                 ? new GridLength(50) : new GridLength(0);
 
             switch (skin)
@@ -290,6 +294,12 @@ namespace PixelLyric8BitFix
                     CityDecorCanvas.Visibility = Visibility.Visible;
                     ImgTrain.Source = PixelArt.CreateTrain();
                     StartTrainDrift();
+                    break;
+
+                case PlayerSkin.Crown:
+                    CrownSkinBg.Visibility = Visibility.Visible;
+                    CrownDecorCanvas.Visibility = Visibility.Visible;
+                    ImgCrown.Source = PixelArt.CreateCrown();
                     break;
 
                 case PlayerSkin.Custom:
