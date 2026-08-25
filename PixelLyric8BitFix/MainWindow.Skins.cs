@@ -358,17 +358,17 @@ namespace PixelLyric8BitFix
             CustomSkinGlow.Color = accent;
             CustomSkinBg.Visibility = Visibility.Visible;
 
-            var iconPalette = theme.Icon!.Palette!.ToDictionary(
-                kv => kv.Key[0],
-                kv => { CustomThemeValidator.TryParseHexColor(kv.Value, out var c); return c; });
-            if (!iconPalette.ContainsKey('.')) iconPalette['.'] = Colors.Transparent;
-            var iconBitmap = PixelArt.BuildCustomIcon(theme.Icon.Rows!.ToArray(), iconPalette);
+            var iconPalette = CustomThemeValidator.BuildIconPalette(theme.Icon!);
+            var iconBitmap = PixelArt.BuildCustomIcon(theme.Icon!.Rows!.ToArray(), iconPalette);
 
             string animType = theme.Animation!.Type!.ToLowerInvariant();
             double? customDuration = theme.Animation.Duration;
             // "跟着音乐律动"是通用开关，不挑 8 种招式里的哪一种——不管用户选的是哪个，
             // 都统一用 SpeedRatio 让这个动画的播放速度跟着音乐响度/鼓点变，见 BeginMusicReactiveAnimation
             bool musicReactive = theme.Animation.MusicReactive && _settings.SkinAudioReactiveEnabled;
+            // "反应多强"跟"要不要反应"是两回事——sensitivity 只在 musicReactive 为 true 时才有意义，
+            // 这里提前算好传下去，各个 Start*Animation 不用各自再判一遍 MusicReactive 开关
+            double sensitivity = CustomThemeValidator.SensitivityToMultiplier(theme.Animation.Sensitivity);
 
             if (animType == "drift")
             {
@@ -377,9 +377,9 @@ namespace PixelLyric8BitFix
                 CustomDriftIcon1.Source = iconBitmap;
                 CustomDriftIcon2.Source = iconBitmap;
                 CustomDriftIcon3.Source = iconBitmap;
-                StartCustomDriftAnimation(CustomDrift1Transform, customDuration ?? 14, 0, musicReactive);
-                StartCustomDriftAnimation(CustomDrift2Transform, (customDuration ?? 14) * 1.35, 2, musicReactive);
-                StartCustomDriftAnimation(CustomDrift3Transform, (customDuration ?? 14) * 1.7, 5, musicReactive);
+                StartCustomDriftAnimation(CustomDrift1Transform, customDuration ?? 14, 0, musicReactive, sensitivity);
+                StartCustomDriftAnimation(CustomDrift2Transform, (customDuration ?? 14) * 1.35, 2, musicReactive, sensitivity);
+                StartCustomDriftAnimation(CustomDrift3Transform, (customDuration ?? 14) * 1.7, 5, musicReactive, sensitivity);
             }
             else if (animType == "fall")
             {
@@ -388,16 +388,159 @@ namespace PixelLyric8BitFix
                 CustomFallIcon1.Source = iconBitmap;
                 CustomFallIcon2.Source = iconBitmap;
                 CustomFallIcon3.Source = iconBitmap;
-                StartCustomFallAnimation(CustomFall1Transform, customDuration ?? 6, 0, -6, 8, musicReactive);
-                StartCustomFallAnimation(CustomFall2Transform, (customDuration ?? 6) * 1.3, 1.5, 4, -10, musicReactive);
-                StartCustomFallAnimation(CustomFall3Transform, (customDuration ?? 6) * 1.6, 3, -8, 6, musicReactive);
+                StartCustomFallAnimation(CustomFall1Transform, customDuration ?? 6, 0, -6, 8, musicReactive, sensitivity);
+                StartCustomFallAnimation(CustomFall2Transform, (customDuration ?? 6) * 1.3, 1.5, 4, -10, musicReactive, sensitivity);
+                StartCustomFallAnimation(CustomFall3Transform, (customDuration ?? 6) * 1.6, 3, -8, 6, musicReactive, sensitivity);
             }
             else
             {
                 RowDecor.Height = new GridLength(50);
                 CustomIconDecorCanvas.Visibility = Visibility.Visible;
                 CustomIcon.Source = iconBitmap;
-                StartCustomIconAnimation(animType, customDuration, accent, musicReactive);
+                StartCustomIconAnimation(animType, customDuration, accent, musicReactive, sensitivity);
+            }
+
+            ApplyCustomExtraLayers(theme, accent);
+        }
+
+        // theme.layers（可选，最多 2 个）：每层自己的图标 + 动画，贴在卡片四个角之一，叠加在主图标/主动画
+        // 之上。不像主图标那样有预先声明好的 XAML 元素可用（层数是可变的），这里运行时现造 Image + 变换 +
+        // 发光效果，四角定位靠 HorizontalAlignment/VerticalAlignment + Margin，不用去猜卡片的像素尺寸。
+        private void ApplyCustomExtraLayers(CustomTheme theme, Color accent)
+        {
+            CustomExtraLayersHost.Children.Clear();
+            if (theme.Layers == null) return;
+
+            foreach (var layer in theme.Layers)
+            {
+                var palette = CustomThemeValidator.BuildIconPalette(layer.Icon!);
+                var bitmap = PixelArt.BuildCustomIcon(layer.Icon!.Rows!.ToArray(), palette);
+
+                var rotate = new RotateTransform();
+                var translate = new TranslateTransform();
+                var glow = new DropShadowEffect { Color = accent, ShadowDepth = 0, BlurRadius = 8, Opacity = 0.6 };
+
+                var image = new Image
+                {
+                    Width = 26,
+                    Height = 26,
+                    Stretch = Stretch.Uniform,
+                    Source = bitmap,
+                    RenderTransform = new TransformGroup { Children = { rotate, translate } },
+                    RenderTransformOrigin = new System.Windows.Point(0.5, 0.5),
+                    Effect = glow,
+                };
+                RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.NearestNeighbor);
+                ApplyLayerAnchor(image, layer.Anchor);
+                CustomExtraLayersHost.Children.Add(image);
+
+                bool musicReactive = layer.Animation!.MusicReactive && _settings.SkinAudioReactiveEnabled;
+                double sensitivity = CustomThemeValidator.SensitivityToMultiplier(layer.Animation.Sensitivity);
+                StartLayerAnimation(layer.Animation.Type!.ToLowerInvariant(), layer.Animation.Duration, image, rotate, translate, glow, musicReactive, sensitivity);
+            }
+        }
+
+        // 校验已经保证 anchor 是 ValidAnchors 四选一，这里的 default 分支只是兜底，理论上到不了
+        private static void ApplyLayerAnchor(FrameworkElement element, string? anchor)
+        {
+            element.Margin = new Thickness(10);
+            switch (anchor?.ToLowerInvariant())
+            {
+                case "top-left":
+                    element.HorizontalAlignment = HorizontalAlignment.Left;
+                    element.VerticalAlignment = VerticalAlignment.Top;
+                    break;
+                case "top-right":
+                    element.HorizontalAlignment = HorizontalAlignment.Right;
+                    element.VerticalAlignment = VerticalAlignment.Top;
+                    break;
+                case "bottom-left":
+                    element.HorizontalAlignment = HorizontalAlignment.Left;
+                    element.VerticalAlignment = VerticalAlignment.Bottom;
+                    break;
+                default: // "bottom-right" 以及任何意外值
+                    element.HorizontalAlignment = HorizontalAlignment.Right;
+                    element.VerticalAlignment = VerticalAlignment.Bottom;
+                    break;
+            }
+        }
+
+        // 额外层的 8 招式，跟主图标 StartCustomIconAnimation 是同一套参数（保证观感一致），只是作用目标
+        // 从固定的 XAML 命名元素换成运行时传进来的实例。drift/fall 在主图标那边各自有一条"飘过/飘落整张
+        // 卡片"的专属轨道（CustomDriftOverlay/CustomFallOverlay），额外层没有那一套坐标系统，
+        // 退化成原地小幅摆动——drift 落在水平位移，fall 复用 StartBobAnimation 但幅度更大一点，
+        // 至少保留"横着晃 vs 竖着晃"这点方向感上的区别，不是完全和 sway/bob 一样。
+        private void StartLayerAnimation(string type, double? customDuration, Image icon, RotateTransform rotate, TranslateTransform translate, DropShadowEffect glow, bool musicReactive, double sensitivity)
+        {
+            switch (type)
+            {
+                case "pulse":
+                    {
+                        var anim = new DoubleAnimation(0.35, 0.75, TimeSpan.FromSeconds(SafeDuration(customDuration, 2.2)))
+                        { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever };
+                        if (musicReactive) BeginMusicReactiveAnimation(glow, DropShadowEffect.OpacityProperty, anim, sensitivity);
+                        else glow.BeginAnimation(DropShadowEffect.OpacityProperty, anim);
+                        break;
+                    }
+                case "twinkle":
+                    {
+                        var anim = new DoubleAnimation(0.25, 1.0, TimeSpan.FromSeconds(SafeDuration(customDuration, 1.6)))
+                        { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever };
+                        if (musicReactive) BeginMusicReactiveAnimation(icon, UIElement.OpacityProperty, anim, sensitivity);
+                        else icon.BeginAnimation(UIElement.OpacityProperty, anim);
+                        break;
+                    }
+                case "sway":
+                    {
+                        var anim = new DoubleAnimation(-8, 8, TimeSpan.FromSeconds(SafeDuration(customDuration, 3.2)))
+                        {
+                            AutoReverse = true,
+                            RepeatBehavior = RepeatBehavior.Forever,
+                            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+                        };
+                        if (musicReactive) BeginMusicReactiveAnimation(rotate, RotateTransform.AngleProperty, anim, sensitivity);
+                        else rotate.BeginAnimation(RotateTransform.AngleProperty, anim);
+                        break;
+                    }
+                case "spin":
+                    {
+                        var anim = new DoubleAnimation(0, 360, TimeSpan.FromSeconds(SafeDuration(customDuration, 4)))
+                        { RepeatBehavior = RepeatBehavior.Forever };
+                        if (musicReactive) BeginMusicReactiveAnimation(rotate, RotateTransform.AngleProperty, anim, sensitivity);
+                        else rotate.BeginAnimation(RotateTransform.AngleProperty, anim);
+                        break;
+                    }
+                case "flicker":
+                    {
+                        double dur = SafeDuration(customDuration, 2.0);
+                        var frames = new DoubleAnimationUsingKeyFrames { RepeatBehavior = RepeatBehavior.Forever };
+                        frames.KeyFrames.Add(new LinearDoubleKeyFrame(0.5, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+                        frames.KeyFrames.Add(new LinearDoubleKeyFrame(0.75, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(dur * 0.15))));
+                        frames.KeyFrames.Add(new LinearDoubleKeyFrame(0.4, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(dur * 0.3))));
+                        frames.KeyFrames.Add(new LinearDoubleKeyFrame(0.7, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(dur * 0.42))));
+                        frames.KeyFrames.Add(new LinearDoubleKeyFrame(0.5, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(dur))));
+                        if (musicReactive) BeginMusicReactiveAnimation(glow, DropShadowEffect.OpacityProperty, frames, sensitivity);
+                        else glow.BeginAnimation(DropShadowEffect.OpacityProperty, frames);
+                        break;
+                    }
+                case "drift":
+                    {
+                        var anim = new DoubleAnimation(-10, 10, TimeSpan.FromSeconds(SafeDuration(customDuration, 4)))
+                        {
+                            AutoReverse = true,
+                            RepeatBehavior = RepeatBehavior.Forever,
+                            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+                        };
+                        if (musicReactive) BeginMusicReactiveAnimation(translate, TranslateTransform.XProperty, anim, sensitivity);
+                        else translate.BeginAnimation(TranslateTransform.XProperty, anim);
+                        break;
+                    }
+                case "fall":
+                    StartBobAnimation(translate, customDuration ?? 4, 10, musicReactive, sensitivity);
+                    break;
+                case "bob":
+                    StartBobAnimation(translate, customDuration ?? 3, 6, musicReactive, sensitivity);
+                    break;
             }
         }
 
@@ -406,19 +549,21 @@ namespace PixelLyric8BitFix
         // 都能被 UpdateMusicReactiveSkin 统一用同一套 SpeedRatio 循环调速，不用为每种情况单独写一份
         // "怎么调速"的逻辑。target 直接传对象引用（Transform/Effect 这些 Freezable），不需要它在
         // 可视化树里有名字——Storyboard.SetTarget 支持直接给对象引用。
-        private void BeginMusicReactiveAnimation(DependencyObject target, DependencyProperty property, Timeline animation)
+        // sensitivityMultiplier 默认 1.0（内置皮肤/Steve 走路都不传，保持原来的反应强度），
+        // 客制化主题会传 CustomThemeValidator.SensitivityToMultiplier(theme.Animation.Sensitivity) 的结果。
+        private void BeginMusicReactiveAnimation(DependencyObject target, DependencyProperty property, Timeline animation, double sensitivityMultiplier = 1.0)
         {
             var storyboard = new Storyboard();
             Storyboard.SetTarget(animation, target);
             Storyboard.SetTargetProperty(animation, new PropertyPath(property));
             storyboard.Children.Add(animation);
             storyboard.Begin(this, HandoffBehavior.SnapshotAndReplace, isControllable: true);
-            _musicReactiveStoryboards.Add(storyboard);
+            _musicReactiveStoryboards.Add(new MusicReactiveEntry(storyboard, sensitivityMultiplier));
         }
 
         // "飘过型"：同一个图标横向飘过整张卡片，飘到头瞬间重置回最左边——
         // 跟 Cloud/Rain/雪花那几个内置皮肤用的是同一套手法
-        private void StartCustomDriftAnimation(TranslateTransform transform, double durationSeconds, double beginDelaySeconds, bool musicReactive)
+        private void StartCustomDriftAnimation(TranslateTransform transform, double durationSeconds, double beginDelaySeconds, bool musicReactive, double sensitivity = 1.0)
         {
             var anim = new DoubleAnimation
             {
@@ -428,14 +573,14 @@ namespace PixelLyric8BitFix
                 BeginTime = TimeSpan.FromSeconds(beginDelaySeconds),
                 RepeatBehavior = RepeatBehavior.Forever,
             };
-            if (musicReactive) BeginMusicReactiveAnimation(transform, TranslateTransform.XProperty, anim);
+            if (musicReactive) BeginMusicReactiveAnimation(transform, TranslateTransform.XProperty, anim, sensitivity);
             else transform.BeginAnimation(TranslateTransform.XProperty, anim);
         }
 
         // "飘落型"：同一个图标从卡片顶部飘到底部，飘到头瞬间重置回最上面，叠加一点左右轻摆（比纯直线
         // 下落更自然）——跟内置的樱花/极光雪花那几个皮肤是同一套手法。摇摆的时长故意比下落短很多
         // （下落时长的 1/3.5），来回摆好几下才落地一次，摆动感才看得出来，不会显得像在匀速平移。
-        private void StartCustomFallAnimation(TranslateTransform transform, double durationSeconds, double beginDelaySeconds, double swayFrom, double swayTo, bool musicReactive)
+        private void StartCustomFallAnimation(TranslateTransform transform, double durationSeconds, double beginDelaySeconds, double swayFrom, double swayTo, bool musicReactive, double sensitivity = 1.0)
         {
             double fallSeconds = SafeDuration(durationSeconds, 6);
 
@@ -461,8 +606,8 @@ namespace PixelLyric8BitFix
             {
                 // 下落 + 摇摆是两个独立属性（Y/X），各自包一个 Storyboard——两个都跟着同一个 SpeedRatio 走，
                 // 下落变快的同时摇摆也跟着变快，视觉上还是同步的，不会看着像两套节奏打架
-                BeginMusicReactiveAnimation(transform, TranslateTransform.YProperty, fallAnim);
-                BeginMusicReactiveAnimation(transform, TranslateTransform.XProperty, swayAnim);
+                BeginMusicReactiveAnimation(transform, TranslateTransform.YProperty, fallAnim, sensitivity);
+                BeginMusicReactiveAnimation(transform, TranslateTransform.XProperty, swayAnim, sensitivity);
             }
             else
             {
@@ -477,7 +622,7 @@ namespace PixelLyric8BitFix
         // 里的 "bob" 分支。musicReactive 默认 false——目前只有客制化主题会传 true，内置皮肤里用 bob 的
         // 这几套（云朵/海边黄昏/极光雪夜/雨夜）故意不用同一个开关接进音乐律动，各自另有自己的律动落点
         // （见 MainWindow.SkinInteractions.cs 的对照表），不然一个方法改了所有调用方都跟着变，不好控制范围
-        private void StartBobAnimation(TranslateTransform transform, double durationSeconds, double amplitude, bool musicReactive = false)
+        private void StartBobAnimation(TranslateTransform transform, double durationSeconds, double amplitude, bool musicReactive = false, double sensitivity = 1.0)
         {
             var anim = new DoubleAnimation(-amplitude, amplitude, TimeSpan.FromSeconds(SafeDuration(durationSeconds, 3)))
             {
@@ -485,7 +630,7 @@ namespace PixelLyric8BitFix
                 RepeatBehavior = RepeatBehavior.Forever,
                 EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
             };
-            if (musicReactive) BeginMusicReactiveAnimation(transform, TranslateTransform.YProperty, anim);
+            if (musicReactive) BeginMusicReactiveAnimation(transform, TranslateTransform.YProperty, anim, sensitivity);
             else transform.BeginAnimation(TranslateTransform.YProperty, anim);
         }
 
@@ -498,7 +643,7 @@ namespace PixelLyric8BitFix
         // DoubleAnimation，不需要预先在 XAML 里声明 Storyboard 资源。musicReactive 为 true 时，
         // 不管选的是哪一招，都统一走 BeginMusicReactiveAnimation 包成可调速的 Storyboard——
         // 见 ApplyCustomSkinVisuals 里对 "跟着音乐律动" 开关的说明
-        private void StartCustomIconAnimation(string type, double? customDuration, Color accent, bool musicReactive)
+        private void StartCustomIconAnimation(string type, double? customDuration, Color accent, bool musicReactive, double sensitivity = 1.0)
         {
             CustomIconRotate.Angle = 0;
             CustomIcon.Opacity = 1;
@@ -511,7 +656,7 @@ namespace PixelLyric8BitFix
                     {
                         var anim = new DoubleAnimation(0.35, 0.75, TimeSpan.FromSeconds(SafeDuration(customDuration, 2.2)))
                         { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever };
-                        if (musicReactive) BeginMusicReactiveAnimation(CustomIconGlow, DropShadowEffect.OpacityProperty, anim);
+                        if (musicReactive) BeginMusicReactiveAnimation(CustomIconGlow, DropShadowEffect.OpacityProperty, anim, sensitivity);
                         else CustomIconGlow.BeginAnimation(DropShadowEffect.OpacityProperty, anim);
                         break;
                     }
@@ -519,7 +664,7 @@ namespace PixelLyric8BitFix
                     {
                         var anim = new DoubleAnimation(0.25, 1.0, TimeSpan.FromSeconds(SafeDuration(customDuration, 1.6)))
                         { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever };
-                        if (musicReactive) BeginMusicReactiveAnimation(CustomIcon, UIElement.OpacityProperty, anim);
+                        if (musicReactive) BeginMusicReactiveAnimation(CustomIcon, UIElement.OpacityProperty, anim, sensitivity);
                         else CustomIcon.BeginAnimation(UIElement.OpacityProperty, anim);
                         break;
                     }
@@ -531,7 +676,7 @@ namespace PixelLyric8BitFix
                             RepeatBehavior = RepeatBehavior.Forever,
                             EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
                         };
-                        if (musicReactive) BeginMusicReactiveAnimation(CustomIconRotate, RotateTransform.AngleProperty, anim);
+                        if (musicReactive) BeginMusicReactiveAnimation(CustomIconRotate, RotateTransform.AngleProperty, anim, sensitivity);
                         else CustomIconRotate.BeginAnimation(RotateTransform.AngleProperty, anim);
                         break;
                     }
@@ -539,7 +684,7 @@ namespace PixelLyric8BitFix
                     {
                         var anim = new DoubleAnimation(0, 360, TimeSpan.FromSeconds(SafeDuration(customDuration, 4)))
                         { RepeatBehavior = RepeatBehavior.Forever };
-                        if (musicReactive) BeginMusicReactiveAnimation(CustomIconRotate, RotateTransform.AngleProperty, anim);
+                        if (musicReactive) BeginMusicReactiveAnimation(CustomIconRotate, RotateTransform.AngleProperty, anim, sensitivity);
                         else CustomIconRotate.BeginAnimation(RotateTransform.AngleProperty, anim);
                         break;
                     }
@@ -552,13 +697,13 @@ namespace PixelLyric8BitFix
                         frames.KeyFrames.Add(new LinearDoubleKeyFrame(0.4, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(dur * 0.3))));
                         frames.KeyFrames.Add(new LinearDoubleKeyFrame(0.7, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(dur * 0.42))));
                         frames.KeyFrames.Add(new LinearDoubleKeyFrame(0.5, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(dur))));
-                        if (musicReactive) BeginMusicReactiveAnimation(CustomIconGlow, DropShadowEffect.OpacityProperty, frames);
+                        if (musicReactive) BeginMusicReactiveAnimation(CustomIconGlow, DropShadowEffect.OpacityProperty, frames, sensitivity);
                         else CustomIconGlow.BeginAnimation(DropShadowEffect.OpacityProperty, frames);
                         break;
                     }
                 case "bob": // 上下轻轻浮动，跟海边黄昏的帆船、云朵漂浮的热气球同一套手法——纯位置浮动，
                             // 不是旋转摆动（那是 sway），振幅比内置那两个稍大一点，客制化图标通常比装饰物更显眼一些
-                    StartBobAnimation(CustomIconBob, customDuration ?? 3, 5, musicReactive);
+                    StartBobAnimation(CustomIconBob, customDuration ?? 3, 5, musicReactive, sensitivity);
                     break;
             }
         }

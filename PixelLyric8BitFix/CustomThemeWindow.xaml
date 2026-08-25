@@ -28,10 +28,15 @@
                 <TextBlock Text="怎么写" Style="{StaticResource SectionHeader}"/>
                 <TextBlock Foreground="#BBBBBB" FontSize="11" TextWrapping="Wrap">
                     每个主题是一份 JSON：name(名字) / font(字体) / colors(各处文字颜色) /
-                    background(背景，纯色 solid 或渐变 gradient) / icon(8x8 像素图标，字符网格 + 调色板) /
+                    background(背景，纯色 solid 或渐变 gradient) / icon(像素图标，字符网格 + 调色板，行数和每行宽度都是 4~64、不用是正方形；不过 Mini 小方块这几个展示位就 20~52px 上下，画太细致的话缩小显示会看不出来，图省事的话 8x8 就够) /
                     animation(动画招式，八选一：pulse 呼吸发光、twinkle 渐隐渐现、drift 飘过、fall 飘落、bob 上下浮动、sway 摇摆、spin 旋转、flicker 不规则闪烁)。
                     animation 里还有个可选的 musicReactive(true/false，不填默认 false)：开了之后，不管选的是哪一种招式，
                     播放速度都会跟着系统正在播的音乐响度/鼓点实时变化，跟设置页里"皮肤音乐律动"开关是同一套机制、共用同一个总开关。
+                    再加一个可选的 sensitivity(low/medium/high，不填默认 medium)：决定这个动画对响度/鼓点变化"反应多强"——
+                    low 声音大变化也比较克制，high 反过来会被小声音放得更明显，只在 musicReactive 开了的时候才有意义。
+                    顶层还有个可选的 layers(数组，最多 2 个)：每个元素是 { anchor, icon, animation } 三件套——
+                    anchor 是贴在卡片哪个角(top-left/top-right/bottom-left/bottom-right)，icon/animation 跟上面主图标
+                    同一套字段形状，是叠加在主图标之上的额外小装饰，不是替换（不写 layers 完全不影响主图标）。
                     颜色格式是 #RRGGBB 或带透明度的 #AARRGGBB。下面是一份完整示例，照着改就行：
                 </TextBlock>
 
@@ -48,11 +53,85 @@
                 <StackPanel x:Name="ThemeListPanel"/>
                 <TextBlock x:Name="TxtNoThemes" Text="还没有存过任何客制化主题。" Foreground="{StaticResource HintTextBrush}" FontSize="11" Margin="0,4,0,0"/>
 
-                <TextBlock Text="粘贴 / 编辑你的 JSON" Style="{StaticResource SectionHeader}"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="粘贴 / 编辑你的 JSON" Style="{StaticResource SectionHeader}" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <!-- 从别人分享的 .json 文件导入——直接把文件内容读进输入框，走的还是普通的"粘贴/校验/保存"
+                             这条路，不是个人资料导入那种"读完直接覆盖本地数据"，所以不需要单独的确认弹窗：
+                             读进来是不是真的存、会不会占掉第 6 个位置，都还是走下面"保存"按钮已有的那套校验/上限逻辑。
+                             导入会顺带清掉"正在编辑：xxx"的提示，防止读进来的是一份完全不相关的主题，
+                             结果用户没留意提示还在，点保存把手头正在编辑的那份主题给覆盖了。 -->
+                        <Button x:Name="BtnImportTheme" Content="📥 从文件导入" Style="{StaticResource PillButtonStyle}"
+                                Padding="10,4" FontSize="11" Margin="0,0,6,0" Click="BtnImportTheme_Click"/>
+                        <!-- 不想从示例一行行改配色的话，点这个直接抽一份配好色的草稿进输入框——名字/字体/配色/背景渐变/
+                             图标/动画招式都是随机挑的，但都出自"搭配好的"选项池，不会抽出互相打架的颜色。抽完照样是
+                             普通 JSON 文本，想接着手改哪个字段都行，多点几下也不会覆盖已保存的主题（只改输入框）。 -->
+                        <Button x:Name="BtnRandomize" Content="🎲 随机生成一份" Style="{StaticResource PillButtonStyle}"
+                                Padding="10,4" FontSize="11" Click="BtnRandomize_Click"/>
+                    </StackPanel>
+                </Grid>
                 <TextBox x:Name="TxtInput" AcceptsReturn="True" TextWrapping="Wrap"
                          Background="#1B211C" Foreground="#EEEEEE" BorderBrush="#2A332B" BorderThickness="1"
-                         FontFamily="Consolas" FontSize="11" Height="180" Padding="6"
-                         VerticalScrollBarVisibility="Auto"/>
+                         FontFamily="Consolas" FontSize="11" Height="160" Padding="6"
+                         VerticalScrollBarVisibility="Auto" TextChanged="TxtInput_TextChanged"/>
+
+                <TextBlock Text="实时预览" Style="{StaticResource SectionHeader}"/>
+                <TextBlock Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,6">
+                    整份 JSON 跟保存时走同一套校验，全部通过才会照着更新下面这块——背景/文字配色/字体/图标动画
+                    跟保存后套到播放器的实际效果一致，不用来回切皮肤对比着看。校验没过就留空，具体哪里错还是看
+                    "保存"之后的报错框。
+                </TextBlock>
+                <!-- 整体实时预览：不是只画一张孤立的图标，而是照着主播放器的样子拼一份"缩小版"——背景/标题/
+                     歌手名/歌词框/图标动画全套元素都在，字段改了这里立刻能看见，不用保存、切到主窗口对应皮肤、
+                     再手动触发一次动画才发现"颜色配歪了"或者"这个招式比想的快/慢"。渲染逻辑是这个窗口自己的
+                     简化版（见 CustomThemeWindow.xaml.cs 的 ApplyPreviewTheme/StartPreviewIconAnimation），
+                     跟 MainWindow.Skins.cs 里真正套皮肤用的 ApplyCustomSkinVisuals/StartCustomIconAnimation
+                     是两份独立实现但招式参数保持一致：这边没有音频输入，musicReactive 开关在预览里不生效
+                     （动画照样播，只是不会跟着音乐变速），drift/fall 也没有三图标错位起播的效果，是刻意简化，
+                     不是要跟主窗口逐像素对齐，能看出"大致是什么样"就够用。 -->
+                <Border x:Name="PreviewCard" Background="#12160F" BorderBrush="#2A332B" BorderThickness="1"
+                        CornerRadius="6" Height="150" ClipToBounds="True">
+                    <Grid>
+                        <!-- PreviewContent 整体一个 Visibility 开关：JSON 校验没过就整块收起来，不是只清掉
+                             背景/图标这几个"会画出明显东西"的属性——不然文字颜色、歌词框边框这些设过的画刷
+                             还留在上一次校验通过时的值上，中间那截空档会看到上一份主题的文字/边框残影，
+                             不是真的"留空"。见 CustomThemeWindow.xaml.cs 的 ClearPreview。 -->
+                        <Grid x:Name="PreviewContent">
+                            <Canvas>
+                                <Image x:Name="PreviewIcon" Width="40" Height="40" Canvas.Left="14" Canvas.Top="14"
+                                       RenderOptions.BitmapScalingMode="NearestNeighbor">
+                                    <Image.RenderTransform>
+                                        <TransformGroup>
+                                            <RotateTransform x:Name="PreviewIconRotate" CenterX="20" CenterY="20"/>
+                                            <TranslateTransform x:Name="PreviewIconTranslate"/>
+                                        </TransformGroup>
+                                    </Image.RenderTransform>
+                                    <Image.Effect>
+                                        <DropShadowEffect x:Name="PreviewIconGlow" ShadowDepth="0" BlurRadius="10" Opacity="0.6"/>
+                                    </Image.Effect>
+                                </Image>
+                            </Canvas>
+                            <StackPanel VerticalAlignment="Bottom" Margin="14,0,14,12">
+                                <TextBlock x:Name="PreviewTitle" Text="歌曲名示例" FontSize="16" FontWeight="Bold"/>
+                                <TextBlock x:Name="PreviewArtist" Text="演出者示例" FontSize="11" Margin="0,2,0,8"/>
+                                <Border x:Name="PreviewLyricBox" BorderThickness="1" CornerRadius="4" Padding="10,6" HorizontalAlignment="Left">
+                                    <TextBlock x:Name="PreviewLyric" Text="这是一句示例歌词 ♪" FontSize="13"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock x:Name="TxtIconSizeHint" Text="" Foreground="{StaticResource HintTextBrush}" FontSize="9"
+                                       HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,6,8,0"/>
+                            <!-- theme.layers（可选，最多 2 个）的预览：贴在卡片四个角之一，动态创建，
+                                 跟 MainWindow.Skins.cs 的 CustomExtraLayersHost 是同一个思路的预览版 -->
+                            <Grid x:Name="PreviewLayersHost" IsHitTestVisible="False"/>
+                        </Grid>
+                        <TextBlock x:Name="TxtPreviewHint" Text="JSON 还没校验通过，预览留空" Foreground="{StaticResource HintTextBrush}"
+                                   FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
+                </Border>
 
                 <TextBlock x:Name="TxtEditingHint" Text="" Foreground="#8AB4F8" FontSize="10" Margin="0,4,0,0" Visibility="Collapsed"/>
 

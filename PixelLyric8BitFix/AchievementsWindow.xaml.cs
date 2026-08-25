@@ -6,8 +6,9 @@ using System.Windows.Media;
 namespace PixelLyric8BitFix
 {
     /// <summary>
-    /// 成就墙：8 张卡片（7 个常规成就 + 1 个压轴），全部从本地听歌统计现算出来（AchievementCalculator），
-    /// 没有独立的"已解锁"存档——纯展示页，不涉及任何网络请求。
+    /// 成就墙：9 张卡片——7 个常规听歌成就 + 1 个压轴（从 AchievementCalculator/ListeningStats 现算），
+    /// 加 1 个"主题工匠"（从 CustomThemeAchievement/CustomThemeStore 现算，是完全独立的第二条解锁线，
+    /// 见 CustomThemeAchievement 的注释）。没有独立的"已解锁"存档——纯展示页，不涉及任何网络请求。
     /// </summary>
     public partial class AchievementsWindow : Window
     {
@@ -17,6 +18,7 @@ namespace PixelLyric8BitFix
 
             var stats = ListeningStatsStore.Load();
             var results = AchievementCalculator.Evaluate(stats);
+            results.Add(new AchievementProgress { Achievement = CustomThemeAchievement.Definition, Unlocked = CustomThemeAchievement.IsUnlocked() });
             TxtProgress.Text = $"{results.Count(r => r.Unlocked)} / {results.Count} 已解锁";
 
             foreach (var progress in results)
@@ -25,13 +27,18 @@ namespace PixelLyric8BitFix
             }
         }
 
-        // 压轴那张（尊贵听众）额外标出"解锁「尊贵皇冠」限定皮肤"这行奖励文案，边框用金色跟其它
-        // 7 张常规成就区分开；没解锁的卡片整体降低不透明度 + 叠一个 🔒，不用额外做灰度处理那么复杂，
-        // 透明度已经足够说明"这张还没点亮"
+        // 压轴那张（尊贵听众）额外标出"解锁「尊贵皇冠」限定皮肤"这行奖励文案，边框用金色；
+        // "主题工匠"同样是奖励类卡片，标出"解锁🎲随机生成里的限定配色"，边框用祖母绿——
+        // 特意选跟尊贵皇冠的紫金配色不一样的颜色，两张"有额外奖励"的卡片视觉上不会混在一起。
+        // 其余 7 张常规成就都用同一个绿色，没解锁的卡片整体降低不透明度 + 叠一个 🔒，
+        // 不用额外做灰度处理那么复杂，透明度已经足够说明"这张还没点亮"
         private static UIElement BuildCard(AchievementProgress progress)
         {
             bool isCapstone = progress.Achievement.Id == AchievementCalculator.CrownSkin.Id;
-            var accentColor = isCapstone ? Color.FromRgb(0xE6, 0xB6, 0x55) : Color.FromRgb(0x34, 0xD3, 0x99);
+            bool isThemeMaker = progress.Achievement.Id == CustomThemeAchievement.Definition.Id;
+            var accentColor = isCapstone ? Color.FromRgb(0xE6, 0xB6, 0x55)
+                : isThemeMaker ? Color.FromRgb(0x2E, 0xC4, 0x8A)
+                : Color.FromRgb(0x34, 0xD3, 0x99);
 
             var content = new StackPanel();
             content.Children.Add(new TextBlock
@@ -60,6 +67,18 @@ namespace PixelLyric8BitFix
                 content.Children.Add(new TextBlock
                 {
                     Text = "🎁 解锁「尊贵皇冠」限定皮肤",
+                    Foreground = new SolidColorBrush(accentColor),
+                    FontSize = 11,
+                    FontWeight = FontWeights.Bold,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 8, 0, 0),
+                });
+            }
+            else if (isThemeMaker)
+            {
+                content.Children.Add(new TextBlock
+                {
+                    Text = "🎁 自定义主题页「🎲 随机生成」多一份限定配色",
                     Foreground = new SolidColorBrush(accentColor),
                     FontSize = 11,
                     FontWeight = FontWeights.Bold,
@@ -97,7 +116,7 @@ namespace PixelLyric8BitFix
                 CornerRadius = new CornerRadius(10),
                 Background = new SolidColorBrush(Color.FromRgb(0x1B, 0x21, 0x1C)),
                 BorderBrush = new SolidColorBrush(progress.Unlocked ? accentColor : Color.FromRgb(0x2A, 0x33, 0x2B)),
-                BorderThickness = new Thickness(isCapstone ? 2 : 1),
+                BorderThickness = new Thickness(isCapstone || isThemeMaker ? 2 : 1),
                 Opacity = progress.Unlocked ? 1.0 : 0.55,
                 Child = cardChild,
             };

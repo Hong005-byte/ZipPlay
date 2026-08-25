@@ -12,12 +12,13 @@ namespace PixelLyric8BitFix
     /// <summary>版本号 + 检查更新（含一键下载装） + 几条使用小贴士——从 HomeWindow 的"ℹ️ 关于与更新"格子进来。</summary>
     public partial class AboutWindow : Window
     {
-        private readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
+        // 两个都走 NetworkHelpers 建，自带强制 IPv4，详见 NetworkHelpers 类注释和 MainWindow.xaml.cs
+        // 里同样的两个 HttpClient 的注释。
+        private readonly HttpClient _httpClient = NetworkHelpers.CreateHttpClient(TimeSpan.FromSeconds(6));
 
         // 查版本（小 JSON 请求）跟下安装包（几十 MB 的文件）不能共用同一个短超时的 HttpClient——
         // HttpClient.Timeout 管的是整个请求（包括读响应体），4~6 秒对一个大文件下载来说太容易半路被打断。
-        // 详见 MainWindow.xaml.cs 里同样的两个 HttpClient 的注释。
-        private readonly HttpClient _downloadHttpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+        private readonly HttpClient _downloadHttpClient = NetworkHelpers.CreateHttpClient(TimeSpan.FromMinutes(10));
         private UpdateInfo? _foundUpdate;
         private bool _updateInProgress;
 

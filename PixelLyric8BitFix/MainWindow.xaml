@@ -576,7 +576,7 @@
                  旋转和位移分开两个变换（TransformGroup 里各管各的），具体转多少度/摆多少/浮多高
                  由代码按 animation.type 现场写 -->
             <Canvas x:Name="CustomIconDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
-                <Image x:Name="CustomIcon" Width="24" Height="24" Canvas.Right="14" Canvas.Bottom="2" Stretch="Uniform"
+                <Image x:Name="CustomIcon" Width="36" Height="36" Canvas.Right="14" Canvas.Bottom="2" Stretch="Uniform"
                        RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0.5,0.5">
                     <Image.RenderTransform>
                         <TransformGroup>
@@ -1019,13 +1019,13 @@
                 <!-- 客制化"飘过型"动画专属（animation.type = drift）：同一张用户图标画三份，各自不同速度飘过 -->
                 <Viewbox x:Name="CustomDriftOverlay" Stretch="Fill" IsHitTestVisible="False" Visibility="Collapsed">
                     <Canvas Width="300" Height="150" ClipToBounds="True">
-                        <Image x:Name="CustomDriftIcon1" Width="22" Height="22" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Top="15">
+                        <Image x:Name="CustomDriftIcon1" Width="34" Height="34" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Top="15">
                             <Image.RenderTransform><TranslateTransform x:Name="CustomDrift1Transform"/></Image.RenderTransform>
                         </Image>
-                        <Image x:Name="CustomDriftIcon2" Width="18" Height="18" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Top="60">
+                        <Image x:Name="CustomDriftIcon2" Width="28" Height="28" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Top="60">
                             <Image.RenderTransform><TranslateTransform x:Name="CustomDrift2Transform"/></Image.RenderTransform>
                         </Image>
-                        <Image x:Name="CustomDriftIcon3" Width="20" Height="20" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Top="100">
+                        <Image x:Name="CustomDriftIcon3" Width="30" Height="30" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Top="100">
                             <Image.RenderTransform><TranslateTransform x:Name="CustomDrift3Transform"/></Image.RenderTransform>
                         </Image>
                     </Canvas>
@@ -1036,17 +1036,23 @@
                      那几个皮肤是同一套手法，只是这里图标是用户自己给的，不是写死的花瓣/雪花形状 -->
                 <Viewbox x:Name="CustomFallOverlay" Stretch="Fill" IsHitTestVisible="False" Visibility="Collapsed">
                     <Canvas Width="300" Height="150" ClipToBounds="True">
-                        <Image x:Name="CustomFallIcon1" Width="20" Height="20" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Left="40">
+                        <Image x:Name="CustomFallIcon1" Width="30" Height="30" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Left="40">
                             <Image.RenderTransform><TranslateTransform x:Name="CustomFall1Transform"/></Image.RenderTransform>
                         </Image>
-                        <Image x:Name="CustomFallIcon2" Width="16" Height="16" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Left="150">
+                        <Image x:Name="CustomFallIcon2" Width="24" Height="24" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Left="150">
                             <Image.RenderTransform><TranslateTransform x:Name="CustomFall2Transform"/></Image.RenderTransform>
                         </Image>
-                        <Image x:Name="CustomFallIcon3" Width="18" Height="18" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Left="250">
+                        <Image x:Name="CustomFallIcon3" Width="28" Height="28" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Left="250">
                             <Image.RenderTransform><TranslateTransform x:Name="CustomFall3Transform"/></Image.RenderTransform>
                         </Image>
                     </Canvas>
                 </Viewbox>
+
+                <!-- 客制化主题的"额外装饰层"（theme.layers，可选，最多 2 个）：每层自己的小图标 + 动画 +
+                     贴在卡片四个角之一，叠加在主图标/主动画之上，不是替换。不像 drift/fall 那样预先声明
+                     好几份重复的 XAML 元素——层数是可变的（0~2 个），运行时按数据动态创建 Image，
+                     见 MainWindow.Skins.cs 的 ApplyCustomExtraLayers。 -->
+                <Grid x:Name="CustomExtraLayersHost" IsHitTestVisible="False" Panel.ZIndex="9"/>
 
                 <!-- 内容层：所有皮肤共用，只是背景/文字颜色不同（由代码按皮肤设置）。
                      右边多一列播放控制（上一首/播放暂停/下一首），跟标题/进度条/歌词那一大块并排，
@@ -1246,7 +1252,7 @@
                 Width="64" Height="64" HorizontalAlignment="Center" VerticalAlignment="Center"
                 Cursor="Hand" ToolTip="拖动可以移动；点一下（不拖动）展开"
                 MouseLeftButtonDown="MiniBadge_MouseLeftButtonDown">
-            <Image x:Name="MiniBadgeImage" Stretch="Uniform" Margin="10"
+            <Image x:Name="MiniBadgeImage" Stretch="Uniform" Margin="6"
                    RenderOptions.BitmapScalingMode="NearestNeighbor"/>
         </Border>
     </Grid>

@@ -239,7 +239,7 @@ namespace PixelLyric8BitFix
         {
             if (!_settings.BilingualLyricsEnabled) return; // 没开双语开关就不用多发这个网络请求
 
-            string? translation = await LiveTranslator.TranslateLrcAsync(lrc, _httpClient, token);
+            string? translation = await LiveTranslator.TranslateLrcAsync(lrc, token);
             if (translation == null) return;
             if (token.IsCancellationRequested || trackId != _lastTrackId) return; // 翻完了才发现已经切歌，这份翻译作废
             if (HasTranslation()) return; // 网易云 onLateTranslation 那条路先到了，不要覆盖（见那边的注释）

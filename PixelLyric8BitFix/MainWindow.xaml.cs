@@ -34,18 +34,30 @@ namespace PixelLyric8BitFix
     //   MainWindow.PlaybackControls.cs —— 上一首/播放-暂停/下一首 + 进度条拖拽跳转
     //   MainWindow.SkinInteractions.cs —— 皮肤音乐律动（黑胶/磁带机/篝火/Minecraft/星空/雨夜/极光雪夜/樱花/CRT/赛博朋克 + 客制化主题）+ 装饰物可点击反馈（Steve/篝火）
     // 拆开纯粹是文件组织，行为跟拆之前完全一样，只是不用再在一个 1300+ 行的文件里翻了。
+
+    /// <summary>_musicReactiveStoryboards 的元素：一个可调 SpeedRatio 的 Storyboard + 它对律动反应多强的倍率。
+    /// 内置皮肤/Steve 走路都固定传 1.0（这个字段加进来之前唯一的行为）；客制化主题勾了 musicReactive 的话，
+    /// 倍率来自 animation.sensitivity（见 CustomThemeValidator.SensitivityToMultiplier），
+    /// 在 MainWindow.SkinInteractions.cs 的 UpdateMusicReactiveSkin 里逐个应用。</summary>
+    internal readonly record struct MusicReactiveEntry(Storyboard Storyboard, double SensitivityMultiplier);
+
     public partial class MainWindow : Window
     {
         private GlobalSystemMediaTransportControlsSessionManager? _sessionManager;
         private GlobalSystemMediaTransportControlsSession? _currentSession;
         private readonly DispatcherTimer _smoothTimer;
-        private readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(4) };
+        // 两个 HttpClient 都走 NetworkHelpers 建，自带强制 IPv4——查双语翻译"开了开关但一直没有翻译行"
+        // 那次踩到的坑：IPv6 地址解析得出来但实际连不通的网络环境下，.NET 的连接逻辑会一路干等到
+        // HttpClient.Timeout 才失败，不像浏览器的 Happy Eyeballs 那样几百毫秒就自动切 IPv4；这不是
+        // 翻译那一条请求独有的问题，是机器/网络层面的，抓词/查更新/下安装包这几个请求一样会中招，
+        // 所以 app 里所有对外请求的 HttpClient 都统一用这个（见 NetworkHelpers 类注释）。
+        private readonly HttpClient _httpClient = NetworkHelpers.CreateHttpClient(TimeSpan.FromSeconds(4));
 
         // 专门给"下载更新安装包"用的另一个 HttpClient，超时给得长很多——不能跟上面那个共用：
         // 上面那个 4 秒超时是为了让抓词/查版本这类应该秒回的小请求卡住时能快速放弃换下一个引擎，
         // 但安装包动辄几十 MB，4 秒经常连一半都下不完，HttpClient.Timeout 管的是整个请求（包括读响应体），
         // 不是只管建立连接，用短超时的那个客户端下载会大概率半路被 TaskCanceledException 打断。
-        private readonly HttpClient _downloadHttpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+        private readonly HttpClient _downloadHttpClient = NetworkHelpers.CreateHttpClient(TimeSpan.FromMinutes(10));
 
         private readonly LyricsFetcher _lyricsFetcher; // 抓词逻辑独立成类，这里只负责调用
 
@@ -150,11 +162,12 @@ namespace PixelLyric8BitFix
         // ── 皮肤音乐律动：跟 Mini 模式共用同一个 _audioVisualizer，见 MainWindow.SkinInteractions.cs。
         // _isMusicReactiveSkin 代表"当前这套皮肤（或客制化主题勾了 musicReactive）参与律动，该不该抓音频"；
         // _musicReactiveStoryboards 里放的是所有"额外以 isControllable=true 方式启动、可以实时调 SpeedRatio"
-        // 的 Storyboard——可能是 0 个（比如只有 Steve 跳跃这种一次性动作、没有连续循环可调速的皮肤）、
-        // 1 个（大多数内置皮肤），也可能是好几个（客制化主题 drift/fall 那种一次起好几个独立图标的情况）。
+        // 的 Storyboard，配一个"这个 Storyboard 对律动反应多强"的倍率——可能是 0 个（比如只有 Steve 跳跃
+        // 这种一次性动作、没有连续循环可调速的皮肤）、1 个（大多数内置皮肤，倍率固定 1.0），也可能是好几个
+        // （客制化主题 drift/fall 那种一次起好几个独立图标的情况，倍率来自 animation.sensitivity）。
         // 用 List 而不是单个可空字段，就是为了让这几种情况共用同一套调速循环，不用分开写。
         private bool _isMusicReactiveSkin;
-        private readonly List<Storyboard> _musicReactiveStoryboards = new();
+        private readonly List<MusicReactiveEntry> _musicReactiveStoryboards = new();
 
         public MainWindow() : this(AppSettings.Load()) { }
 
@@ -390,7 +403,7 @@ namespace PixelLyric8BitFix
                     if (needsControllableStoryboard && _settings.SkinAudioReactiveEnabled)
                     {
                         ambientStoryboard.Begin(this, HandoffBehavior.SnapshotAndReplace, isControllable: true);
-                        _musicReactiveStoryboards.Add(ambientStoryboard);
+                        _musicReactiveStoryboards.Add(new MusicReactiveEntry(ambientStoryboard, 1.0));
                     }
                     else
                     {

@@ -55,6 +55,18 @@ namespace PixelLyric8BitFix
             return target > current ? target : resting + (current - resting) * decayPerTick;
         }
 
+        // 客制化主题 animation.sensitivity 落地的地方：不是直接拿 sensitivityMultiplier 去乘 ratio
+        // （那样会连 baseRatio 本身也被放大/缩小，安静的时候也会跟着变速，没声音时"看起来跟固定节奏
+        // 循环差不多"这个体感就没了），而是只放大/缩小 ratio 相对 baseRatio 的"偏移量"——
+        // multiplier=1.0（medium）时这个函数就是恒等变换（ratio 原样返回），跟这个字段加进来之前
+        // 完全一样，内置皮肤/Steve 走路统一传 1.0 就是靠这一点保证行为不变。抽成 internal static
+        // 纯函数方便直接单测，不用真的起一个 MainWindow + 音频管线才能验证这几个数字对不对。
+        internal static double ApplyReactiveSensitivity(double ratio, double baseRatio, double sensitivityMultiplier, double min, double max)
+        {
+            double adjusted = baseRatio + (ratio - baseRatio) * sensitivityMultiplier;
+            return Math.Clamp(adjusted, min, max);
+        }
+
         // BeatBounce/BeatShake 共用的"武装/解除武装"上升沿检测：冲过 armedThreshold 才触发一次，
         // 触发完直到衰减到 disarmThreshold 以下才重新武装，两个阈值中间隔一段距离（不是同一个值），
         // 避免数值刚好卡在临界点附近来回抖、连续触发好几次。每套皮肤各自维护自己的 armed 字段——
@@ -142,9 +154,9 @@ namespace PixelLyric8BitFix
             double ratio = BaseSpeedRatio + levelNormalized * (LevelPeakRatio - BaseSpeedRatio) + snapshot.BeatPulse * BeatSpeedBoost;
             ratio = Math.Clamp(ratio, MinSpeedRatio, MaxSpeedRatio);
 
-            foreach (var storyboard in _musicReactiveStoryboards)
+            foreach (var entry in _musicReactiveStoryboards)
             {
-                storyboard.SetSpeedRatio(this, ratio);
+                entry.Storyboard.SetSpeedRatio(this, ApplyReactiveSensitivity(ratio, BaseSpeedRatio, entry.SensitivityMultiplier, MinSpeedRatio, MaxSpeedRatio));
             }
 
             if (_settings.Skin == PlayerSkin.Campfire)
