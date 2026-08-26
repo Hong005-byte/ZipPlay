@@ -97,9 +97,25 @@ namespace PixelLyric8BitFix
         // 解析那边（ParseAndValidate 用的 JsonConvert.DeserializeObject）本来就不区分大小写，
         // 所以旧主题文件即使是老版本存下来的 PascalCase（"Name"/"Colors"）也照样读得出来，
         // 这份设置只影响"以后新写出去的文件长什么样"，不影响能不能读旧文件。
+        //
+        // 不能直接用 CamelCasePropertyNamesContractResolver()——它默认连字典的 key 也会一起转
+        // camelCase（NamingStrategy.ProcessDictionaryKeys 默认是 true），而 icon.palette / layers[i].
+        // icon.palette 这些 Dictionary<string,string> 的 key 是画板/用户自己分配的单字符调色板符号，
+        // 大小写是有意义的、彼此独立的两个颜色（PixelIconEditor.AssignableChars 里 'f' 和 'F' 就是分开
+        // 分配的两种颜色，撑大调色板上限到 45 种）——被强制转小写会把 "A" 和 "a" 这种本该是两个颜色的
+        // key 挤成同一个，序列化直接写出两条重复的 "a" 键，反序列化回来丢一个，图标就此损坏，
+        // rows 里引用的那些大写符号在 palette 里找不到对应颜色了。这是真实炸过的 bug：手绘/转换出的
+        // 大调色板（16+ 色）图标存下去之后，回读校验会报"icon.rows 里用了字符 'X'，但 icon.palette 里
+        // 没有给它配颜色"，导致这份主题从"已保存的客制化主题"列表里静默消失——存的时候看着成功了
+        // （存盘前的那次校验用的是内存里没被这层转换污染的原始对象），下次刷新列表重新读盘校验才炸。
+        // 显式用 DefaultContractResolver + processDictionaryKeys:false 的命名策略，只转属性名，
+        // 字典 key 原样保留。
         public static readonly JsonSerializerSettings SerializerSettings = new()
         {
-            ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver(),
+            ContractResolver = new Newtonsoft.Json.Serialization.DefaultContractResolver
+            {
+                NamingStrategy = new Newtonsoft.Json.Serialization.CamelCaseNamingStrategy(processDictionaryKeys: false, overrideSpecifiedNames: true),
+            },
         };
 
         // 图标网格的行数/每行宽度都必须落在这个范围内，两个方向各自独立判断，不强制正方形——内置皮肤里
