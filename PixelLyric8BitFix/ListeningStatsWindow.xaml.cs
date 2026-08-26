@@ -41,6 +41,25 @@ namespace PixelLyric8BitFix
             PopulateCardStyleOptions();
             RefreshSummary();
             BuildHeatmap();
+            BuildRank();
+        }
+
+        // 称号跟热力图一样只在打开窗口时算一次——按全部时间的累计秒数现算，不跟着本月/今年/全部时间
+        // 三个切换按钮联动，见 XAML 里那段注释
+        private void BuildRank()
+        {
+            int totalSeconds = ListeningStatsAggregator.GetTotalSeconds(_stats, DateOnly.MinValue, DateOnly.MaxValue);
+            var tier = ListeningRank.GetCurrentTier(totalSeconds);
+            var next = ListeningRank.GetNextTier(totalSeconds);
+            double progress = ListeningRank.GetProgressWithinTier(totalSeconds);
+
+            TxtRankName.Text = $"{tier.Icon} {tier.Name}";
+            RankProgressFillCol.Width = new GridLength(progress, GridUnitType.Star);
+            RankProgressEmptyCol.Width = new GridLength(1 - progress, GridUnitType.Star);
+
+            TxtRankNextHint.Text = next == null
+                ? "已经是最高档了，继续听下去纯粹是因为喜欢，不是为了再升一级"
+                : $"还差 {ListeningStatsAggregator.FormatDuration(next.MinSeconds - totalSeconds)} 升到「{next.Icon} {next.Name}」";
         }
 
         // 热力图固定是"今年 1 月 1 日到今天"，只在打开窗口时算一次——不像 RefreshSummary 那样跟着

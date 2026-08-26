@@ -194,6 +194,15 @@ namespace PixelLyric8BitFix
                 }
             }
 
+            // 客制化主题主图标的逐帧动画（theme.icon.frames）——只在这份主题自己的 musicReactive 开着时
+            // 才会用到这个比率（见 UpdateCustomIconFrameAnimation），跟 Steve 换腿是同一份 ratio 数据源，
+            // 只是额外套了一层这份主题自己的 sensitivity（ApplyReactiveSensitivity），Steve 没有这个
+            // 可调项（内置皮肤不需要），客制化主题这边本来就支持 low/medium/high 三档
+            if (_customIconFrames != null)
+            {
+                _customIconFrameSpeedRatio = ApplyReactiveSensitivity(ratio, BaseSpeedRatio, _customIconFrameSensitivity, MinSpeedRatio, MaxSpeedRatio);
+            }
+
             if (_settings.Skin == PlayerSkin.Starry)
             {
                 if (TryArmBeatTrigger(ref _ufoHopArmed, snapshot.BeatPulse, BeatTriggerArmedThreshold, BeatTriggerDisarmThreshold))
@@ -383,6 +392,63 @@ namespace PixelLyric8BitFix
             };
             CampfirePokeScale.BeginAnimation(ScaleTransform.ScaleXProperty, scaleX);
             CampfirePokeScale.BeginAnimation(ScaleTransform.ScaleYProperty, scaleY);
+        }
+
+        // 隐藏彩蛋——不是"装饰物"（不是每套皮肤都有 Steve/篝火这种能戳的元素），是标题行本身，
+        // 所有皮肤/显示模式（除了极简模式会整个隐藏这一行）都有，保证彩蛋在任何皮肤下都能摸到。
+        // 连点 10 下、每下间隔不超过 1.2 秒才算数——中间停顿超过这个数就重新从 1 开始计，
+        // 不是"这辈子点满 10 下"那种累计。故意不给这行加 Cursor="Hand" 或者任何视觉提示（见 XAML
+        // 里的注释），这是留给愿意随手乱点的人的小彩蛋，不是一个正经功能入口，不该被"发现"得太容易。
+        private const int EasterEggClickThreshold = 10;
+        private static readonly TimeSpan EasterEggClickWindow = TimeSpan.FromMilliseconds(1200);
+        private static readonly string[] EasterEggMessages =
+        {
+            "🎉 你发现了一个隐藏彩蛋！",
+            "✨ 咦，被你戳出来了",
+            "🥚 彩蛋 GET，纯粹好玩，不解锁任何东西",
+            "🎮 手速不错，但这个彩蛋没有奖励",
+        };
+
+        private void TitleRow_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            // 必须 Handled，理由跟 ImgSteve_MouseLeftButtonDown 一样——不这么做的话，连点第 2 下就会被
+            // Window 上挂的 MouseDoubleClick 识别成"双击"，直接把窗口缩成 Mini 模式，后面 8 下根本点不到。
+            // 代价是标题行这一小块区域没法再用来拖窗口/双击进 Mini 模式了，跟 Steve/篝火是同一个取舍——
+            // 窗口其它地方（标题行以外）双击/拖拽照样正常，只是这一小块被彩蛋"占用"了。
+            e.Handled = true;
+
+            var now = DateTime.Now;
+            _titleClickCount = now - _lastTitleClickTime <= EasterEggClickWindow ? _titleClickCount + 1 : 1;
+            _lastTitleClickTime = now;
+
+            if (_titleClickCount < EasterEggClickThreshold) return;
+            _titleClickCount = 0; // 立刻归零，不然松手之后接着点几下会连续触发好几次
+
+            ShowToast(EasterEggMessages[Random.Shared.Next(EasterEggMessages.Length)]);
+
+            double fromAngle = TitleRowEasterEggRotate.Angle;
+            var spin = new DoubleAnimation(fromAngle, fromAngle + 360, TimeSpan.FromMilliseconds(600))
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut },
+                FillBehavior = FillBehavior.Stop, // 播完自动归位、交还这个属性，不影响标题行以后的正常显示
+            };
+            TitleRowEasterEggRotate.BeginAnimation(RotateTransform.AngleProperty, spin);
+        }
+
+        // 给 MainWindow.xaml.cs 里的 MouseDoubleClick 处理器用——判断一次双击的点击源（e.OriginalSource）
+        // 是不是落在 TitleRow 范围内，是的话说明这次双击是冲着彩蛋触发区来的，不该切 Mini 模式。见那边
+        // 的注释：这不是给 TitleRow_MouseLeftButtonDown 的 e.Handled 兜底，是这个场景下唯一真正管用的拦法。
+        // 逻辑树/可视化树混着走（LogicalTreeHelper 优先、够不到再退 VisualTreeHelper）是因为 OriginalSource
+        // 大多数情况下就是被点中的那个 TextBlock 本身，两套树在这种简单布局下走到根都是同一条路，
+        // 混着走只是多一层保险，不是真的需要跨越模板边界。
+        private bool IsWithinTitleRow(DependencyObject? source)
+        {
+            while (source != null)
+            {
+                if (ReferenceEquals(source, TitleRow)) return true;
+                source = LogicalTreeHelper.GetParent(source) ?? VisualTreeHelper.GetParent(source);
+            }
+            return false;
         }
     }
 }

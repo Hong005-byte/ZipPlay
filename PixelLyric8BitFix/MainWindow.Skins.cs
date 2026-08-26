@@ -61,7 +61,12 @@ namespace PixelLyric8BitFix
                 .ToList();
             Color miniBg = bgStops.Count > 0 ? bgStops[0] : Color.FromRgb(0x22, 0x22, 0x22);
 
-            var iconRows = custom.Icon!.Rows!.ToArray();
+            // 有 icon.frames 的话 Rows 就是 null（渲染只认 frames，见 CustomThemeIcon.Frames 的注释）——
+            // MiniIcon 这条路（Mini 小方块/进度条拖拽图标/分享卡片吉祥物）目前还没接上逐帧动画，见
+            // ApplyCustomSkinVisuals 开头的范围说明，先退到第一帧当静态图，不是漏了处理 frames，
+            // 是刻意先只让主图标动。之前这里无脑读 Rows!，遇到只写了 frames、没写 rows 的主题会直接
+            // NullReferenceException——凡是选了带 frames 的自定义主题当皮肤，一进播放器就崩。
+            var iconRows = (custom.Icon!.Frames is { Count: > 0 } frames ? frames[0] : custom.Icon.Rows!).ToArray();
             var iconPalette = custom.Icon.Palette!.ToDictionary(
                 kv => kv.Key[0],
                 kv => { CustomThemeValidator.TryParseHexColor(kv.Value, out var c); return c; });
@@ -86,6 +91,12 @@ namespace PixelLyric8BitFix
             // 清一下，万一以后哪天改成"不重开窗口、原地切皮肤"，也不会因为忘了清空导致旧皮肤的 Storyboard
             // 一直占在列表里、UpdateMusicReactiveSkin 每 tick 都在给不可见的动画调速率
             _musicReactiveStoryboards.Clear();
+
+            // 逐帧动画状态也要清一次——不清的话，从"带 frames 的客制化主题"切到别的皮肤（或者切到
+            // 另一份没有 frames 的客制化主题）之后，SmoothTimer_Tick 里 `if (_customIconFrames != null)`
+            // 那个判断会一直命中，拿着上一份主题的位图数组去更新一个现在压根不显示这份图标的皮肤，
+            // 纯属浪费；ApplyCustomSkinVisuals 命中带 frames 的主题时会重新赋值回来，不会漏
+            _customIconFrames = null;
 
             // 客制化皮肤要先把 JSON 读出来——加载失败（文件被删/改坏了）就当没有，下面会退回简约风
             _customTheme = skin == PlayerSkin.Custom && !string.IsNullOrEmpty(_settings.CustomThemeFile)
@@ -358,8 +369,12 @@ namespace PixelLyric8BitFix
             CustomSkinGlow.Color = accent;
             CustomSkinBg.Visibility = Visibility.Visible;
 
-            var iconPalette = CustomThemeValidator.BuildIconPalette(theme.Icon!);
-            var iconBitmap = PixelArt.BuildCustomIcon(theme.Icon!.Rows!.ToArray(), iconPalette);
+            // frames 数组：没有 icon.frames 就是长度 1（跟这个字段加进来之前完全一样的行为）。
+            // iconBitmap 取第一帧——drift/fall 那两条轨道和这个方法末尾的 ApplyCustomExtraLayers
+            // 暂时都还只认第一帧（静态），只有下面 else 分支（主图标固定贴装饰栏）真的会逐帧切换，
+            // 见开头讨论时定的范围。
+            var iconFrames = CustomThemeValidator.BuildCustomIconFrames(theme.Icon!);
+            var iconBitmap = iconFrames[0];
 
             // animation.type 可以是 "pulse" 这种单招，也可以是 "pulse+sway" 这种用 + 连起来的组合——
             // 校验已经保证：要么整个数组只有 drift 或 fall 一个（走三图标飘过/飘落轨道），要么完全不含
@@ -400,11 +415,26 @@ namespace PixelLyric8BitFix
             {
                 RowDecor.Height = new GridLength(50);
                 CustomIconDecorCanvas.Visibility = Visibility.Visible;
-                CustomIcon.Source = iconBitmap;
+                CustomIcon.Source = iconBitmap; // 多帧的话这里先显示第一帧，SmoothTimer_Tick 里立刻会接管往后切
                 // 重置放在循环外面，只做一次——挪进循环里的话，组合里后一招重置的时候会把前一招刚设好的
                 // 状态（比如 sway 已经在转的角度）擦掉，等于每加一招都在跟前面打架
                 ResetCustomIconAnimationState(accent);
                 foreach (var t in animTypes) StartCustomIconAnimation(t, customDuration, musicReactive, sensitivity);
+
+                // 逐帧动画（theme.icon.frames）只在这个分支（主图标固定贴装饰栏）生效——drift/fall 那两条
+                // 三图标轨道结构不一样，暂时不支持，见 ApplyCustomSkinVisuals 开头的注释。只有真的 >1 帧
+                // 才启用，1 帧（或者压根没填 frames）就跟这个功能加进来之前完全一样，SmoothTimer_Tick 里
+                // `if (_customIconFrames != null)` 那个判断天然不会命中，不会多一份空转的开销。
+                if (iconFrames.Length > 1)
+                {
+                    _customIconFrames = iconFrames;
+                    _customIconFrameDurationSeconds = CustomThemeValidator.GetFrameDurationSeconds(theme.Icon!);
+                    _customIconFrameIndex = 0;
+                    _customIconFrameTickCounter = 0;
+                    _customIconFramesMusicReactive = musicReactive;
+                    _customIconFrameSensitivity = sensitivity;
+                    _customIconFrameSpeedRatio = 1.0;
+                }
             }
 
             ApplyCustomExtraLayers(theme, accent);
@@ -420,8 +450,11 @@ namespace PixelLyric8BitFix
 
             foreach (var layer in theme.Layers)
             {
-                var palette = CustomThemeValidator.BuildIconPalette(layer.Icon!);
-                var bitmap = PixelArt.BuildCustomIcon(layer.Icon!.Rows!.ToArray(), palette);
+                // 层目前不支持逐帧动画（见 CustomTheme.cs 里 icon.frames 的范围说明），但校验没有单独
+                // 挡住"层的 icon 里写了 frames"这种情况（ValidateIcon 是主图标/层共用的同一套规则）——
+                // 用 BuildCustomIconFrames 取第一帧当静态图，跟主图标之外那几处（Mini 小方块/drift/fall/
+                // 分享卡片）是同一个退化策略，不会因为用户在层里写了 frames 就直接崩
+                var bitmap = CustomThemeValidator.BuildCustomIconFrames(layer.Icon!)[0];
 
                 var rotate = new RotateTransform();
                 var translate = new TranslateTransform();
@@ -876,6 +909,30 @@ namespace PixelLyric8BitFix
                 _steveLegTickCounter = 0;
                 ImgSteve.Source = ImgSteve.Source == _steveFrame1 ? _steveFrame2 : _steveFrame1;
             }
+        }
+
+        // 客制化主题主图标的逐帧动画——跟上面 UpdateSteveWalkAnimation 是同一套"计时器数 tick、攒够就
+        // 换一帧"机制，只是从写死两张图变成用户 JSON 里任意张（见 CustomTheme.cs 的 CustomThemeIcon.
+        // Frames）。musicReactive 开着的话换帧节奏按 _customIconFrameSpeedRatio（UpdateMusicReactiveSkin
+        // 里算出来的同一份播放速度倍率，经过这份主题自己的 sensitivity 调整过）缩放，跟 Steve 换腿变速
+        // 是同一个道理；没开的话就是 frameDuration 写多少就多快，雷打不动。
+        //
+        // 调用方（SmoothTimer_Tick）已经拿 `_customIconFrames != null` 判断过要不要调这个方法，这里
+        // 不重复判断；_customIconFrames.Length 理论上一定 > 1（见 ApplyCustomSkinVisuals 只在 >1 帧时
+        // 才赋值），但还是留一道防御，免得以后有别的地方误赋值成单帧数组时这里直接除零/数组越界。
+        private void UpdateCustomIconFrameAnimation()
+        {
+            var frames = _customIconFrames;
+            if (frames == null || frames.Length <= 1) return;
+
+            _customIconFrameTickCounter++;
+            double speedRatio = _customIconFramesMusicReactive ? _customIconFrameSpeedRatio : 1.0;
+            int ticksPerFrame = Math.Max(1, (int)Math.Round(_customIconFrameDurationSeconds * 1000 / 50.0 / speedRatio));
+            if (_customIconFrameTickCounter < ticksPerFrame) return;
+
+            _customIconFrameTickCounter = 0;
+            _customIconFrameIndex = (_customIconFrameIndex + 1) % frames.Length;
+            CustomIcon.Source = frames[_customIconFrameIndex];
         }
 
         // 显示模式：极简只留歌词一行，标准把标题/进度条也带上

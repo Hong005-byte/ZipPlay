@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
 
 namespace PixelLyric8BitFix
 {
@@ -33,6 +34,21 @@ namespace PixelLyric8BitFix
         private const int MaxHistorySteps = 20;
         private sealed record HistorySnapshot(string Text, string? EditingFileName, string EditingHintText, Visibility EditingHintVisibility);
         private readonly List<HistorySnapshot> _history = new();
+
+        // 主图标逐帧动画（theme.icon.frames）的预览——跟正式渲染（MainWindow.Skins.cs）不是同一套计时器：
+        // 那边复用了本来就存在的 50ms 主循环（SmoothTimer_Tick），这个窗口没有那样一个常驻循环，
+        // 单独开一个按 frameDuration 直接定间隔的计时器更简单，不用再算"多少个 50ms tick 凑够一帧"。
+        // 也没有音乐律动那层（编辑页没有音频采集）——固定按 frameDuration 播，跟 8 招式预览是同一个简化程度。
+        //
+        // 用字段初始化器而不是在构造函数体里赋值——构造函数体里 InitializeComponent() 之后紧接着就调了
+        // UpdatePreview()，那条路径（不管走 ApplyPreviewTheme 还是 ClearPreview）一定会摸到
+        // ResetPreviewIconAnimationState/ClearPreview 里的 _previewFrameTimer.Stop()。之前这个字段是在
+        // UpdatePreview() 调用之后才在构造函数体里 new 出来的，第一次打开这个窗口、TxtInput 还是空的时候
+        // 就会走到 ClearPreview() 摸一个还是 null 的 _previewFrameTimer，直接 NullReferenceException——
+        // 每次打开自定义主题页都会崩。字段初始化器在 InitializeComponent() 之前就跑完了，不会有这个先后顺序问题。
+        private readonly System.Windows.Threading.DispatcherTimer _previewFrameTimer = new();
+        private BitmapSource[]? _previewIconFrames;
+        private int _previewIconFrameIndex;
 
         private void PushHistory()
         {
@@ -62,10 +78,24 @@ namespace PixelLyric8BitFix
         public CustomThemeWindow()
         {
             InitializeComponent();
+            _previewFrameTimer.Tick += PreviewFrameTimer_Tick;
+            // DispatcherTimer 挂在 Dispatcher 上，不会因为这个窗口关掉就自动停——不手动 Stop 的话，
+            // 关掉编辑页之后它还会一直在后台空转（虽然 Tick 里访问的 PreviewIcon 已经没人看得见了，
+            // 不算真的坏，但纯属浪费，也留着一份不必要的引用不让这个窗口被回收）
+            Closed += (s, e) => _previewFrameTimer.Stop();
+
             TxtExample.Text = BuildExampleJson();
             RefreshThemeList();
             UpdatePreview();
             RefreshRandomizeButtonHint();
+        }
+
+        private void PreviewFrameTimer_Tick(object? sender, EventArgs e)
+        {
+            if (_previewIconFrames is not { Length: > 1 } frames) return;
+            _previewIconFrameIndex = (_previewIconFrameIndex + 1) % frames.Length;
+            PreviewIcon.Source = frames[_previewIconFrameIndex];
+            IconZoomPreview.Source = frames[_previewIconFrameIndex]; // 放大框跟主预览显示同一帧，方便确认逐帧动画顺不顺
         }
 
         // "主题工匠"成就解锁前后，🎲 按钮的提示语不一样——没解锁的时候顺手告诉一句"存一个就能解锁"，
@@ -138,13 +168,17 @@ namespace PixelLyric8BitFix
             PreviewLyricBox.Background = new SolidColorBrush(lyricBoxBg);
             PreviewLyricBox.BorderBrush = new SolidColorBrush(lyricBoxBorder);
 
-            var iconPalette = CustomThemeValidator.BuildIconPalette(theme.Icon!);
-            var iconBitmap = PixelArt.BuildCustomIcon(theme.Icon!.Rows!.ToArray(), iconPalette);
+            // frames 数组：没有 icon.frames 就是长度 1（这个字段加进来之前的唯一行为）。尺寸提示文字
+            // 改成从渲染出来的位图（PixelWidth/PixelHeight）读，不是直接读 theme.Icon.Rows——Rows 在
+            // 多帧模式下可能是 null（渲染只认 Frames，见 CustomThemeIcon.Frames 的注释），从位图读
+            // 两种情况都对，不用分支判断
+            var iconFrames = CustomThemeValidator.BuildCustomIconFrames(theme.Icon!);
+            var iconBitmap = iconFrames[0];
             PreviewIcon.Source = iconBitmap;
-            string iconSizeText = $"图标 {theme.Icon.Rows!.Count} 行 x {theme.Icon.Rows[0].Length} 列";
+            string iconSizeText = $"图标 {iconBitmap.PixelHeight} 行 x {iconBitmap.PixelWidth} 列" + (iconFrames.Length > 1 ? $"，共 {iconFrames.Length} 帧" : "");
             TxtIconSizeHint.Text = iconSizeText;
 
-            // 放大版用的是同一张 iconBitmap，不重新画一遍——两边看到的必须是完全同一份数据，
+            // 放大版用的是同一批 iconFrames，不重新画一遍——两边看到的必须是完全同一份数据，
             // 不然万一哪天两处渲染逻辑走岔了，两个预览显示的图标对不上，反而更容易让人怀疑是不是哪里出错了
             IconZoomPreview.Source = iconBitmap;
             TxtIconZoomHint.Visibility = Visibility.Collapsed;
@@ -159,6 +193,17 @@ namespace PixelLyric8BitFix
                 StartPreviewIconAnimation(t, theme.Animation.Duration);
             }
             ApplyPreviewLayers(theme, accent);
+
+            // 逐帧动画只在真的 >1 帧时才启动计时器——1 帧（或者没填 frames）就跟这个功能加进来之前
+            // 完全一样，PreviewIcon/IconZoomPreview 保持 ResetPreviewIconAnimationState 里已经清空的状态，
+            // 显示上面已经设好的这张静态 iconBitmap，不会多出一个不必要的计时器在后台跑
+            if (iconFrames.Length > 1)
+            {
+                _previewIconFrames = iconFrames;
+                _previewIconFrameIndex = 0;
+                _previewFrameTimer.Interval = TimeSpan.FromSeconds(CustomThemeValidator.GetFrameDurationSeconds(theme.Icon!));
+                _previewFrameTimer.Start();
+            }
         }
 
         // theme.layers 的预览版：跟 MainWindow.Skins.cs 的 ApplyCustomExtraLayers 是同一个思路
@@ -171,8 +216,11 @@ namespace PixelLyric8BitFix
 
             foreach (var layer in theme.Layers)
             {
-                var palette = CustomThemeValidator.BuildIconPalette(layer.Icon!);
-                var bitmap = PixelArt.BuildCustomIcon(layer.Icon!.Rows!.ToArray(), palette);
+                // 层目前不支持逐帧动画（见 CustomTheme.cs 里 icon.frames 的范围说明），但校验没有单独
+                // 挡住"层的 icon 里写了 frames"这种情况（ValidateIcon 是主图标/层共用的同一套规则）——
+                // 用 BuildCustomIconFrames 取第一帧当静态图，跟主图标之外那几处（Mini 小方块/drift/fall/
+                // 分享卡片）是同一个退化策略，不会因为用户在层里写了 frames 就直接崩
+                var bitmap = CustomThemeValidator.BuildCustomIconFrames(layer.Icon!)[0];
 
                 var rotate = new RotateTransform();
                 var translate = new TranslateTransform();
@@ -305,6 +353,12 @@ namespace PixelLyric8BitFix
         // 会把前一招刚设好的状态擦掉
         private void ResetPreviewIconAnimationState(Color accent)
         {
+            // 逐帧动画状态也在这里一起重置——每次 ApplyPreviewTheme 都会先调这个方法再决定要不要重新
+            // 启动计时器，不重置的话，从"带 frames 的主题"改成"不带 frames 的主题"时，旧的计时器还会
+            // 继续跑、拿着上一份主题的位图数组往 PreviewIcon 上贴，跟这次新的静态图打架
+            _previewFrameTimer.Stop();
+            _previewIconFrames = null;
+
             PreviewIconRotate.BeginAnimation(RotateTransform.AngleProperty, null);
             PreviewIconRotate.Angle = 0;
             PreviewIconTranslate.BeginAnimation(TranslateTransform.XProperty, null);
@@ -384,6 +438,9 @@ namespace PixelLyric8BitFix
 
         private void ClearPreview()
         {
+            _previewFrameTimer.Stop();
+            _previewIconFrames = null;
+
             PreviewIconRotate.BeginAnimation(RotateTransform.AngleProperty, null);
             PreviewIconTranslate.BeginAnimation(TranslateTransform.XProperty, null);
             PreviewIconTranslate.BeginAnimation(TranslateTransform.YProperty, null);
@@ -439,11 +496,28 @@ namespace PixelLyric8BitFix
         // 不用额外调用。故意不清空"正在编辑：xxx"的提示：多点几下随机只是在改输入框里的草稿内容，
         // 不代表用户放弃了正在编辑的那个已存主题，真正决定"这次保存是新建还是覆盖"的是 _editingFileName，
         // 这里不去动它——点了保存的话照样会覆盖那份正在编辑的主题，这个提示应该继续挂着提醒用户
+        // Common 不弹提示（那是最常见的结果，每次都念叨反而烦）；Rare 以上弹一句"出货"反馈，
+        // 稀有度越高颜色越显眼——纯粹是给"抽卡"这个动作加点游戏感，跟主题本身能不能存、
+        // 能不能过校验完全没关系，Rare/Epic/Limited 生成出来的 JSON 结构跟 Common 一模一样。
         private void BtnRandomize_Click(object sender, RoutedEventArgs e)
         {
             HideMessages();
             PushHistory();
-            TxtInput.Text = CustomThemeRandomizer.GenerateJson(CustomThemeAchievement.IsUnlocked());
+            var result = CustomThemeRandomizer.GenerateWithRarity(CustomThemeAchievement.IsUnlocked());
+            TxtInput.Text = result.Json;
+
+            (string label, string color) = result.Rarity switch
+            {
+                PaletteRarity.Limited => ("🌟 限定", "#D4AF37"),
+                PaletteRarity.Epic => ("💜 史诗", "#E040FB"),
+                PaletteRarity.Rare => ("✨ 稀有", "#4FD1C5"),
+                _ => ("", ""),
+            };
+            if (label.Length > 0)
+            {
+                var brush = (Brush)new BrushConverter().ConvertFromString(color)!;
+                ShowSuccess($"{label}配色！抽到了「{result.Mood}」", brush);
+            }
         }
 
         // 从别人分享的 .json 文件导入——读文件内容塞进输入框，不直接落地。是不是真的存、
@@ -514,11 +588,20 @@ namespace PixelLyric8BitFix
             var picker = new ThemeRemixWindow { Owner = this };
             if (picker.ShowDialog() != true || picker.ResultJson == null) return;
 
+            bool remixMasterUnlockedBefore = CustomThemeAchievement.IsRemixMasterUnlocked();
+
             PushHistory();
             TxtInput.Text = picker.ResultJson;
             _editingFileName = null;
             TxtEditingHint.Visibility = Visibility.Collapsed;
             CustomThemeFeatureUsage.MarkRemixUsed(); // 真的拿到一份混搭草稿才算用过，见该方法注释
+
+            // 只在真的刚解锁那一次弹一句提示——平时点混搭不用每次都刷一条"已经生成"的成功消息，
+            // 草稿直接进输入框、预览立刻跟着重画就是最直接的反馈了，不需要额外的文字确认
+            if (!remixMasterUnlockedBefore && CustomThemeAchievement.IsRemixMasterUnlocked())
+            {
+                ShowSuccess("🎉 顺带解锁「混音师」成就，成就墙里能看到。");
+            }
         }
 
         // 点格子画图标——打开前先看当前输入框里有没有一个能续画的 icon（TryExtractIcon 解析不出来就是
@@ -533,15 +616,18 @@ namespace PixelLyric8BitFix
             var painter = new IconPainterWindow(existingIcon) { Owner = this };
             if (painter.ShowDialog() != true || painter.ResultIcon == null) return;
 
+            bool pixelPainterUnlockedBefore = CustomThemeAchievement.IsPixelPainterUnlocked();
             CustomThemeFeatureUsage.MarkPainterUsed(); // 画完点了"插入"/"复制片段"才算用过，见该方法注释；插入进 JSON 成不成功不影响这个成就
+            bool justUnlockedPixelPainter = !pixelPainterUnlockedBefore && CustomThemeAchievement.IsPixelPainterUnlocked();
 
             string? merged = PixelIconEditor.TryInsertIconIntoJson(TxtInput.Text, painter.ResultIcon);
             if (merged != null)
             {
                 PushHistory();
                 TxtInput.Text = merged;
-                TxtSuccess.Text = "✅ 图标已经画好，替换进当前 JSON 的 icon 字段了。";
-                SuccessBox.Visibility = Visibility.Visible;
+                ShowSuccess(justUnlockedPixelPainter
+                    ? "✅ 图标已经画好，替换进当前 JSON 的 icon 字段了。🎉 顺带解锁「像素画师」成就，成就墙里能看到。"
+                    : "✅ 图标已经画好，替换进当前 JSON 的 icon 字段了。");
                 return;
             }
 
@@ -575,8 +661,7 @@ namespace PixelLyric8BitFix
             try
             {
                 File.WriteAllText(dialog.FileName, raw);
-                TxtSuccess.Text = $"✅ 「{entry.Theme.Name}」已导出，把这个文件发给别人，对方在这个页面点 [📥 从文件导入] 就能用。";
-                SuccessBox.Visibility = Visibility.Visible;
+                ShowSuccess($"✅ 「{entry.Theme.Name}」已导出，把这个文件发给别人，对方在这个页面点 [📥 从文件导入] 就能用。");
             }
             catch (Exception ex)
             {
@@ -617,9 +702,10 @@ namespace PixelLyric8BitFix
                 return;
             }
 
-            // 存之前先问一次"主题工匠"解不解锁——这是第一次存主题之前唯一能拿到的"之前"状态，
+            // 存之前先问一次"主题工匠"/"收藏家"解不解锁——这是存主题之前唯一能拿到的"之前"状态，
             // 存完再问一次就已经变成 true 了，没法靠"存后的状态"反推"是不是刚刚才解锁的"
             bool themeMakerUnlockedBefore = CustomThemeAchievement.IsUnlocked();
+            bool collectorUnlockedBefore = CustomThemeAchievement.IsCollectorUnlocked();
 
             var (success, error, savedFileName) = CustomThemeStore.Save(theme, _editingFileName);
             if (!success)
@@ -633,10 +719,18 @@ namespace PixelLyric8BitFix
             TxtEditingHint.Text = $"正在编辑：{theme.Name}（再次保存会覆盖更新这一份，不会新建）";
             TxtEditingHint.Visibility = Visibility.Visible;
 
-            TxtSuccess.Text = !themeMakerUnlockedBefore && CustomThemeAchievement.IsUnlocked()
-                ? $"✅ 「{theme.Name}」保存成功，回到设置页的皮肤选择器里就能看到了。🎉 顺带解锁「主题工匠」成就，🎲 随机生成里多了一份限定配色。"
-                : $"✅ 「{theme.Name}」保存成功，回到设置页的皮肤选择器里就能看到了。";
-            SuccessBox.Visibility = Visibility.Visible;
+            // 一次保存理论上最多同时新解锁这两个之一（收藏家要求正好存满 10 个，主题工匠只要求存过 1 个，
+            // 两个条件不会在同一次保存里同时从"没解锁"变成"解锁"——但还是拼成列表处理，不用两层嵌套三元，
+            // 万一以后又加了新的自定义主题成就，这里不用再改结构
+            var newlyUnlockedNotes = new List<string>();
+            if (!themeMakerUnlockedBefore && CustomThemeAchievement.IsUnlocked())
+                newlyUnlockedNotes.Add("「主题工匠」成就（🎲 随机生成里多了一份限定配色）");
+            if (!collectorUnlockedBefore && CustomThemeAchievement.IsCollectorUnlocked())
+                newlyUnlockedNotes.Add("「收藏家」成就");
+
+            ShowSuccess(newlyUnlockedNotes.Count > 0
+                ? $"✅ 「{theme.Name}」保存成功，回到设置页的皮肤选择器里就能看到了。🎉 顺带解锁{string.Join("、", newlyUnlockedNotes)}。"
+                : $"✅ 「{theme.Name}」保存成功，回到设置页的皮肤选择器里就能看到了。");
 
             RefreshThemeList();
             RefreshRandomizeButtonHint();
@@ -663,6 +757,21 @@ namespace PixelLyric8BitFix
         {
             ErrorBox.Visibility = Visibility.Collapsed;
             SuccessBox.Visibility = Visibility.Collapsed;
+        }
+
+        // 默认的成功提示绿色——XAML 里 TxtSuccess 自己也是这个颜色，这里重复一份常量是因为
+        // ShowSuccess 需要能"改成别的颜色（稀有度用）之后，下一次普通消息再改回来"，
+        // 不重复的话没地方能问到"默认颜色到底是什么"
+        private static readonly Brush DefaultSuccessBrush = (Brush)new BrushConverter().ConvertFromString("#7AE08A")!;
+
+        // 所有"存成功了/导出了/分享码复制了/顺带解锁了什么成就"这些提示统一走这里——不然每个调用点
+        // 都要记得自己把 Foreground 从上一次可能被稀有度反馈（BtnRandomize_Click）改成的紫色/金色
+        // 改回默认绿色，漏改一处就会出现"明明是普通保存成功，字却是金色的"这种残留状态。
+        private void ShowSuccess(string text, Brush? foreground = null)
+        {
+            TxtSuccess.Text = text;
+            TxtSuccess.Foreground = foreground ?? DefaultSuccessBrush;
+            SuccessBox.Visibility = Visibility.Visible;
         }
 
         private void RefreshThemeList()
@@ -745,8 +854,7 @@ namespace PixelLyric8BitFix
                         return;
                     }
                     try { Clipboard.SetText(CustomThemeShareCode.Encode(raw)); } catch { /* 剪贴板偶尔被占用，不是关键功能，失败就算了 */ }
-                    TxtSuccess.Text = $"✅ 「{entryForShare.Theme.Name}」的分享码已经复制到剪贴板，直接粘贴发给别人就行，对方点 [🔗 粘贴分享码导入] 就能用。";
-                    SuccessBox.Visibility = Visibility.Visible;
+                    ShowSuccess($"✅ 「{entryForShare.Theme.Name}」的分享码已经复制到剪贴板，直接粘贴发给别人就行，对方点 [🔗 粘贴分享码导入] 就能用。");
                 };
                 Grid.SetColumn(shareBtn, 2);
 

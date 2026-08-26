@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Windows;
 
 namespace PixelLyric8BitFix
@@ -63,6 +64,26 @@ namespace PixelLyric8BitFix
             day.TrackSeconds[trackId] = day.TrackSeconds.GetValueOrDefault(trackId) + seconds;
 
             ListeningStatsStore.Save(_stats);
+            CelebrateNewlyUnlockedAchievements();
+        }
+
+        // 每次真的写了新的听歌数据（唯一会让听歌成就状态发生变化的时机）之后，顺手评估一遍 8 个听歌成就，
+        // 把"这次相比上次多解锁的"弹成 toast——AchievementCalculator 本身不碰磁盘、没有独立的已解锁状态，
+        // 靠 AchievementUnlockTracker 记一份"见过哪些"才知道"这个是不是刚刚才解锁"，不是每次都当新的庆祝一遍。
+        // 挂在 FlushListeningStats 末尾而不是每个 50ms tick 里，是因为只有这里才真的改了 _stats 的内容，
+        // 别的 tick 只是攒 _pendingListenSeconds，成就状态不可能变，没必要每 50ms 重新评估一次。
+        private void CelebrateNewlyUnlockedAchievements()
+        {
+            var progress = AchievementCalculator.Evaluate(_stats);
+            var newlyUnlocked = AchievementUnlockTracker.DetectNewlyUnlocked(progress);
+            if (newlyUnlocked.Count == 0) return;
+
+            // ShowToast 只有一块地方显示，不是消息队列——同一次 flush 就凑齐两个成就的情况是真会发生的
+            // （比如刚好这次听歌时长跨过 100 小时那一刻，7 个常规成就已经全亮了，压轴的"尊贵听众"也跟着
+            // 同时解锁），分开调用两次 ShowToast 后一条会立刻覆盖前一条，前一条等于白弹。多个一起解锁的话
+            // 拼进同一条 toast 里，不会有哪个被静默吃掉。
+            string names = string.Join("、", newlyUnlocked.Select(a => $"{a.Icon} {a.Name}"));
+            ShowToast($"🎉 成就解锁：{names}");
         }
 
         // HandleTrackChangeAsync 每次真正换了一首新歌就调一次，把这首歌"干净"的标题/艺人（已经去掉

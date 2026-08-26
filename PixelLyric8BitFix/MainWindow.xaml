@@ -1071,7 +1071,17 @@
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
-                        <StackPanel x:Name="TitleRow" Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center">
+                        <!-- 连点 10 下（1.2 秒内）触发一个隐藏彩蛋——见 MainWindow.SkinInteractions.cs 的
+                             TitleRow_MouseLeftButtonDown（那边会 e.Handled=true，所以这一小块区域不能再用来
+                             双击进 Mini 模式/拖窗口了，跟 Steve/篝火同一个取舍——窗口其它地方不受影响）。
+                             故意不给 Cursor="Hand"、不加任何视觉提示，这行本来就不是"可点击的按钮"，
+                             是留给愿意瞎点的人的小彩蛋，不是一个功能入口。RenderTransform 挂一个
+                             RotateTransform 是彩蛋触发时转一圈用的，平时角度是 0，不影响正常显示。 -->
+                        <StackPanel x:Name="TitleRow" Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center"
+                                    RenderTransformOrigin="0.5,0.5" MouseLeftButtonDown="TitleRow_MouseLeftButtonDown">
+                            <StackPanel.RenderTransform>
+                                <RotateTransform x:Name="TitleRowEasterEggRotate"/>
+                            </StackPanel.RenderTransform>
                             <TextBlock x:Name="TxtSongTitle" Text="LOADING..." FontFamily="Lucida Console" Foreground="#FFFFFF" FontSize="15" FontWeight="Bold"/>
                             <TextBlock x:Name="TxtArtist" Text=" - ARTIST" FontFamily="Lucida Console" Foreground="#DDD" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"/>
                             <TextBlock x:Name="TxtTime" Text="[00:00 / 00:00]" FontFamily="Lucida Console" Foreground="#DDD" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"/>

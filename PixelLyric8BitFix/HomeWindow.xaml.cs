@@ -67,7 +67,11 @@ namespace PixelLyric8BitFix
             var settings = AppSettings.Load();
             var stats = ListeningStatsStore.Load();
             int totalSeconds = ListeningStatsAggregator.GetTotalSeconds(stats, DateOnly.MinValue, DateOnly.MaxValue);
-            string statsSubtitle = totalSeconds > 0 ? $"共听了 {ListeningStatsAggregator.FormatDuration(totalSeconds)}" : "还没有听歌记录";
+            // 称号（ListeningRank）挂在这行小字最前面——0 秒也有称号（"初来乍到"），不用等有数据才显示，
+            // 这样首页永远能看到"我现在是什么段位"，不是只有听出成绩了才冒出来
+            string statsSubtitle = totalSeconds > 0
+                ? $"{ListeningRank.GetCurrentTier(totalSeconds).Icon} {ListeningRank.GetCurrentTier(totalSeconds).Name} · 共听了 {ListeningStatsAggregator.FormatDuration(totalSeconds)}"
+                : "还没有听歌记录";
 
             LargeTilePanel.Children.Add(BuildTile("🎨", "皮肤主题", GetCurrentSkinLabel(settings), height: 150, OpenDialog<SkinPickerWindow>));
             LargeTilePanel.Children.Add(BuildTile("📊", "听歌统计", statsSubtitle, height: 150, OpenDialog<ListeningStatsWindow>));

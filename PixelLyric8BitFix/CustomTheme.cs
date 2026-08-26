@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -61,7 +62,21 @@ namespace PixelLyric8BitFix
     public sealed class CustomThemeIcon
     {
         public Dictionary<string, string>? Palette { get; set; } // 单字符 -> 十六进制颜色，"." 固定是透明，不用填
-        public List<string>? Rows { get; set; }                   // 4~16 行，每行必须等宽，宽度也是 4~16（不强制正方形，见 CustomThemeValidator.MinIconSize/MaxIconSize）
+        public List<string>? Rows { get; set; }                   // 4~64 行，每行必须等宽，宽度也是 4~64（不强制正方形，见 CustomThemeValidator.MinIconSize/MaxIconSize）
+
+        // 可选：给了就是逐帧循环播放（走路/扇翅膀那种"1、2、3 交替出现看起来在动"的效果，
+        // 跟 Minecraft 皮肤 Steve 走路换腿是完全同一套机制，只是从写死两张图变成读用户自己画的任意张），
+        // 不给就还是上面 Rows 这唯一一帧——完全向后兼容，老主题一个字都不用改。每一帧的形状规则
+        // 跟 Rows 完全一样（行数/宽度落在 MinIconSize~MaxIconSize、每行等宽），而且所有帧必须彼此
+        // 同宽同高——不然切换的时候图标会跳着缩放/错位，是"抖"不是"动"。帧数不设上限，用户想画几帧
+        // 就几帧，没有系统层面的技术瓶颈需要卡这个数字（渲染只是多存几张已经生成好的位图，逐个轮流显示，
+        // 不会因为帧多就变卡）。真给了 Frames，渲染只认它、Rows 会被忽略——留着 Rows 字段本身不冲突，
+        // 单纯是没必要为了这个特意去掉一个已经存在的字段。
+        public List<List<string>>? Frames { get; set; }
+
+        // 每帧播放多久（秒），只有 Frames 有值时才有意义。不填默认见 CustomThemeValidator.DefaultFrameDurationSeconds
+        // （0.25，对齐 Steve 换腿大约 250ms 一帧的节奏，不是瞎猜的数字）。
+        public double? FrameDuration { get; set; }
     }
 
     public sealed class CustomThemeAnimation
@@ -126,6 +141,11 @@ namespace PixelLyric8BitFix
         // 纯粹是"画了但看不见"，不是不能用。MinIconSize 保底 4，最省事的 8x8 也一直落在这个范围内。
         public const int MinIconSize = 4;
         public const int MaxIconSize = 64;
+
+        // 逐帧动画（icon.frames）没填 frameDuration 时用这个——对齐 Minecraft 皮肤 Steve 走路换腿大约
+        // 250ms 一帧的节奏（见 MainWindow.Skins.cs 的 UpdateSteveWalkAnimation），不是瞎猜的数字，
+        // 保证不特意调这个字段的话，自定义图标的换帧手感跟内置的 Steve 走路观感是一致的。
+        public const double DefaultFrameDurationSeconds = 0.25;
 
         // 额外装饰层：最多 2 个，贴在卡片四个角之一。上限故意压得比 10 个已存主题的上限低很多——
         // 层数一多，渲染开销（每层一份独立的 BuildCustomIcon + 一套动画）线性往上涨，2 个已经够表达
@@ -328,27 +348,51 @@ namespace PixelLyric8BitFix
         private static void ValidateIcon(CustomThemeIcon icon, List<string> errors, string fieldPrefix = "icon")
         {
             string rowsField = fieldPrefix == "icon" ? "icon.rows" : $"{fieldPrefix}.icon.rows";
+            string framesField = fieldPrefix == "icon" ? "icon.frames" : $"{fieldPrefix}.icon.frames";
+            string frameDurationField = fieldPrefix == "icon" ? "icon.frameDuration" : $"{fieldPrefix}.icon.frameDuration";
             string paletteField = fieldPrefix == "icon" ? "icon.palette" : $"{fieldPrefix}.icon.palette";
 
-            if (icon.Rows == null || icon.Rows.Count < MinIconSize || icon.Rows.Count > MaxIconSize)
-            {
-                errors.Add($"\"{rowsField}\" 必须是 {MinIconSize}~{MaxIconSize} 行，现在是 {icon.Rows?.Count ?? 0} 行。");
-                return;
-            }
+            // 有 frames 就走多帧校验，Rows 这时候不校验（渲染只认 frames，见 CustomThemeIcon.Frames 的注释）；
+            // 没有 frames 就是老的单帧路径，行为跟这个字段加进来之前完全一样
+            bool usingFrames = icon.Frames != null;
+            List<string>? framesErrorSourceForPalette = null; // 校验通过的话，最后统一收集"用到的字符"给调色板核对用
 
-            int width = icon.Rows[0].Length;
-            if (width < MinIconSize || width > MaxIconSize)
+            if (usingFrames)
             {
-                errors.Add($"\"{rowsField}\" 每一行长度必须是 {MinIconSize}~{MaxIconSize} 个字符，第 1 行现在是 {width} 个。不要求正方形，行数和每行宽度可以不一样，比如 8 行 x 16 列这种长条形也行。");
-                return;
+                ValidateFrames(icon.Frames!, framesField, errors, out var flattenedRows);
+                framesErrorSourceForPalette = flattenedRows;
             }
-
-            for (int i = 0; i < icon.Rows.Count; i++)
+            else
             {
-                if (icon.Rows[i].Length != width)
+                if (icon.Rows == null || icon.Rows.Count < MinIconSize || icon.Rows.Count > MaxIconSize)
                 {
-                    errors.Add($"\"{rowsField}\" 第 {i + 1} 行长度是 {icon.Rows[i].Length}，跟第 1 行的 {width} 不一致——每一行必须一样宽，不然画出来的图会错位。");
+                    errors.Add($"\"{rowsField}\" 必须是 {MinIconSize}~{MaxIconSize} 行，现在是 {icon.Rows?.Count ?? 0} 行。");
+                    return;
                 }
+
+                int width = icon.Rows[0].Length;
+                if (width < MinIconSize || width > MaxIconSize)
+                {
+                    errors.Add($"\"{rowsField}\" 每一行长度必须是 {MinIconSize}~{MaxIconSize} 个字符，第 1 行现在是 {width} 个。不要求正方形，行数和每行宽度可以不一样，比如 8 行 x 16 列这种长条形也行。");
+                    return;
+                }
+
+                for (int i = 0; i < icon.Rows.Count; i++)
+                {
+                    if (icon.Rows[i].Length != width)
+                    {
+                        errors.Add($"\"{rowsField}\" 第 {i + 1} 行长度是 {icon.Rows[i].Length}，跟第 1 行的 {width} 不一致——每一行必须一样宽，不然画出来的图会错位。");
+                    }
+                }
+
+                framesErrorSourceForPalette = icon.Rows;
+            }
+
+            // frameDuration 不填就用默认值，填了必须是正数——道理跟 animation.duration 一样，
+            // 0 或负数会让换帧计时器算出一个非正的 tick 间隔，行为没有意义
+            if (icon.FrameDuration is double fd && fd <= 0)
+            {
+                errors.Add($"\"{frameDurationField}\" 填的是 {fd}，必须是大于 0 的数字（不填就用默认的 {DefaultFrameDurationSeconds} 秒）。");
             }
 
             // "icon.palette" 必须存在——就算图标全是 "." 空白格用不上任何颜色，也留一个空对象 {}。
@@ -369,17 +413,76 @@ namespace PixelLyric8BitFix
                 }
             }
 
-            var usedChars = icon.Rows.SelectMany(r => r).Distinct().Where(c => c != '.');
+            // framesErrorSourceForPalette 在校验失败（比如某帧行宽不齐）时可能包含脏数据，但这里只是拿来
+            // 收集"用到了哪些字符"，脏数据顶多让调色板报错报得更多一点，不会崩——上面那些结构性错误
+            // 已经各自 return/记录过了，这里不用再重复判断一遍"是不是已经出过错"
+            var usedChars = framesErrorSourceForPalette.SelectMany(r => r).Distinct().Where(c => c != '.');
             foreach (var c in usedChars)
             {
                 string key = c.ToString();
                 if (!icon.Palette.TryGetValue(key, out var hex))
                 {
-                    errors.Add($"\"{rowsField}\" 里用了字符 '{c}'，但 \"{paletteField}\" 里没有给它配颜色。");
+                    errors.Add($"\"{(usingFrames ? framesField : rowsField)}\" 里用了字符 '{c}'，但 \"{paletteField}\" 里没有给它配颜色。");
                 }
                 else if (!TryParseHexColor(hex, out _))
                 {
                     errors.Add($"\"{paletteField}\" 里 '{c}' 对应的颜色 \"{hex}\" 不是合法的十六进制颜色。");
+                }
+            }
+        }
+
+        /// <summary>逐帧校验：每一帧先各自检查形状合不合规（复用跟单帧 Rows 一样的行数/宽度范围），
+        /// 再统一检查所有帧是不是彼此同宽同高——顺序很重要，先把"这一帧本身就不合规"挑出来单独报错，
+        /// 不然"尺寸跟第一帧不一致"的报错会把注意力从真正的格式错误上带偏。帧数不设上限，用户想画
+        /// 几帧就几帧，见 CustomThemeIcon.Frames 的注释。flattenedRows 吐出所有帧摊平之后的行，
+        /// 给调用方统一核对调色板用，不用再重新遍历一次 Frames。</summary>
+        private static void ValidateFrames(List<List<string>> frames, string framesField, List<string> errors, out List<string> flattenedRows)
+        {
+            flattenedRows = new List<string>();
+
+            if (frames.Count == 0)
+            {
+                errors.Add($"\"{framesField}\" 给了这个字段就至少要有 1 帧，不能是空数组——真的只想要 1 帧的话直接用 \"rows\" 就够了，不用特地包一层 frames。");
+                return;
+            }
+
+            int? firstWidth = null, firstHeight = null;
+            for (int f = 0; f < frames.Count; f++)
+            {
+                var rows = frames[f];
+                string prefix = $"{framesField}[{f}]";
+
+                if (rows == null || rows.Count < MinIconSize || rows.Count > MaxIconSize)
+                {
+                    errors.Add($"\"{prefix}\" 必须是 {MinIconSize}~{MaxIconSize} 行，现在是 {rows?.Count ?? 0} 行。");
+                    continue;
+                }
+
+                int width = rows[0].Length;
+                if (width < MinIconSize || width > MaxIconSize)
+                {
+                    errors.Add($"\"{prefix}\" 每一行长度必须是 {MinIconSize}~{MaxIconSize} 个字符，第 1 行现在是 {width} 个。");
+                    continue;
+                }
+
+                bool rowWidthOk = true;
+                for (int i = 0; i < rows.Count; i++)
+                {
+                    if (rows[i].Length != width)
+                    {
+                        errors.Add($"\"{prefix}\" 第 {i + 1} 行长度是 {rows[i].Length}，跟第 1 行的 {width} 不一致——每一行必须一样宽。");
+                        rowWidthOk = false;
+                    }
+                }
+                if (!rowWidthOk) continue;
+
+                flattenedRows.AddRange(rows);
+
+                firstWidth ??= width;
+                firstHeight ??= rows.Count;
+                if (width != firstWidth || rows.Count != firstHeight)
+                {
+                    errors.Add($"\"{prefix}\" 是 {rows.Count} 行 x {width} 列，跟第 1 帧的 {firstHeight} 行 x {firstWidth} 列不一样——所有帧必须是同一个尺寸，不然切换的时候图标会跳着缩放/错位，看着是「抖」不是「动」。");
                 }
             }
         }
@@ -397,6 +500,24 @@ namespace PixelLyric8BitFix
             if (!palette.ContainsKey('.')) palette['.'] = Colors.Transparent;
             return palette;
         }
+
+        /// <summary>把一份 icon 渲染成一串位图——没有 Frames 就是长度为 1 的数组（跟这个字段加进来之前
+        /// "只有一张静态图"完全一样的行为），有 Frames 就按顺序逐帧渲染。调用方（正式渲染 MainWindow.
+        /// Skins.cs、编辑页预览 CustomThemeWindow.xaml.cs）拿到这个数组之后自己决定要不要做逐帧切换——
+        /// 这里只管"数据转位图"，不碰 UI/计时器。调用前应该已经过 ValidateIcon 校验，这里不重复校验。</summary>
+        public static BitmapSource[] BuildCustomIconFrames(CustomThemeIcon icon)
+        {
+            var palette = BuildIconPalette(icon);
+            if (icon.Frames is { Count: > 0 } frames)
+            {
+                return frames.Select(f => PixelArt.BuildCustomIcon(f.ToArray(), palette)).ToArray();
+            }
+            return new[] { PixelArt.BuildCustomIcon(icon.Rows!.ToArray(), palette) };
+        }
+
+        /// <summary>frameDuration 没填就用默认值——校验已经保证填了的话一定是正数，这里不重复校验。</summary>
+        public static double GetFrameDurationSeconds(CustomThemeIcon icon) =>
+            icon.FrameDuration is double d && d > 0 ? d : DefaultFrameDurationSeconds;
 
         // low/high 相对 1.0（medium）不是对称的——1.6 比 1/0.6≈1.67 略保守一点，是刻意的：
         // "反应更明显"这个方向观感上比"更克制"更容易一不小心就晃得太夸张，high 稍微收着点选

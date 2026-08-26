@@ -93,6 +93,22 @@ namespace PixelLyric8BitFix
         private Brush _karaokeSungBrush = Brushes.White;
         private Brush _karaokeUnsungBrush = Brushes.Gray;
 
+        // ── 隐藏彩蛋：连点标题行 N 下触发，见 MainWindow.SkinInteractions.cs 的 TitleRow_MouseLeftButtonDown ──
+        private int _titleClickCount;
+        private DateTime _lastTitleClickTime = DateTime.MinValue;
+
+        // ── 客制化主题主图标逐帧动画（theme.icon.frames）：跟 Steve 走路换腿同一套"计时器数 tick、
+        // 攒够就换一帧"机制，只是帧数据/间隔从用户 JSON 读，不是写死两张图。只有主图标（装饰栏那个）
+        // 支持，Mini 小方块/进度条拖拽图标/分享卡片/layers 装饰层暂时还是显示第一帧，见 MainWindow.
+        // Skins.cs 的 ApplyCustomSkinVisuals、UpdateCustomIconFrameAnimation ──
+        private BitmapSource[]? _customIconFrames;      // null 或长度 <=1 表示这份主题没有多帧动画
+        private double _customIconFrameDurationSeconds = CustomThemeValidator.DefaultFrameDurationSeconds;
+        private int _customIconFrameIndex;
+        private int _customIconFrameTickCounter;
+        private bool _customIconFramesMusicReactive;    // 对应 theme.animation.musicReactive && 设置页总开关
+        private double _customIconFrameSensitivity = 1.0;
+        private double _customIconFrameSpeedRatio = 1.0; // 音乐律动开着时，当前这一刻换帧应该多快——UpdateMusicReactiveSkin 里算
+
         private string _lastTrackId = "";
         private CancellationTokenSource? _lyricFetchCts;
 
@@ -252,8 +268,20 @@ namespace PixelLyric8BitFix
 
             this.MouseDown += (s, e) => { if (e.ChangedButton == MouseButton.Left) this.DragMove(); };
             // 双击缩成一个贴主题的小方块（Mini 模式），而不是直接退程序或整个消失找不着；
-            // 真要彻底藏起来/退出走右键菜单或托盘菜单
-            this.MouseDoubleClick += (s, e) => ToggleMiniMode();
+            // 真要彻底藏起来/退出走右键菜单或托盘菜单。
+            //
+            // 标题行（TitleRow）连点 10 下是隐藏彩蛋的触发区，那边的 MouseLeftButtonDown 处理器会
+            // e.Handled=true，但拦不住这里——Control.MouseDoubleClick 的双击识别是靠一个挂在隧道阶段
+            // （PreviewMouseDown，从 Window 往下传）的内部处理器做的，隧道经过 Window 自己那一刻就已经
+            // 判断"是不是双击"了，比点击事件冒泡传到 TitleRow、标记 Handled 要早得多——等标记上的时候
+            // Mini 模式已经切过去了，晚了一步。真正能拦的地方是这里：判断这次双击的点击源在不在
+            // TitleRow 范围内，是的话就不切 Mini 模式，把"这次点击是不是彩蛋触发区的"这个判断权交还
+            // 给点击当下最终落地的那个元素，不依赖 Handled 这套（在这个场景下靠不住的）机制。
+            this.MouseDoubleClick += (s, e) =>
+            {
+                if (IsWithinTitleRow(e.OriginalSource as DependencyObject)) return;
+                ToggleMiniMode();
+            };
 
             // 隐藏到托盘时律动条也没必要继续抓音频/算 FFT 白费功夫，收起来就停、拉回来（如果还在 Mini 状态）就续上
             this.IsVisibleChanged += (s, e) => SyncAudioVisualizerState();
@@ -544,6 +572,11 @@ namespace PixelLyric8BitFix
             if (_settings.Skin == PlayerSkin.Minecraft)
             {
                 UpdateSteveWalkAnimation();
+            }
+
+            if (_customIconFrames != null)
+            {
+                UpdateCustomIconFrameAnimation();
             }
 
             if (_isMiniMode)
