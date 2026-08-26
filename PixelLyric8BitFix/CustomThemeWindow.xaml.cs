@@ -23,12 +23,20 @@ namespace PixelLyric8BitFix
         // 画板插入/导入文件/导入分享码/切去编辑另一份已存主题）之前记一笔，不是每敲一个字符都记
         // （逐字符撤销本来就是 TextBox 自带的 Ctrl+Z，不用重复造）。最多存 20 步，超过就把最早的挤掉，
         // 没人会真的连点 20 次起草按钮还想一路撤销回最开始。
+        //
+        // 每一步连 _editingFileName（+ 对应的提示文案/可见性）一起记，不是只记文本——之前只记文本
+        // 那版有个真实的坏 bug：🎲 随机生成 / 🖌️ 画板插入这两个动作故意不清空 _editingFileName（还在
+        // 编辑原来那份已存主题，见 BtnRandomize_Click 的注释），但撤销回去的时候却无脑把 _editingFileName
+        // 清成了 null——等于"编辑一个已存主题 -> 随机看看 -> 不满意点撤销 -> 保存"这条路会把撤销之后
+        // 那份其实没变的内容当成"新建"存成一份重复的主题，而不是覆盖更新原来那份，用户会觉得"怎么保存
+        // 保存不到原来那份"。现在把 _editingFileName 也存进历史，撤销真的是把"当时的状态"原样恢复。
         private const int MaxHistorySteps = 20;
-        private readonly List<string> _history = new();
+        private sealed record HistorySnapshot(string Text, string? EditingFileName, string EditingHintText, Visibility EditingHintVisibility);
+        private readonly List<HistorySnapshot> _history = new();
 
         private void PushHistory()
         {
-            _history.Add(TxtInput.Text);
+            _history.Add(new HistorySnapshot(TxtInput.Text, _editingFileName, TxtEditingHint.Text, TxtEditingHint.Visibility));
             if (_history.Count > MaxHistorySteps) _history.RemoveAt(0);
             BtnUndo.IsEnabled = true;
         }
@@ -38,17 +46,14 @@ namespace PixelLyric8BitFix
             if (_history.Count == 0) return;
             HideMessages();
 
-            string previous = _history[^1];
+            var previous = _history[^1];
             _history.RemoveAt(_history.Count - 1);
             BtnUndo.IsEnabled = _history.Count > 0;
 
-            TxtInput.Text = previous; // 触发 TxtInput_TextChanged -> UpdatePreview()
-
-            // 撤回去的这份内容跟"正在编辑哪个已存文件"的对应关系已经说不清楚了（可能是撤回到编辑另一份
-            // 主题之前、也可能是撤回到一份全新草稿之前），干脆清掉这个提示，跟导入/混搭同一个处理方式：
-            // 真要保存的话会被当成"新建"，不会误覆盖一份不相关的已存主题
-            _editingFileName = null;
-            TxtEditingHint.Visibility = Visibility.Collapsed;
+            _editingFileName = previous.EditingFileName;
+            TxtEditingHint.Text = previous.EditingHintText;
+            TxtEditingHint.Visibility = previous.EditingHintVisibility;
+            TxtInput.Text = previous.Text; // 触发 TxtInput_TextChanged -> UpdatePreview()
         }
 
         /// <summary>true 表示这次窗口关闭时至少成功保存/删除过一次，调用方（设置页）据此决定要不要刷新主题列表。</summary>
