@@ -222,6 +222,7 @@ namespace PixelLyric8BitFix
             WindowResizeGrip.Visibility = Visibility.Collapsed;
 
             ApplySkin(_settings.Skin);
+            ApplyDecorIconScale(_settings.GetClampedIconScale());
             ApplyDisplayMode(_settings.DisplayMode);
 
             Loaded += MainWindow_Loaded;

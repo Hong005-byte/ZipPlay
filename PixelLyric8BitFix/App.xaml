@@ -201,5 +201,41 @@
             </Setter>
         </Style>
 
+        <!-- 极简深色滑块：一根细横条当轨道 + 一个圆形拖拽把手，配色跟上面滚动条那套一致（AppScrollBarThumb），
+             没有默认 Aero 主题那种立体感的把手/轨道，跟这个 app 其它控件的扁平风格保持一致。
+             目前只有"窗口与显示"页的顶部图标缩放用到，是这个 app 第一个用到 Slider 的地方。 -->
+        <Style x:Key="AppSliderThumb" TargetType="Thumb">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Ellipse Width="14" Height="14" Fill="{StaticResource AccentBrush}" Stroke="#0F140F" StrokeThickness="1"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="Slider">
+            <Setter Property="Height" Value="20"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <Grid VerticalAlignment="Center">
+                            <Border Height="4" Background="#2A332B" CornerRadius="2" VerticalAlignment="Center"/>
+                            <Track x:Name="PART_Track">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="Slider.DecreaseLarge" Opacity="0" Focusable="False"/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="Slider.IncreaseLarge" Opacity="0" Focusable="False"/>
+                                </Track.IncreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource AppSliderThumb}"/>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
     </Application.Resources>
 </Application>

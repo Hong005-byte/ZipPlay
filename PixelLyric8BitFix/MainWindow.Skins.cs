@@ -83,6 +83,30 @@ namespace PixelLyric8BitFix
         }
 
         // 皮肤：先把 6 套背景层 / 装饰层的显隐都摆对，再套上文字调色板
+        // 顶部装饰图标的整体缩放——"窗口与显示"页那个滑块调的对象。缩放锚点定在每个装饰画布自己的
+        // 右下角（RenderTransformOrigin="1,1"）：这些画布本来就撑满整条顶部装饰行（RowDecor，紧贴着
+        // 下面的歌词框），而各套皮肤的图标基本都贴着画布的右下角摆（Canvas.Right/Canvas.Bottom）。
+        // 从右下角往外缩放，放大的部分只会往左上（窗口内部、离歌词框更远的方向）长，不会反过来长到
+        // 歌词框那一侧；缩得比较大的话顶多是图标顶部超出窗口本身的可见范围被窗口边缘裁掉，不会盖到
+        // 别的内容。21 套皮肤各自的装饰画布统一走这一份，不用现查"现在是哪个皮肤"再单独处理——
+        // 没显示的画布带不带这个变换都不影响任何东西。
+        private void ApplyDecorIconScale(double scale)
+        {
+            Canvas[] canvases =
+            {
+                MinecraftDecorCanvas, VinylDecorCanvas, LofiDecorCanvas, CampfireDecorCanvas, SakuraDecorCanvas,
+                CassetteDecorCanvas, CandleDecorCanvas, PlantDecorCanvas, CloudDecorCanvas, SunsetDecorCanvas,
+                StarryDecorCanvas, CrtDecorCanvas, GlassDecorCanvas, AuroraDecorCanvas, RainDecorCanvas,
+                CyberpunkDecorCanvas, ArcadeDecorCanvas, InvadersDecorCanvas, CityDecorCanvas, CrownDecorCanvas,
+                CustomIconDecorCanvas,
+            };
+            foreach (var canvas in canvases)
+            {
+                canvas.RenderTransformOrigin = new System.Windows.Point(1, 1); // 这个文件同时 using 了 Windows.Foundation（SMTC），跟 System.Windows 都有个 Point，得写全名消歧义
+                canvas.RenderTransform = new ScaleTransform(scale, scale);
+            }
+        }
+
         private void ApplySkin(PlayerSkin skin)
         {
             // 目前 ApplySkin 只会在构造函数里跑一次（换皮肤是整个 MainWindow 重开，不是同一个实例复用），
