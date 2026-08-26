@@ -42,6 +42,7 @@ namespace PixelLyric8BitFix
         Small,
         Medium,
         Large,
+        Custom, // 用户自己填一个宽度，高度还是跟其它三档一样锁 170，见 AppSettings.CustomWidth
     }
 
     public enum PlayerDisplayMode
@@ -75,6 +76,17 @@ namespace PixelLyric8BitFix
         public PlayerSize Size { get; set; } = PlayerSize.Medium;
         public PlayerDisplayMode DisplayMode { get; set; } = PlayerDisplayMode.Standard;
 
+        /// <summary>只有 Size == PlayerSize.Custom 时才有意义：用户自己填的窗口宽度。高度不给自定义——
+        /// 三档预设的高度本来就统一是 170，这个值已经验证过整套布局（标题/进度条/歌词/播放控制）
+        /// 都撑得住，没必要再让用户对着一个可能撑爆布局的高度调，宽度这边反而怎么变都安全（内容
+        /// 要么居中留白、要么换行，不会裁切）。</summary>
+        public double CustomWidth { get; set; } = 900;
+
+        public const double MinCustomWidth = 300;
+        public const double MaxCustomWidth = 2000;
+
+        public double GetClampedCustomWidth() => Math.Clamp(CustomWidth, MinCustomWidth, MaxCustomWidth);
+
         /// <summary>上次关闭时的窗口位置。null 表示还没存过，走默认的屏幕居中。</summary>
         public double? WindowLeft { get; set; }
         public double? WindowTop { get; set; }
@@ -94,6 +106,17 @@ namespace PixelLyric8BitFix
 
         /// <summary>歌词字号。默认中，跟原来的行为保持一致。</summary>
         public LyricFontSize FontSize { get; set; } = LyricFontSize.Medium;
+
+        /// <summary>顶部装饰图标（皮肤那个小图标，跟着窗口一起变宽之后单独调大小用）整体缩放比例，
+        /// "窗口与显示"页一个滑块调，默认 1.0（不缩放，等于原来的大小）。范围见 MinIconScale/
+        /// MaxIconScale，读配置文件时用 GetClampedIconScale 夹一下——不然手改配置文件塞进一个离谱的
+        /// 值（比如 50），图标会被放大到完全遮住其它内容或者小到看不见。</summary>
+        public double IconScale { get; set; } = 1.0;
+
+        public const double MinIconScale = 0.7;
+        public const double MaxIconScale = 1.6;
+
+        public double GetClampedIconScale() => Math.Clamp(IconScale, MinIconScale, MaxIconScale);
 
         /// <summary>
         /// 双语歌词开关（左上角 🌐）。默认开启；只有网易云那个引擎抓到的歌词才可能带翻译行，
@@ -181,12 +204,15 @@ namespace PixelLyric8BitFix
             }
         }
 
-        /// <summary>窗口尺寸预设。选完之后主窗口会锁死大小，不允许再拖拽缩放。</summary>
+        /// <summary>窗口尺寸预设。选完之后主窗口会锁死大小，不允许再拖拽缩放。三档故意都用同一个高度
+        /// （170）——只加宽不加高，横向空间多了能容纳更长的歌名/歌词而不用换行，高度不变意味着
+        /// 不管选哪档，窗口占屏幕的"厚度"感受都一样，纯粹是"要多宽的一条"的选择。</summary>
         public (double Width, double Height) GetWindowSize() => Size switch
         {
             PlayerSize.Small => (400, 170),
-            PlayerSize.Large => (760, 340),
-            _ => (580, 260), // Medium
+            PlayerSize.Large => (1200, 170),
+            PlayerSize.Custom => (GetClampedCustomWidth(), 170),
+            _ => (700, 170), // Medium
         };
 
         /// <summary>歌词行的字号（磅值）。原来写死是 14（对应 Medium），小/大各加减 3。</summary>

@@ -4,7 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         mc:Ignorable="d"
-        Title="ZipPlay — 窗口与显示" Height="440" Width="400"
+        Title="ZipPlay — 窗口与显示" Height="560" Width="400"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
         Background="{StaticResource WindowBackgroundBrush}">
@@ -27,9 +27,56 @@
             <StackPanel>
                 <TextBlock Text="窗口尺寸" Style="{StaticResource SectionHeader}"/>
                 <RadioButton x:Name="RbSizeSmall" Content="小　（400 × 170）" GroupName="Size"/>
-                <RadioButton x:Name="RbSizeMedium" Content="中　（580 × 260）" GroupName="Size" IsChecked="True"/>
-                <RadioButton x:Name="RbSizeLarge" Content="大　（760 × 340）" GroupName="Size"/>
-                <TextBlock Text="选定后主窗口会锁定该尺寸，不能再拖拽缩放，避免误拉成全屏。" Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                <RadioButton x:Name="RbSizeMedium" Content="中　（700 × 170）" GroupName="Size" IsChecked="True"/>
+                <RadioButton x:Name="RbSizeLarge" Content="大　（1200 × 170）" GroupName="Size"/>
+                <!-- Checked/Unchecked 挂在这个没问题（不会有 TxtFrameDuration/SliderIconScale 那种坑）——
+                     这个 RadioButton 没有显式写 IsChecked="True"，InitializeComponent() 期间不会触发一次
+                     赋值，只有用户真的点了它之后才会走这个处理器，那时候 TxtCustomWidth 早就 Connect() 过了 -->
+                <RadioButton x:Name="RbSizeCustom" Content="自定义" GroupName="Size"
+                             Checked="RbSizeCustom_CheckedChanged" Unchecked="RbSizeCustom_CheckedChanged"/>
+                <StackPanel Orientation="Horizontal" Margin="20,4,0,0">
+                    <TextBlock Text="宽度" Foreground="{StaticResource MutedTextBrush}" FontSize="12" VerticalAlignment="Center"/>
+                    <TextBox x:Name="TxtCustomWidth" Text="900" Width="60" FontSize="12" Margin="4,0,0,0" IsEnabled="False"
+                             Background="#1B211C" Foreground="#EEEEEE" BorderBrush="#2A332B" BorderThickness="1" Padding="4,2"/>
+                    <TextBlock Text="px（高度固定 170）" Foreground="{StaticResource MutedTextBrush}" FontSize="12" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                </StackPanel>
+                <TextBlock Text="三档预设高度都一样，只是变宽——横向空间更多，能显示更长的歌名/歌词而不用换行；选了自定义就用旁边这个宽度（300~2000 之间，填歪了会自动夹回范围内）。选定后主窗口会锁定该尺寸，不能再拖拽缩放，避免误拉成全屏。" Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
+
+                <TextBlock Text="顶部图标大小" Style="{StaticResource SectionHeader}"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <!-- 缩放锚点在图标自己的右下角（见 MainWindow.Skins.cs 的 ApplyDecorIconScale），
+                         往大调只会往左上（窗口内部）长，不会盖到下面的歌词框；往小调最小也留着 70%，
+                         不会小到看不清是什么图标 -->
+                    <!-- ValueChanged 故意不在这里用 XAML 声明式挂——XAML 里写的 Value="1.0" 这个初始值在
+                         InitializeComponent() 期间赋值时就会同步触发一次 ValueChanged，而这个 Slider 在
+                         文档里排在 TxtIconScaleValue 前面，那时候后声明的 TxtIconScaleValue 还没被
+                         Connect()，处理器里一摸就是 NullReferenceException（跟 IconPainterWindow.xaml 里
+                         TxtFrameDuration 那段是同一个坑）。改成在 PlayerAppearanceWindow.xaml.cs 构造函数
+                         末尾、TxtIconScaleValue 已经就绪之后才用代码订阅。 -->
+                    <Slider x:Name="SliderIconScale" Grid.Column="0" Minimum="0.7" Maximum="1.6" Value="1.0"
+                            TickFrequency="0.05" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock x:Name="TxtIconScaleValue" Grid.Column="1" Text="100%" Foreground="{StaticResource MutedTextBrush}"
+                               FontSize="12" VerticalAlignment="Center" Width="40" TextAlignment="Right"/>
+                    <!-- 这个页面跟正在播放的主窗口不是同一个实例（见下面代码注释），滑块拖完看不到主窗口
+                         实际效果——放一个跟着滑块实时缩放的小图标当预览，所见即所调，不用来回切页面试。
+                         图标随便找了个通用的音符图标（PixelArt.CreateNoteIcon），不是哪套皮肤专属的，
+                         纯粹演示"缩放这件事本身长什么样"。 -->
+                    <Border Grid.Column="2" Width="44" Height="44" Margin="10,0,0,0" Background="#12160F"
+                            BorderBrush="#2A332B" BorderThickness="1" CornerRadius="6">
+                        <Image x:Name="IconScalePreview" Width="24" Height="24" Stretch="Uniform"
+                               RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0.5,0.5">
+                            <Image.RenderTransform>
+                                <ScaleTransform x:Name="IconScalePreviewTransform" ScaleX="1" ScaleY="1"/>
+                            </Image.RenderTransform>
+                        </Image>
+                    </Border>
+                </Grid>
+                <TextBlock Text="只调皮肤那个顶部装饰图标（Steve/篝火/皇冠这些），不影响 Mini 模式小方块或者进度条上的图标。" Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
 
                 <TextBlock Text="显示模式" Style="{StaticResource SectionHeader}"/>
                 <RadioButton x:Name="RbModeStandard" Content="标准（标题 + 进度条 + 歌词）" GroupName="Mode" IsChecked="True"/>
