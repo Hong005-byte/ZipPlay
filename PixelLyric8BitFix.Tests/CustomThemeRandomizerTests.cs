@@ -78,6 +78,37 @@ namespace PixelLyric8BitFix.Tests
         }
 
         [Fact]
+        public void GenerateJson_SometimesGeneratesComboAnimations_AndTheyAlwaysValidate()
+        {
+            // 4 成概率给主图标配组合招式——200 次里断言至少出现过一次带 "+" 的 animation.type，
+            // 顺带确认每次抽到的组合本身都过校验（防的是"抽到的两招恰好撞了 drift/fall 那条限制"这种漏网之鱼）
+            bool sawCombo = false;
+            for (int i = 0; i < 200; i++)
+            {
+                string json = CustomThemeRandomizer.GenerateJson();
+                var (theme, errors) = CustomThemeValidator.ParseAndValidate(json);
+                Assert.True(errors.Count == 0, $"第 {i} 次没能过校验：{string.Join(" | ", errors)}\nJSON:\n{json}");
+                if (theme!.Animation!.Type!.Contains('+')) sawCombo = true;
+            }
+            Assert.True(sawCombo, "跑了 200 次，主图标一次组合招式都没抽到，概率上不太正常，查一下是不是没真的接上");
+        }
+
+        [Fact]
+        public void GenerateJson_MainIconCombo_NeverIncludesDriftOrFall()
+        {
+            // 组合逻辑只从 ComboablePool（6 招）里挑，drift/fall 完全不该出现在任何一次组合里——
+            // 这条如果破了，抽到的 JSON 会直接被 CustomThemeValidator 拒掉（校验层面已经拦了），
+            // 这里单独断言一下能更快定位到是随机器自己的组合池选错了，还是校验规则本身松了
+            for (int i = 0; i < 200; i++)
+            {
+                string type = CustomThemeValidator.ParseAndValidate(CustomThemeRandomizer.GenerateJson()).Theme!.Animation!.Type!;
+                if (!type.Contains('+')) continue;
+                Assert.DoesNotContain("drift", type);
+                Assert.DoesNotContain("fall", type);
+            }
+        }
+
+        [Fact]
         public void GenerateJson_IconRows_AreEqualWidth()
         {
             // 随机图标形状是手写的字符网格，最容易犯的错就是某一行敲少/敲多一个字符——

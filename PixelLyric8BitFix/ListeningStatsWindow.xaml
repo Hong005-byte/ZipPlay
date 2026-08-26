@@ -63,11 +63,34 @@
                 <TextBlock x:Name="TxtEmptyState" Text="这段时间还没有听歌记录——播放的时候程序会自动累计，回来再看看。"
                            Foreground="{StaticResource HintTextBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,20,0,0" Visibility="Collapsed"/>
 
+                <!-- 固定显示"今年 1 月 1 日到今天"，不跟着上面本月/今年/全部时间那三个切换按钮走——
+                     热力图看的是"一年里哪几天听得多"，样式跟"选了哪个统计范围"是两件事；也不放进下面
+                     SummaryPanel 里，那个面板会在"选中范围没有任何数据"时整块收起（比如刚进新的一个月），
+                     但今年其它月份可能还有数据，热力图不该跟着一起消失。没有任何记录的一年就是格子全灰，
+                     这本身就是一种"空状态"，不需要额外收起。见 ListeningStatsWindow.xaml.cs 的 BuildHeatmap。 -->
+                <TextBlock Text="🔥 听歌热力图" Style="{StaticResource SectionHeader}"/>
+                <Border Background="#1B211C" BorderBrush="#2A332B" BorderThickness="1" CornerRadius="6" Padding="8" Margin="0,4,0,4">
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <Canvas x:Name="HeatmapCanvas" Height="60"/>
+                    </ScrollViewer>
+                </Border>
+                <TextBlock x:Name="TxtHeatmapHint" Text="" Foreground="{StaticResource HintTextBrush}" FontSize="10" Margin="0,0,0,10"/>
+
                 <StackPanel x:Name="SummaryPanel">
                     <Border Background="#1B211C" BorderBrush="#2A332B" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,4,0,0">
                         <StackPanel>
                             <TextBlock x:Name="TxtTotalTime" Text="0 小时 0 分钟" Foreground="{StaticResource AccentBrush}" FontSize="28" FontWeight="Bold"/>
                             <TextBlock x:Name="TxtActiveDays" Text="0 天有听歌" Foreground="{StaticResource MutedTextBrush}" FontSize="12" Margin="0,4,0,0"/>
+                            <!-- 总结叙事：连续天数/不同艺人歌曲数/最投入的一天拼成一两句话，比单独几个
+                                 并排的数字更有"讲故事"的感觉——数据太单薄（只有一两天记录）的时候
+                                 ListeningStatsNarrative.BuildHeadline 会返回 null，这一行就整个收起来，
+                                 不会硬凑一句没什么信息量的话 -->
+                            <TextBlock x:Name="TxtNarrative" Text="" Foreground="{StaticResource MutedTextBrush}" FontSize="12"
+                                       TextWrapping="Wrap" Margin="0,10,0,0" Visibility="Collapsed"/>
+                            <!-- 同一份 ListeningSummary 换一种"一次只看一件事、点下一张翻页"的呈现方式，
+                                 跟上面这一段总结叙事不是互相替代，两个入口都留着——见 ListeningHighlightsBuilder。 -->
+                            <Button x:Name="BtnHighlights" Content="✨ 查看亮点回顾" Style="{StaticResource PillButtonStyle}"
+                                    HorizontalAlignment="Left" Padding="10,4" FontSize="11" Margin="0,12,0,0" Click="BtnHighlights_Click"/>
                         </StackPanel>
                     </Border>
 

@@ -33,12 +33,14 @@ namespace PixelLyric8BitFix
             BuildTiles();
         }
 
+        // 问候语从固定一句模板换成"看时间段 + 偶尔看听歌数据"的文案池（HomeGreetingBuilder），
+        // 每次打开首页都可能不一样，纯粹是给"打开首页"这个动作加一点小惊喜感，不是为了塞更多信息。
+        // 用真随机源——跟 HomeGreetingBuilderTests 用固定 seed 那套是同一个方法，只是随机源不同。
         private void RefreshGreeting()
         {
             var settings = AppSettings.Load();
-            TxtGreeting.Text = string.IsNullOrWhiteSpace(settings.UserName)
-                ? "设置你的名字/头像 →"
-                : $"你好，{settings.UserName} 👋（点这里改资料）";
+            var stats = ListeningStatsStore.Load();
+            TxtGreeting.Text = HomeGreetingBuilder.Build(DateTime.Now, settings.UserName, stats, Random.Shared);
         }
 
         private void RefreshAvatarDisplay()

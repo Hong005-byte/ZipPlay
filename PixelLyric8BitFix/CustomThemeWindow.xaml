@@ -26,19 +26,26 @@
             <StackPanel>
 
                 <TextBlock Text="怎么写" Style="{StaticResource SectionHeader}"/>
-                <TextBlock Foreground="#BBBBBB" FontSize="11" TextWrapping="Wrap">
-                    每个主题是一份 JSON：name(名字) / font(字体) / colors(各处文字颜色) /
-                    background(背景，纯色 solid 或渐变 gradient) / icon(像素图标，字符网格 + 调色板，行数和每行宽度都是 4~64、不用是正方形；不过 Mini 小方块这几个展示位就 20~52px 上下，画太细致的话缩小显示会看不出来，图省事的话 8x8 就够) /
-                    animation(动画招式，八选一：pulse 呼吸发光、twinkle 渐隐渐现、drift 飘过、fall 飘落、bob 上下浮动、sway 摇摆、spin 旋转、flicker 不规则闪烁)。
-                    animation 里还有个可选的 musicReactive(true/false，不填默认 false)：开了之后，不管选的是哪一种招式，
-                    播放速度都会跟着系统正在播的音乐响度/鼓点实时变化，跟设置页里"皮肤音乐律动"开关是同一套机制、共用同一个总开关。
-                    再加一个可选的 sensitivity(low/medium/high，不填默认 medium)：决定这个动画对响度/鼓点变化"反应多强"——
-                    low 声音大变化也比较克制，high 反过来会被小声音放得更明显，只在 musicReactive 开了的时候才有意义。
-                    顶层还有个可选的 layers(数组，最多 2 个)：每个元素是 { anchor, icon, animation } 三件套——
-                    anchor 是贴在卡片哪个角(top-left/top-right/bottom-left/bottom-right)，icon/animation 跟上面主图标
-                    同一套字段形状，是叠加在主图标之上的额外小装饰，不是替换（不写 layers 完全不影响主图标）。
-                    颜色格式是 #RRGGBB 或带透明度的 #AARRGGBB。下面是一份完整示例，照着改就行：
-                </TextBlock>
+                <!-- 之前这里是一整段没断句的说明文字，字段一多（八招式+组合、musicReactive、sensitivity、
+                     layers……）就变成一堵密密麻麻的墙，扫一眼抓不住重点。现在只列最核心的几条，
+                     完整字段说明/取值范围/组合规则这些细节挪到"下载详细说明"那份文档里——
+                     那份文档结构化程度更高，人耐心看没问题，丢给 AI 读也方便（结构清楚，AI 更容易照着生成）。 -->
+                <StackPanel Margin="0,4,0,0">
+                    <TextBlock Foreground="#BBBBBB" FontSize="11" TextWrapping="Wrap" Text="• 一份主题是一份 JSON，不是代码：改颜色/图标/动画，app 只负责照着画，不会执行任何东西。"/>
+                    <TextBlock Foreground="#BBBBBB" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0" Text="• 六个部分：name(名字) / font(字体) / colors(配色) / background(背景) / icon(像素图标) / animation(动画，可以用 + 组合几招)。"/>
+                    <TextBlock Foreground="#BBBBBB" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0" Text="• 可选加成：layers(最多 2 个额外小装饰)、musicReactive + sensitivity(跟着音乐变速、调反应强弱)。"/>
+                    <TextBlock Foreground="#BBBBBB" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0" Text="• 颜色格式 #RRGGBB 或带透明度的 #AARRGGBB。填错了保存时会告诉你具体是哪个字段。"/>
+                </StackPanel>
+                <Grid Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" VerticalAlignment="Center"
+                               Text="每个字段的取值范围、8 种动画的组合规则、完整示例——都在下面这份文档里，也可以直接丢给 AI 帮你按你想要的风格生成一份。"/>
+                    <Button Grid.Column="1" x:Name="BtnDownloadSpec" Content="📄 下载详细说明" Style="{StaticResource PillButtonStyle}"
+                            Padding="10,4" FontSize="11" Margin="8,0,0,0" Click="BtnDownloadSpec_Click"/>
+                </Grid>
 
                 <Border Background="#1B211C" BorderBrush="#2A332B" BorderThickness="1" CornerRadius="6" Margin="0,8,0,0" Padding="8">
                     <TextBox x:Name="TxtExample" IsReadOnly="True" TextWrapping="NoWrap"
@@ -49,35 +56,54 @@
                 <Button x:Name="BtnCopyExample" Content="📋 复制示例到剪贴板" Style="{StaticResource PillButtonStyle}"
                         HorizontalAlignment="Left" Padding="10,4" FontSize="11" Margin="0,6,0,0" Click="BtnCopyExample_Click"/>
 
-                <TextBlock x:Name="TxtThemeCount" Text="已保存的客制化主题 (0/5)" Style="{StaticResource SectionHeader}"/>
+                <TextBlock x:Name="TxtThemeCount" Text="已保存的客制化主题 (0/10)" Style="{StaticResource SectionHeader}"/>
                 <StackPanel x:Name="ThemeListPanel"/>
                 <TextBlock x:Name="TxtNoThemes" Text="还没有存过任何客制化主题。" Foreground="{StaticResource HintTextBrush}" FontSize="11" Margin="0,4,0,0"/>
 
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="粘贴 / 编辑你的 JSON" Style="{StaticResource SectionHeader}" VerticalAlignment="Center"/>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal">
-                        <!-- 从别人分享的 .json 文件导入——直接把文件内容读进输入框，走的还是普通的"粘贴/校验/保存"
-                             这条路，不是个人资料导入那种"读完直接覆盖本地数据"，所以不需要单独的确认弹窗：
-                             读进来是不是真的存、会不会占掉第 6 个位置，都还是走下面"保存"按钮已有的那套校验/上限逻辑。
-                             导入会顺带清掉"正在编辑：xxx"的提示，防止读进来的是一份完全不相关的主题，
-                             结果用户没留意提示还在，点保存把手头正在编辑的那份主题给覆盖了。 -->
-                        <Button x:Name="BtnImportTheme" Content="📥 从文件导入" Style="{StaticResource PillButtonStyle}"
-                                Padding="10,4" FontSize="11" Margin="0,0,6,0" Click="BtnImportTheme_Click"/>
-                        <!-- 不想从示例一行行改配色的话，点这个直接抽一份配好色的草稿进输入框——名字/字体/配色/背景渐变/
-                             图标/动画招式都是随机挑的，但都出自"搭配好的"选项池，不会抽出互相打架的颜色。抽完照样是
-                             普通 JSON 文本，想接着手改哪个字段都行，多点几下也不会覆盖已保存的主题（只改输入框）。 -->
-                        <Button x:Name="BtnRandomize" Content="🎲 随机生成一份" Style="{StaticResource PillButtonStyle}"
-                                Padding="10,4" FontSize="11" Click="BtnRandomize_Click"/>
-                    </StackPanel>
-                </Grid>
+                <TextBlock Text="粘贴 / 编辑你的 JSON" Style="{StaticResource SectionHeader}"/>
+                <!-- 三个"帮你起草"的入口，独占一行（不再挤在标题右边）——窗口就 480 宽，三个按钮
+                     并排放标题旁边会挤不下 -->
+                <WrapPanel Margin="0,0,0,6">
+                    <!-- 从别人分享的 .json 文件导入——直接把文件内容读进输入框，走的还是普通的"粘贴/校验/保存"
+                         这条路，不是个人资料导入那种"读完直接覆盖本地数据"，所以不需要单独的确认弹窗：
+                         读进来是不是真的存、会不会占掉上限，都还是走下面"保存"按钮已有的那套校验/上限逻辑。
+                         导入会顺带清掉"正在编辑：xxx"的提示，防止读进来的是一份完全不相关的主题，
+                         结果用户没留意提示还在，点保存把手头正在编辑的那份主题给覆盖了。 -->
+                    <Button x:Name="BtnImportTheme" Content="📥 从文件导入" Style="{StaticResource PillButtonStyle}"
+                            Padding="10,4" FontSize="11" Margin="0,0,6,6" Click="BtnImportTheme_Click"/>
+                    <!-- 分享码是"发文件"的轻量版：一段 Base64 纯文本，聊天框里直接发一行字就行，
+                         对方复制之后点这个按钮，从剪贴板里读、解出 JSON 塞进输入框——不用先存成文件
+                         再发送/接收。见 CustomThemeShareCode 和 BtnImportShareCode_Click。 -->
+                    <Button x:Name="BtnImportShareCode" Content="🔗 粘贴分享码导入" Style="{StaticResource PillButtonStyle}"
+                            Padding="10,4" FontSize="11" Margin="0,0,6,6" Click="BtnImportShareCode_Click"/>
+                    <!-- 不想从示例一行行改配色的话，点这个直接抽一份配好色的草稿进输入框——名字/字体/配色/背景渐变/
+                         图标/动画招式都是随机挑的，但都出自"搭配好的"选项池，不会抽出互相打架的颜色。抽完照样是
+                         普通 JSON 文本，想接着手改哪个字段都行，多点几下也不会覆盖已保存的主题（只改输入框）。 -->
+                    <Button x:Name="BtnRandomize" Content="🎲 随机生成一份" Style="{StaticResource PillButtonStyle}"
+                            Padding="10,4" FontSize="11" Margin="0,0,6,6" Click="BtnRandomize_Click"/>
+                    <!-- 从已存的主题里"混搭"（配色/图标/动画各自挑一个来源）——至少存过 2 个主题才有意义，
+                         不够的话按钮禁用，提示要先存够 2 个；跟"随机生成"是同一条路线（生成草稿塞进输入框，
+                         不直接落盘），只是素材来源从内置调色板换成用户自己攒的主题 -->
+                    <Button x:Name="BtnRemix" Content="🔀 混搭已存主题" Style="{StaticResource PillButtonStyle}"
+                            Padding="10,4" FontSize="11" Margin="0,0,6,6" Click="BtnRemix_Click"/>
+                    <!-- 点格子画图标，不用再自己数字符网格——打开时如果当前输入框里已经有一个合法的
+                         icon（不管是手写的还是之前画过的），会先摊开续画，不是每次都从空白开始。
+                         画完点"插入到编辑框"会智能替换当前 JSON 里的 icon 字段（其它字段不动），
+                         输入框内容当前不是合法 JSON 的话会退化成复制到剪贴板，见 BtnPaintIcon_Click。 -->
+                    <Button x:Name="BtnPaintIcon" Content="🖌️ 图标画板" Style="{StaticResource PillButtonStyle}"
+                            Padding="10,4" FontSize="11" Margin="0,0,0,6" Click="BtnPaintIcon_Click"/>
+                </WrapPanel>
                 <TextBox x:Name="TxtInput" AcceptsReturn="True" TextWrapping="Wrap"
                          Background="#1B211C" Foreground="#EEEEEE" BorderBrush="#2A332B" BorderThickness="1"
                          FontFamily="Consolas" FontSize="11" Height="160" Padding="6"
                          VerticalScrollBarVisibility="Auto" TextChanged="TxtInput_TextChanged"/>
+                <!-- 撤销的不是每一个字符（那个 Ctrl+Z 在 TextBox 里本来就有），是"上一次点了某个起草按钮
+                     之前"的完整内容——随机生成/混搭/画板插入/导入文件/导入分享码/切到编辑某个已存主题，
+                     这几个动作在改之前都会把当前内容压进一份小历史栈（见 CustomThemeWindow.xaml.cs 的
+                     PushHistory），改坏了或者不如上一版就点这个一键退回，最多存 20 步。 -->
+                <Button x:Name="BtnUndo" Content="↩️ 撤销上一步" Style="{StaticResource PillButtonStyle}"
+                        HorizontalAlignment="Left" Padding="10,4" FontSize="11" Margin="0,6,0,0"
+                        IsEnabled="False" Click="BtnUndo_Click"/>
 
                 <TextBlock Text="实时预览" Style="{StaticResource SectionHeader}"/>
                 <TextBlock Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,6">
@@ -132,6 +158,23 @@
                                    FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Grid>
                 </Border>
+
+                <!-- 图标细节放大：上面整体预览里图标只有 40px，网格开到 32x32/64x64 的话边缘/配色细节
+                     基本看不清——单独拉一个大一点的框，原图直接放大显示，NearestNeighbor 不做任何模糊，
+                     像素边缘该是方的就是方的，想确认自己画的图标对不对看这块最准。 -->
+                <TextBlock Text="图标细节放大" Style="{StaticResource SectionHeader}"/>
+                <Border x:Name="IconZoomCard" Background="#12160F" BorderBrush="#2A332B" BorderThickness="1" CornerRadius="6"
+                        Width="200" Height="200" HorizontalAlignment="Center" Margin="0,0,0,4">
+                    <Grid>
+                        <Image x:Name="IconZoomPreview" Stretch="Uniform" Margin="16"
+                               RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                        <TextBlock x:Name="TxtIconZoomHint" Text="JSON 还没校验通过，预览留空" Foreground="{StaticResource HintTextBrush}"
+                                   FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"
+                                   Width="140"/>
+                    </Grid>
+                </Border>
+                <TextBlock x:Name="TxtIconZoomSizeHint" Text="" Foreground="{StaticResource HintTextBrush}" FontSize="10"
+                           HorizontalAlignment="Center" Margin="0,4,0,0"/>
 
                 <TextBlock x:Name="TxtEditingHint" Text="" Foreground="#8AB4F8" FontSize="10" Margin="0,4,0,0" Visibility="Collapsed"/>
 

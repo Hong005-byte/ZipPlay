@@ -210,5 +210,61 @@ namespace PixelLyric8BitFix.Tests
             Assert.Null(theme);
             Assert.Contains(errors, e => e.Contains("layers[0].animation.type"));
         }
+
+        [Theory]
+        [InlineData("pulse")]
+        [InlineData("pulse+sway")]
+        [InlineData("pulse+sway+twinkle+bob")] // 4 个互不占用同一属性的招式叠一起，理论上限
+        [InlineData("PULSE+SWAY")] // 大小写不敏感
+        public void ParseAndValidate_MainIconComboWithoutDriftFall_NoError(string type)
+        {
+            var (theme, errors) = CustomThemeValidator.ParseAndValidate(BuildJsonWithSensitivity("").Replace(@"""type"": ""pulse""", $@"""type"": ""{type}"""));
+            Assert.NotNull(theme);
+            Assert.Empty(errors);
+        }
+
+        [Theory]
+        [InlineData("drift+pulse")]
+        [InlineData("pulse+fall")]
+        [InlineData("drift+fall")]
+        public void ParseAndValidate_MainIconComboWithDriftFall_ReportsError(string type)
+        {
+            var (theme, errors) = CustomThemeValidator.ParseAndValidate(BuildJsonWithSensitivity("").Replace(@"""type"": ""pulse""", $@"""type"": ""{type}"""));
+            Assert.Null(theme);
+            Assert.Contains(errors, e => e.Contains("animation.type") && e.Contains("drift/fall"));
+        }
+
+        [Fact]
+        public void ParseAndValidate_MainIconComboWithOneUnknownType_ReportsErrorForThatTokenOnly()
+        {
+            var (theme, errors) = CustomThemeValidator.ParseAndValidate(BuildJsonWithSensitivity("").Replace(@"""type"": ""pulse""", @"""type"": ""pulse+explode"""));
+            Assert.Null(theme);
+            Assert.Contains(errors, e => e.Contains("\"explode\""));
+            Assert.DoesNotContain(errors, e => e.Contains("\"pulse\"") && e.Contains("不认识"));
+        }
+
+        [Fact]
+        public void ParseAndValidate_LayerAllowsDriftFallCombo_NoError()
+        {
+            // 层没有主图标那个三图标专属轨道的结构性限制，drift 跟别的招式组合应该直接放行
+            string layer = @",
+          ""layers"": [
+            { ""anchor"": ""top-left"", ""icon"": { ""palette"": { ""#"": ""#FFFFFF"" }, ""rows"": [""####"", ""####"", ""####"", ""####""] }, ""animation"": { ""type"": ""drift+pulse"" } }
+          ]";
+            var (theme, errors) = CustomThemeValidator.ParseAndValidate(BuildJsonWithLayersField(layer));
+            Assert.NotNull(theme);
+            Assert.Empty(errors);
+        }
+
+        [Theory]
+        [InlineData("pulse", new[] { "pulse" })]
+        [InlineData("pulse+sway", new[] { "pulse", "sway" })]
+        [InlineData(" pulse + sway ", new[] { "pulse", "sway" })] // 多余空格要能容忍
+        [InlineData("PULSE+SWAY", new[] { "pulse", "sway" })]     // 统一转小写
+        [InlineData("pulse++sway", new[] { "pulse", "sway" })]    // 连续 + 号中间的空项要被丢弃，不当成一个空字符串招式
+        public void SplitAnimationTypes_SplitsTrimsAndLowercases(string input, string[] expected)
+        {
+            Assert.Equal(expected, CustomThemeValidator.SplitAnimationTypes(input));
+        }
     }
 }

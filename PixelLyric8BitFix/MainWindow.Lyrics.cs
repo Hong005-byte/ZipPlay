@@ -283,6 +283,70 @@ namespace PixelLyric8BitFix
             }
         }
 
+        // "🖼️ 生成当前歌词分享卡片"：把正在显示的这一句歌词拼成一张能发朋友圈/群里的图片——跟听歌统计
+        // 分享卡片是同一套"拼视觉树 -> 离屏渲染 -> 存 PNG"流程（LyricShareCardBuilder.Build + 复用
+        // ShareCardBuilder.RenderToBitmap 的通用尺寸重载），只是内容换成"这一句歌词"。没歌词/还没到
+        // 第一句歌词的时候（比如刚切歌还在抓词）没有能截的内容，弹个 toast 提示，不生成一张空卡片。
+        private void GenerateLyricShareCard()
+        {
+            string? line;
+            lock (_lyricLock)
+            {
+                line = _lyricCursor >= 0 && _lyricCursor < _lyricLines.Count ? _lyricLines[_lyricCursor].Text : null;
+            }
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                ShowToast("⚠️ 现在还没有可以截的歌词");
+                return;
+            }
+
+            // 卡片上想显示"干净"的歌名/艺人（去掉 remix/feat 标注），跟统计报告页同一份数据源；
+            // 万一这首歌还没来得及注册（理论上到不了这里，HandleTrackChangeAsync 里比抓词更早注册）就退回
+            // TxtSongTitle 上显示的那份，好过整张卡片崩掉
+            bool hasInfo = _stats.Tracks.TryGetValue(_lastTrackId, out var info);
+            string title = hasInfo ? info!.Title : TxtSongTitle.Text;
+            string artist = hasInfo ? info!.Artist : "";
+
+            try
+            {
+                var theme = GetActiveSkinTheme(_settings.Skin);
+                var card = LyricShareCardBuilder.Build(line, title, artist, theme);
+                var bitmap = ShareCardBuilder.RenderToBitmap(card, LyricShareCardBuilder.CardWidth, LyricShareCardBuilder.CardHeight);
+
+                var dialog = new Microsoft.Win32.SaveFileDialog
+                {
+                    Title = "保存歌词分享卡片",
+                    Filter = "PNG 图片 (*.png)|*.png",
+                    FileName = $"ZipPlay-歌词卡片-{SanitizeFileName(title)}.png",
+                };
+                if (dialog.ShowDialog(this) != true) return;
+
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                using var stream = File.Create(dialog.FileName);
+                encoder.Save(stream);
+                ShowToast("✅ 歌词卡片已保存");
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("MainWindow.GenerateLyricShareCard", ex);
+                ShowToast("⚠️ 生成失败，详情记到日志文件里了");
+            }
+        }
+
+        // 歌名可能带斜杠/冒号这些文件名不允许的字符，存文件名之前先洗一遍——跟 CustomThemeWindow.
+        // SanitizeFileName 是同一个道理，没抽公共方法是因为两边一个在 partial 类里一个是独立窗口，
+        // 拆公共方法要专门为这几行开一个新文件，不值当
+        private static string SanitizeFileName(string? name)
+        {
+            string safe = string.IsNullOrWhiteSpace(name) ? "未命名" : name;
+            foreach (char c in Path.GetInvalidFileNameChars())
+            {
+                safe = safe.Replace(c, '_');
+            }
+            return safe;
+        }
+
         private void ParseLrcText(string lrcContent)
         {
             var sorted = LrcParser.ParseLines(lrcContent);

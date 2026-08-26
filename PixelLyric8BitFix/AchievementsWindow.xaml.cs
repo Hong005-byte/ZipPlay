@@ -6,8 +6,8 @@ using System.Windows.Media;
 namespace PixelLyric8BitFix
 {
     /// <summary>
-    /// 成就墙：9 张卡片——7 个常规听歌成就 + 1 个压轴（从 AchievementCalculator/ListeningStats 现算），
-    /// 加 1 个"主题工匠"（从 CustomThemeAchievement/CustomThemeStore 现算，是完全独立的第二条解锁线，
+    /// 成就墙：12 张卡片——7 个常规听歌成就 + 1 个压轴（从 AchievementCalculator/ListeningStats 现算），
+    /// 加 4 个自定义主题相关的（从 CustomThemeAchievement 现算，是完全独立的第二条解锁线，
     /// 见 CustomThemeAchievement 的注释）。没有独立的"已解锁"存档——纯展示页，不涉及任何网络请求。
     /// </summary>
     public partial class AchievementsWindow : Window
@@ -18,7 +18,7 @@ namespace PixelLyric8BitFix
 
             var stats = ListeningStatsStore.Load();
             var results = AchievementCalculator.Evaluate(stats);
-            results.Add(new AchievementProgress { Achievement = CustomThemeAchievement.Definition, Unlocked = CustomThemeAchievement.IsUnlocked() });
+            results.AddRange(CustomThemeAchievement.EvaluateAll());
             TxtProgress.Text = $"{results.Count(r => r.Unlocked)} / {results.Count} 已解锁";
 
             foreach (var progress in results)

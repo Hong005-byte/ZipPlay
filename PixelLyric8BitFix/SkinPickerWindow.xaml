@@ -397,7 +397,7 @@
                 <Button x:Name="BtnManageCustomThemes" Content="🎨 自定义主题…" Click="BtnManageCustomThemes_Click"
                         Style="{StaticResource PillButtonStyle}"
                         Padding="10,4" FontSize="11" HorizontalAlignment="Left" Margin="0,4,0,0"/>
-                <TextBlock Text="不是代码，是纯数据——填颜色/渐变/像素图标，挑一种内置动画，最多能存 5 个。"
+                <TextBlock Text="不是代码，是纯数据——填颜色/渐变/像素图标，挑一种内置动画，最多能存 10 个。"
                            Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
 
             </StackPanel>

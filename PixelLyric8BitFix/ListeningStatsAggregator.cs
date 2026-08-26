@@ -77,14 +77,25 @@ namespace PixelLyric8BitFix
                 .ToList();
         }
 
-        /// <summary>报告页面直接绑定用的打包结果，一次算齐总时长/活跃天数/前 N 艺人/前 N 歌曲。</summary>
-        public static ListeningSummary BuildSummary(ListeningStats stats, DateOnly from, DateOnly to, int topN = 5) => new()
+        /// <summary>报告页面直接绑定用的打包结果，一次算齐总时长/活跃天数/前 N 艺人/前 N 歌曲，
+        /// 加上"总结叙事"用的几个数（连续天数/不同艺人数/不同歌曲数/最投入的一天），全部限定在
+        /// [from, to] 范围内——不是全部时间那个固定版本，"今年"的总结不该混进去年的数字。</summary>
+        public static ListeningSummary BuildSummary(ListeningStats stats, DateOnly from, DateOnly to, int topN = 5)
         {
-            TotalSeconds = GetTotalSeconds(stats, from, to),
-            ActiveDayCount = GetActiveDayCount(stats, from, to),
-            TopArtists = GetTopArtists(stats, from, to, topN),
-            TopTracks = GetTopTracks(stats, from, to, topN),
-        };
+            var (bestDay, bestDaySeconds) = GetBestDay(stats, from, to);
+            return new()
+            {
+                TotalSeconds = GetTotalSeconds(stats, from, to),
+                ActiveDayCount = GetActiveDayCount(stats, from, to),
+                TopArtists = GetTopArtists(stats, from, to, topN),
+                TopTracks = GetTopTracks(stats, from, to, topN),
+                LongestStreakDays = GetLongestStreakDays(stats, from, to),
+                UniqueArtistCount = GetUniqueArtistCount(stats, from, to),
+                UniqueTrackCount = GetUniqueTrackCount(stats, from, to),
+                BestDay = bestDay,
+                BestDaySeconds = bestDaySeconds,
+            };
+        }
 
         /// <summary>时长转成"N 小时 M 分钟"这种人话——HomeWindow 首页卡片、听歌统计页、分享卡片三处
         /// 都要用同一份文案，不然会出现同一个数字三个地方显示不一样的情况（之前就真的出现过：首页显示
@@ -98,14 +109,19 @@ namespace PixelLyric8BitFix
             return "不到 1 分钟";
         }
 
-        /// <summary>最长连续听歌天数（全部时间范围内，不局限于当前还在不在连续）——给成就墙的
-        /// "连续 N 天"这类成就用。掉了一天就断，不是"总共听了多少天"那种松散计法。</summary>
-        public static int GetLongestStreakDays(ListeningStats stats)
+        /// <summary>最长连续听歌天数，全部时间范围——给成就墙的"连续 N 天"这类成就用，
+        /// 那类成就故意不分年份/月份，"曾经连续过 N 天"这件事不该因为跨了年就被切断重算。</summary>
+        public static int GetLongestStreakDays(ListeningStats stats) => GetLongestStreakDays(stats, DateOnly.MinValue, DateOnly.MaxValue);
+
+        /// <summary>限定 [from, to] 范围内的最长连续听歌天数——年度总结用"今年最长连续了几天"，
+        /// 不是"有史以来"那个版本；[from, to] 是 MinValue/MaxValue（不限）时两个方法结果完全一样。
+        /// 掉了一天就断，不是"总共听了多少天"那种松散计法。</summary>
+        public static int GetLongestStreakDays(ListeningStats stats, DateOnly from, DateOnly to)
         {
             var activeDays = stats.Days
                 .Where(kv => kv.Value.TotalSeconds > 0)
                 .Select(kv => TryParseDayKey(kv.Key, out var d) ? d : (DateOnly?)null)
-                .Where(d => d.HasValue)
+                .Where(d => d.HasValue && d.Value >= from && d.Value <= to)
                 .Select(d => d!.Value)
                 .Distinct()
                 .OrderBy(d => d)
@@ -122,11 +138,15 @@ namespace PixelLyric8BitFix
             return longest;
         }
 
-        /// <summary>听过的不同艺人数（全部时间）——基于 Days.TrackSeconds 里真的出现过秒数的 trackId，
-        /// 不是 Tracks 表本身的条数：Tracks 只要切歌切到过这首歌就会注册一条，哪怕只听了半秒钟就跳走，
-        /// 用它算"听过多少艺人"会虚高，达不到"这是个要花时间才能拿到的成就"的意图。</summary>
-        public static int GetUniqueArtistCount(ListeningStats stats) =>
-            EnumerateTrackSecondsInRange(stats, DateOnly.MinValue, DateOnly.MaxValue)
+        /// <summary>听过的不同艺人数，全部时间——给成就墙用，不分年份/月份。</summary>
+        public static int GetUniqueArtistCount(ListeningStats stats) => GetUniqueArtistCount(stats, DateOnly.MinValue, DateOnly.MaxValue);
+
+        /// <summary>限定 [from, to] 范围内听过的不同艺人数——年度总结用"今年认识了几位艺人"。
+        /// 基于 Days.TrackSeconds 里真的出现过秒数的 trackId，不是 Tracks 表本身的条数：
+        /// Tracks 只要切歌切到过这首歌就会注册一条，哪怕只听了半秒钟就跳走，用它算"听过多少艺人"
+        /// 会虚高，达不到"这是花了时间才攒出来的数字"的意图。</summary>
+        public static int GetUniqueArtistCount(ListeningStats stats, DateOnly from, DateOnly to) =>
+            EnumerateTrackSecondsInRange(stats, from, to)
                 .Select(t => t.TrackId)
                 .Distinct()
                 .Select(id => stats.Tracks.TryGetValue(id, out var info) ? info.Artist : null)
@@ -134,12 +154,32 @@ namespace PixelLyric8BitFix
                 .Distinct()
                 .Count();
 
-        /// <summary>听过的不同歌曲数（全部时间），同样只算真的攒到过听歌秒数的 trackId。</summary>
-        public static int GetUniqueTrackCount(ListeningStats stats) =>
-            EnumerateTrackSecondsInRange(stats, DateOnly.MinValue, DateOnly.MaxValue)
+        /// <summary>听过的不同歌曲数，全部时间——给成就墙用。</summary>
+        public static int GetUniqueTrackCount(ListeningStats stats) => GetUniqueTrackCount(stats, DateOnly.MinValue, DateOnly.MaxValue);
+
+        /// <summary>限定 [from, to] 范围内听过的不同歌曲数，同样只算真的攒到过听歌秒数的 trackId。</summary>
+        public static int GetUniqueTrackCount(ListeningStats stats, DateOnly from, DateOnly to) =>
+            EnumerateTrackSecondsInRange(stats, from, to)
                 .Select(t => t.TrackId)
                 .Distinct()
                 .Count();
+
+        /// <summary>[from, to] 范围内听得最投入的一天——单日 TotalSeconds 最高的那天，年度总结叙事用
+        /// （"你听得最投入的一天是 X 月 X 日，听了 X 小时"）。没有任何记录时 Date 返回 null，
+        /// 调用方自己决定要不要展示这句——总时长是 0 的时候硬凑一句"最投入的一天"没有意义。</summary>
+        public static (DateOnly? Date, int Seconds) GetBestDay(ListeningStats stats, DateOnly from, DateOnly to)
+        {
+            DateOnly? bestDate = null;
+            int bestSeconds = 0;
+            foreach (var (dayKey, day) in stats.Days)
+            {
+                if (day.TotalSeconds <= bestSeconds) continue;
+                if (!TryParseDayKey(dayKey, out var date) || date < from || date > to) continue;
+                bestDate = date;
+                bestSeconds = day.TotalSeconds;
+            }
+            return (bestDate, bestSeconds);
+        }
 
         // 同一首歌可能横跨好几天听、同一天也可能听了好几遍（DayStats.TrackSeconds 已经把同一天的
         // 累加过了），这里只管把范围内每一天、每个 trackId 的秒数原样吐出来，交给上面两个方法按
@@ -166,6 +206,13 @@ namespace PixelLyric8BitFix
         public int ActiveDayCount { get; set; }
         public List<ArtistStat> TopArtists { get; set; } = new();
         public List<TrackStat> TopTracks { get; set; } = new();
+
+        // 这四个是"总结叙事"用的，见 ListeningStatsNarrative——都限定在跟其它字段同一个 [from, to] 范围内
+        public int LongestStreakDays { get; set; }
+        public int UniqueArtistCount { get; set; }
+        public int UniqueTrackCount { get; set; }
+        public DateOnly? BestDay { get; set; }
+        public int BestDaySeconds { get; set; }
     }
 
     public sealed class ArtistStat

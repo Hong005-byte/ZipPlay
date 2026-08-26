@@ -361,16 +361,20 @@ namespace PixelLyric8BitFix
             var iconPalette = CustomThemeValidator.BuildIconPalette(theme.Icon!);
             var iconBitmap = PixelArt.BuildCustomIcon(theme.Icon!.Rows!.ToArray(), iconPalette);
 
-            string animType = theme.Animation!.Type!.ToLowerInvariant();
+            // animation.type 可以是 "pulse" 这种单招，也可以是 "pulse+sway" 这种用 + 连起来的组合——
+            // 校验已经保证：要么整个数组只有 drift 或 fall 一个（走三图标飘过/飘落轨道），要么完全不含
+            // drift/fall（走下面 else 分支，可以是 1~6 招的任意组合）。两种情况不会混在一起，这里不用
+            // 再重新判一遍"含不含 drift/fall"，直接看 animTypes[0] 是不是那两个之一就够了。
+            string[] animTypes = CustomThemeValidator.SplitAnimationTypes(theme.Animation!.Type!);
             double? customDuration = theme.Animation.Duration;
-            // "跟着音乐律动"是通用开关，不挑 8 种招式里的哪一种——不管用户选的是哪个，
-            // 都统一用 SpeedRatio 让这个动画的播放速度跟着音乐响度/鼓点变，见 BeginMusicReactiveAnimation
+            // "跟着音乐律动"是通用开关，不挑招式组合里的哪一个——不管选了几种，都统一用 SpeedRatio
+            // 让这些动画的播放速度跟着音乐响度/鼓点变，见 BeginMusicReactiveAnimation
             bool musicReactive = theme.Animation.MusicReactive && _settings.SkinAudioReactiveEnabled;
             // "反应多强"跟"要不要反应"是两回事——sensitivity 只在 musicReactive 为 true 时才有意义，
             // 这里提前算好传下去，各个 Start*Animation 不用各自再判一遍 MusicReactive 开关
             double sensitivity = CustomThemeValidator.SensitivityToMultiplier(theme.Animation.Sensitivity);
 
-            if (animType == "drift")
+            if (animTypes[0] == "drift")
             {
                 RowDecor.Height = new GridLength(0);
                 CustomDriftOverlay.Visibility = Visibility.Visible;
@@ -381,7 +385,7 @@ namespace PixelLyric8BitFix
                 StartCustomDriftAnimation(CustomDrift2Transform, (customDuration ?? 14) * 1.35, 2, musicReactive, sensitivity);
                 StartCustomDriftAnimation(CustomDrift3Transform, (customDuration ?? 14) * 1.7, 5, musicReactive, sensitivity);
             }
-            else if (animType == "fall")
+            else if (animTypes[0] == "fall")
             {
                 RowDecor.Height = new GridLength(0);
                 CustomFallOverlay.Visibility = Visibility.Visible;
@@ -397,7 +401,10 @@ namespace PixelLyric8BitFix
                 RowDecor.Height = new GridLength(50);
                 CustomIconDecorCanvas.Visibility = Visibility.Visible;
                 CustomIcon.Source = iconBitmap;
-                StartCustomIconAnimation(animType, customDuration, accent, musicReactive, sensitivity);
+                // 重置放在循环外面，只做一次——挪进循环里的话，组合里后一招重置的时候会把前一招刚设好的
+                // 状态（比如 sway 已经在转的角度）擦掉，等于每加一招都在跟前面打架
+                ResetCustomIconAnimationState(accent);
+                foreach (var t in animTypes) StartCustomIconAnimation(t, customDuration, musicReactive, sensitivity);
             }
 
             ApplyCustomExtraLayers(theme, accent);
@@ -436,7 +443,12 @@ namespace PixelLyric8BitFix
 
                 bool musicReactive = layer.Animation!.MusicReactive && _settings.SkinAudioReactiveEnabled;
                 double sensitivity = CustomThemeValidator.SensitivityToMultiplier(layer.Animation.Sensitivity);
-                StartLayerAnimation(layer.Animation.Type!.ToLowerInvariant(), layer.Animation.Duration, image, rotate, translate, glow, musicReactive, sensitivity);
+                // 层里的招式组合不受"drift/fall 必须单独出现"那条限制（层没有主图标那个三图标专属轨道），
+                // 8 招随便怎么组合都走同一套单图标渲染，直接全部循环应用
+                foreach (var t in CustomThemeValidator.SplitAnimationTypes(layer.Animation!.Type!))
+                {
+                    StartLayerAnimation(t, layer.Animation.Duration, image, rotate, translate, glow, musicReactive, sensitivity);
+                }
             }
         }
 
@@ -639,17 +651,24 @@ namespace PixelLyric8BitFix
         private static double SafeDuration(double? value, double fallback) =>
             value.HasValue && value.Value > 0 ? value.Value : fallback;
 
-        // 单图标动画："招式"从 pulse / twinkle / sway / spin / flicker 里选一个，全部用代码现场构造
-        // DoubleAnimation，不需要预先在 XAML 里声明 Storyboard 资源。musicReactive 为 true 时，
-        // 不管选的是哪一招，都统一走 BeginMusicReactiveAnimation 包成可调速的 Storyboard——
-        // 见 ApplyCustomSkinVisuals 里对 "跟着音乐律动" 开关的说明
-        private void StartCustomIconAnimation(string type, double? customDuration, Color accent, bool musicReactive, double sensitivity = 1.0)
+        // 基准姿态：角度归零、图标不透明、发光用皮肤强调色——调用方（ApplyCustomSkinVisuals）在整个
+        // 招式组合循环开始之前调一次，不要挪进 StartCustomIconAnimation 里，不然组合里后一招重置的时候
+        // 会把前一招刚设好的状态擦掉
+        private void ResetCustomIconAnimationState(Color accent)
         {
             CustomIconRotate.Angle = 0;
             CustomIcon.Opacity = 1;
             CustomIconGlow.Color = accent;
             CustomIconGlow.Opacity = 0.6;
+        }
 
+        // 单图标动画："招式"从 pulse / twinkle / drift / fall / bob / sway / spin / flicker 里选一个或者
+        // 用 + 组合几个（组合规则见 CustomThemeValidator.ValidateAnimation），全部用代码现场构造
+        // DoubleAnimation，不需要预先在 XAML 里声明 Storyboard 资源。musicReactive 为 true 时，
+        // 不管选的是哪一招，都统一走 BeginMusicReactiveAnimation 包成可调速的 Storyboard——
+        // 见 ApplyCustomSkinVisuals 里对 "跟着音乐律动" 开关的说明
+        private void StartCustomIconAnimation(string type, double? customDuration, bool musicReactive, double sensitivity = 1.0)
+        {
             switch (type)
             {
                 case "pulse": // 呼吸发光，平缓的明暗循环
