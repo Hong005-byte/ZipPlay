@@ -159,6 +159,12 @@ namespace PixelLyric8BitFix
         private readonly AudioVisualizer _audioVisualizer = new();
         private (System.Windows.Shapes.Rectangle Element, bool IsOuterRing)[]? _miniVisualizerParticles;
 
+        // ── Mini 模式的成就环：绕在上面那两圈音频粒子外面，8 个小方点静态显示这次进 Mini 模式时
+        // 解锁了几个听歌成就（7 个常规 + 1 个压轴），不参与音频律动。跟音频粒子环的关键区别是
+        // "只建一次全程复用" vs 这个"每次真正进 Mini 模式都重新算一遍"——两次进 Mini 模式之间完全
+        // 可能新解锁了成就，见 MainWindow.MiniMode.cs 的 RefreshAchievementRing。
+        private readonly List<System.Windows.Shapes.Rectangle> _miniAchievementDots = new();
+
         // ── 皮肤音乐律动：跟 Mini 模式共用同一个 _audioVisualizer，见 MainWindow.SkinInteractions.cs。
         // _isMusicReactiveSkin 代表"当前这套皮肤（或客制化主题勾了 musicReactive）参与律动，该不该抓音频"；
         // _musicReactiveStoryboards 里放的是所有"额外以 isControllable=true 方式启动、可以实时调 SpeedRatio"
@@ -258,6 +264,8 @@ namespace PixelLyric8BitFix
             itemSkin.Click += (s, e) => OpenSettingsAndClose();
             var itemImportLrc = new MenuItem { Header = "📄 手动导入歌词 (.lrc)" };
             itemImportLrc.Click += (s, e) => ImportLocalLrc();
+            var itemLyricCard = new MenuItem { Header = "🖼️ 生成当前歌词分享卡片" };
+            itemLyricCard.Click += (s, e) => GenerateLyricShareCard();
             var itemResetOffset = new MenuItem { Header = "🔄 重置歌词偏移" };
             itemResetOffset.Click += (s, e) => AdjustLyricOffset(0, replace: true);
             var itemToggleKaraoke = new MenuItem { Header = "🎤 开关卡拉OK扫光效果" };
@@ -270,6 +278,7 @@ namespace PixelLyric8BitFix
             itemExit.Click += (s, e) => Application.Current.Shutdown();
             menu.Items.Add(itemSkin);
             menu.Items.Add(itemImportLrc);
+            menu.Items.Add(itemLyricCard);
             menu.Items.Add(itemResetOffset);
             menu.Items.Add(itemToggleKaraoke);
             menu.Items.Add(itemToggleBilingual);

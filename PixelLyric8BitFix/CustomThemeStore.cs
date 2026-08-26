@@ -10,12 +10,13 @@ namespace PixelLyric8BitFix
     public sealed record CustomThemeEntry(string FileName, CustomTheme Theme);
 
     /// <summary>
-    /// 客制化主题的磁盘存取：一个主题一个 JSON 文件，最多 5 个（够用了，多了选择器也摆不下）。
+    /// 客制化主题的磁盘存取：一个主题一个 JSON 文件，最多 10 个（原本定的是 5，用了一阵子确认整套
+    /// 校验/渲染/预览都挺稳，放宽到 10；皮肤选择器是纵向列表滚动的，不是宫格摆位，10 个不会摆不下）。
     /// 到上限了必须先删一个才能再存新的——不做"自动挤掉最老的"这种会让用户没提防丢东西的行为。
     /// </summary>
     internal static class CustomThemeStore
     {
-        public const int MaxThemes = 5;
+        public const int MaxThemes = 10;
 
         public static string Dir => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -92,7 +93,7 @@ namespace PixelLyric8BitFix
 
                 string fileName = existingFileName ?? $"{Guid.NewGuid():N}.json";
                 string path = Path.Combine(Dir, fileName);
-                string json = JsonConvert.SerializeObject(theme, Formatting.Indented);
+                string json = JsonConvert.SerializeObject(theme, Formatting.Indented, CustomThemeValidator.SerializerSettings);
                 File.WriteAllText(path, json);
                 return (true, null, fileName);
             }

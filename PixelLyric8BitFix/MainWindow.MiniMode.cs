@@ -58,6 +58,7 @@ namespace PixelLyric8BitFix
             MiniBadge.Visibility = Visibility.Visible;
 
             EnsureMiniVisualizerParticlesBuilt();
+            RefreshAchievementRing();
             MiniVisualizerCanvas.Visibility = Visibility.Visible;
 
             Width = MiniModeWindowSize;
@@ -159,6 +160,47 @@ namespace PixelLyric8BitFix
                 Canvas.SetLeft(particle, cx - MiniVisualizerCellSize / 2);
                 Canvas.SetTop(particle, cy - MiniVisualizerCellSize / 2);
                 particles.Add((particle, isOuterRing));
+            }
+        }
+
+        // 成就环：绕在音频粒子外圈（半径 58）再外面一圈的 8 个小方点，静态显示 7 个常规听歌成就 +
+        // 1 个压轴（尊贵听众）分别解没解锁——不吃音频数据，纯粹是"把成就墙那个隐性的数字变成一直
+        // 挂在眼前的反馈"。半径卡在 65（窗口半宽只有 70，再往外挤点数就快贴到窗口边缘被裁掉了），
+        // 点比音频粒子小一圈（6px vs 11px），视觉上一眼能分清"这是另一种东西，不是律动的一部分"。
+        private const double MiniAchievementRingRadius = 65;
+        private const double MiniAchievementDotSize = 6;
+
+        // 每次真正"进入" Mini 模式都重新算一遍（不是跟音频粒子环一样只建一次全程复用）——两次进
+        // Mini 模式之间完全可能新解锁了成就（这段时间一直在正常模式下听歌），旧的环形状不该继续显示。
+        // 用的是 MainWindow 自己内存里那份 _stats（实时累计中的听歌数据，见 MainWindow.ListeningStats.cs），
+        // 不用重新读一遍盘，状态已经是当下最新的。具体每个点画在哪、什么颜色/透明度交给
+        // MiniAchievementRing.BuildDots 这个纯函数算，这里只管把算出来的结果变成真的 Rectangle。
+        private void RefreshAchievementRing()
+        {
+            foreach (var dot in _miniAchievementDots) MiniVisualizerCanvas.Children.Remove(dot);
+            _miniAchievementDots.Clear();
+
+            var progress = AchievementCalculator.Evaluate(_stats);
+            double center = MiniModeWindowSize / 2;
+
+            foreach (var spec in MiniAchievementRing.BuildDots(progress, center, MiniAchievementRingRadius))
+            {
+                var dot = new System.Windows.Shapes.Rectangle
+                {
+                    Width = MiniAchievementDotSize,
+                    Height = MiniAchievementDotSize,
+                    // 圆角半径 = 边长一半，画出来是个正圆——跟音频粒子那种"圆角方块"（RadiusX/Y=3，
+                    // 11px 边长）在形状上也刻意区分开，不只是颜色不一样，两个信号来源看一眼就能分清
+                    RadiusX = MiniAchievementDotSize / 2,
+                    RadiusY = MiniAchievementDotSize / 2,
+                    Fill = new SolidColorBrush(spec.Color),
+                    Opacity = spec.Opacity,
+                };
+                RenderOptions.SetBitmapScalingMode(dot, System.Windows.Media.BitmapScalingMode.NearestNeighbor);
+                Canvas.SetLeft(dot, spec.CenterX - MiniAchievementDotSize / 2);
+                Canvas.SetTop(dot, spec.CenterY - MiniAchievementDotSize / 2);
+                MiniVisualizerCanvas.Children.Add(dot);
+                _miniAchievementDots.Add(dot);
             }
         }
 

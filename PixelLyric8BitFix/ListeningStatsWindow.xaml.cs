@@ -40,9 +40,60 @@ namespace PixelLyric8BitFix
             _stats = ListeningStatsStore.Load();
             PopulateCardStyleOptions();
             RefreshSummary();
+            BuildHeatmap();
         }
 
-        // 20 套免费内置皮肤 + 已存的客制化主题（最多 5 个）都能选，默认选中用户当前播放器实际在用的那一套，
+        // 热力图固定是"今年 1 月 1 日到今天"，只在打开窗口时算一次——不像 RefreshSummary 那样跟着
+        // 本月/今年/全部时间三个切换按钮联动，见 XAML 里那段注释的说明
+        private void BuildHeatmap()
+        {
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            var cells = ListeningHeatmap.BuildCells(_stats, new DateOnly(today.Year, 1, 1), today);
+
+            const int cellSize = 8, gap = 2, pitch = cellSize + gap;
+            HeatmapCanvas.Children.Clear();
+
+            int maxWeek = 0;
+            foreach (var cell in cells)
+            {
+                maxWeek = Math.Max(maxWeek, cell.Week);
+                var rect = new System.Windows.Shapes.Rectangle
+                {
+                    Width = cellSize,
+                    Height = cellSize,
+                    RadiusX = 1.5,
+                    RadiusY = 1.5,
+                    Fill = new SolidColorBrush(HeatmapCellColor(cell.Level)),
+                    ToolTip = cell.Seconds > 0
+                        ? $"{cell.Date:yyyy-MM-dd} · {ListeningStatsAggregator.FormatDuration(cell.Seconds)}"
+                        : $"{cell.Date:yyyy-MM-dd} · 没有记录",
+                };
+                Canvas.SetLeft(rect, cell.Week * pitch);
+                Canvas.SetTop(rect, cell.DayOfWeek * pitch);
+                HeatmapCanvas.Children.Add(rect);
+            }
+
+            HeatmapCanvas.Width = (maxWeek + 1) * pitch;
+            HeatmapCanvas.Height = 7 * pitch - gap;
+
+            int activeDays = cells.Count(c => c.Seconds > 0);
+            TxtHeatmapHint.Text = activeDays > 0
+                ? $"{today.Year} 年至今 {activeDays} 天有听歌记录，格子颜色越深听得越多（鼠标悬停看具体某一天）"
+                : $"{today.Year} 年还没有听歌记录";
+        }
+
+        // 5 档强度对应的颜色，从"没听"到"顶格"逐渐加深，最高档直接用全局强调色（翡翠绿）——
+        // 跟成就墙"点亮的卡片用同一个绿"是同一个视觉语言，不用为热力图单独发明一套配色体系
+        private static Color HeatmapCellColor(int level) => level switch
+        {
+            0 => Color.FromRgb(0x24, 0x2B, 0x25),
+            1 => Color.FromRgb(0x0E, 0x4D, 0x33),
+            2 => Color.FromRgb(0x15, 0x7A, 0x4D),
+            3 => Color.FromRgb(0x22, 0xB0, 0x6B),
+            _ => Color.FromRgb(0x34, 0xD3, 0x99),
+        };
+
+        // 20 套免费内置皮肤 + 已存的客制化主题（最多 10 个）都能选，默认选中用户当前播放器实际在用的那一套，
         // 图省事不用每次都自己再挑一遍。限定皮肤（目前只有 Crown）没解锁之前不出现在这个列表里——
         // 之前的想法是"卡片风格跟能不能玩这套皮肤是两件事"，但限定皮肤本来就是要靠成就墙挣的，
         // 挣都没挣到就能拿它的配色/图标出去生成分享卡片，等于变相白嫖了外观，跟"限定"这个定位矛盾，
@@ -134,10 +185,15 @@ namespace PixelLyric8BitFix
             SummaryPanel.Visibility = hasAnything ? Visibility.Visible : Visibility.Collapsed;
             TxtEmptyState.Visibility = hasAnything ? Visibility.Collapsed : Visibility.Visible;
             BtnSaveCard.IsEnabled = hasAnything; // 没数据的时候导出一张全是 0 的卡片没意义，直接禁用按钮
+            BtnHighlights.IsEnabled = hasAnything; // 同理，没数据就只有一张空封面卡片可看，没意义
             if (!hasAnything) return;
 
             TxtTotalTime.Text = ListeningStatsAggregator.FormatDuration(summary.TotalSeconds);
             TxtActiveDays.Text = $"{summary.ActiveDayCount} 天有听歌";
+
+            string? narrative = ListeningStatsNarrative.BuildHeadline(summary);
+            TxtNarrative.Text = narrative ?? "";
+            TxtNarrative.Visibility = narrative != null ? Visibility.Visible : Visibility.Collapsed;
 
             RenderList(ArtistListPanel, TxtNoArtists, summary.TopArtists.Select(a => (Name: a.Artist, a.Seconds)));
             RenderList(TrackListPanel, TxtNoTracks, summary.TopTracks.Select(t =>
@@ -174,6 +230,18 @@ namespace PixelLyric8BitFix
                 // 存图失败（比如目标目录没权限）不是关键功能，记个日志，界面上不用弹刺眼的错误框
                 AppLog.Error("ListeningStatsWindow.BtnSaveCard_Click", ex);
             }
+        }
+
+        // 打开"✨ 亮点回顾"窗口——用的是当前选中范围（本月/今年/全部时间）同一份 _currentSummary，
+        // 卡片风格（配色/图标）也跟分享卡片走同一个下拉框选项，不用户再选一遍
+        private void BtnHighlights_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentSummary == null) return;
+
+            var theme = ResolveSelectedCardTheme();
+            string? userName = AppSettings.Load().UserName;
+            var window = new ListeningHighlightsWindow(_currentSummary, _currentPeriodLabel, userName, theme) { Owner = this };
+            window.ShowDialog();
         }
 
         // 艺人榜/歌曲榜是同一套"序号 + 名字 + 时长"行样式，抽成一个方法避免写两遍

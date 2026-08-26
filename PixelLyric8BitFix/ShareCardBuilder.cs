@@ -57,6 +57,22 @@ namespace PixelLyric8BitFix
             content.Children.Add(BigStat(ListeningStatsAggregator.FormatDuration(summary.TotalSeconds), "总时长"));
             content.Children.Add(BigStat($"{summary.ActiveDayCount} 天", "有听歌"));
 
+            // 总结叙事：跟 ListeningStatsWindow 页面里那句是同一份文案（ListeningStatsNarrative），
+            // 数据太单薄就是 null，直接不画这个 TextBlock，不留一截空白
+            string? narrative = ListeningStatsNarrative.BuildHeadline(summary);
+            if (narrative != null)
+            {
+                content.Children.Add(new TextBlock
+                {
+                    Text = narrative,
+                    Foreground = new SolidColorBrush(SubTextColor),
+                    FontFamily = CardFont,
+                    FontSize = 13,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 4, 0, 0),
+                });
+            }
+
             content.Children.Add(Divider(theme.Accent));
             content.Children.Add(SectionLabel("🎤 最常听的艺人", accentBrush));
             content.Children.Add(RankList(summary.TopArtists.Select(a => (a.Artist, a.Seconds))));
@@ -215,13 +231,18 @@ namespace PixelLyric8BitFix
 
         /// <summary>把拼好的视觉树渲染成一张位图——不依赖它在不在窗口的可视化树里，
         /// 手动 Measure/Arrange 一遍就能渲染，这是 WPF 离屏截图的标准写法。</summary>
-        public static RenderTargetBitmap RenderToBitmap(FrameworkElement visual)
+        public static RenderTargetBitmap RenderToBitmap(FrameworkElement visual) => RenderToBitmap(visual, CardWidth, CardHeight);
+
+        /// <summary>同上，只是尺寸不锁定听歌统计卡片那份 640x960——LyricShareCardBuilder 这种内容量
+        /// 完全不一样的卡片（就一句歌词，不是一整段总结）用自己的尺寸，不用被迫套进 960 高的画布里
+        /// 留一大截空白。两边共用这一份离屏渲染实现，不是各自再写一遍 Measure/Arrange/Render。</summary>
+        public static RenderTargetBitmap RenderToBitmap(FrameworkElement visual, int width, int height)
         {
-            visual.Measure(new Size(CardWidth, CardHeight));
-            visual.Arrange(new Rect(0, 0, CardWidth, CardHeight));
+            visual.Measure(new Size(width, height));
+            visual.Arrange(new Rect(0, 0, width, height));
             visual.UpdateLayout();
 
-            var bitmap = new RenderTargetBitmap(CardWidth, CardHeight, 96, 96, PixelFormats.Pbgra32);
+            var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
             bitmap.Render(visual);
             return bitmap;
         }

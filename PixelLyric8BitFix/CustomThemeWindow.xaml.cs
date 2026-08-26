@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -11,12 +12,44 @@ namespace PixelLyric8BitFix
 {
     /// <summary>
     /// 自定义主题的管理页：展示怎么写（带一份完整示例）、粘贴/编辑 JSON、详细校验错误、整体实时预览、
-    /// 管理最多 5 个已存的客制化主题。跟启动设置页是分开的独立窗口，符合"客制化要开在一个新页面"的要求。
+    /// 管理最多 10 个已存的客制化主题（CustomThemeStore.MaxThemes）。跟启动设置页是分开的独立窗口，符合"客制化要开在一个新页面"的要求。
     /// </summary>
     public partial class CustomThemeWindow : Window
     {
         // 正在编辑哪一个已有主题的文件名；null 表示这次保存是"新建"，会走 5 个上限的检查
         private string? _editingFileName;
+
+        // "↩️ 撤销上一步"背后的小历史栈——只在几个会整段替换 TxtInput.Text 的起草动作（随机生成/混搭/
+        // 画板插入/导入文件/导入分享码/切去编辑另一份已存主题）之前记一笔，不是每敲一个字符都记
+        // （逐字符撤销本来就是 TextBox 自带的 Ctrl+Z，不用重复造）。最多存 20 步，超过就把最早的挤掉，
+        // 没人会真的连点 20 次起草按钮还想一路撤销回最开始。
+        private const int MaxHistorySteps = 20;
+        private readonly List<string> _history = new();
+
+        private void PushHistory()
+        {
+            _history.Add(TxtInput.Text);
+            if (_history.Count > MaxHistorySteps) _history.RemoveAt(0);
+            BtnUndo.IsEnabled = true;
+        }
+
+        private void BtnUndo_Click(object sender, RoutedEventArgs e)
+        {
+            if (_history.Count == 0) return;
+            HideMessages();
+
+            string previous = _history[^1];
+            _history.RemoveAt(_history.Count - 1);
+            BtnUndo.IsEnabled = _history.Count > 0;
+
+            TxtInput.Text = previous; // 触发 TxtInput_TextChanged -> UpdatePreview()
+
+            // 撤回去的这份内容跟"正在编辑哪个已存文件"的对应关系已经说不清楚了（可能是撤回到编辑另一份
+            // 主题之前、也可能是撤回到一份全新草稿之前），干脆清掉这个提示，跟导入/混搭同一个处理方式：
+            // 真要保存的话会被当成"新建"，不会误覆盖一份不相关的已存主题
+            _editingFileName = null;
+            TxtEditingHint.Visibility = Visibility.Collapsed;
+        }
 
         /// <summary>true 表示这次窗口关闭时至少成功保存/删除过一次，调用方（设置页）据此决定要不要刷新主题列表。</summary>
         public bool ThemesChanged { get; private set; }
@@ -101,10 +134,25 @@ namespace PixelLyric8BitFix
             PreviewLyricBox.BorderBrush = new SolidColorBrush(lyricBoxBorder);
 
             var iconPalette = CustomThemeValidator.BuildIconPalette(theme.Icon!);
-            PreviewIcon.Source = PixelArt.BuildCustomIcon(theme.Icon!.Rows!.ToArray(), iconPalette);
-            TxtIconSizeHint.Text = $"图标 {theme.Icon.Rows!.Count} 行 x {theme.Icon.Rows[0].Length} 列";
+            var iconBitmap = PixelArt.BuildCustomIcon(theme.Icon!.Rows!.ToArray(), iconPalette);
+            PreviewIcon.Source = iconBitmap;
+            string iconSizeText = $"图标 {theme.Icon.Rows!.Count} 行 x {theme.Icon.Rows[0].Length} 列";
+            TxtIconSizeHint.Text = iconSizeText;
 
-            StartPreviewIconAnimation(theme.Animation!.Type!.ToLowerInvariant(), theme.Animation.Duration, accent);
+            // 放大版用的是同一张 iconBitmap，不重新画一遍——两边看到的必须是完全同一份数据，
+            // 不然万一哪天两处渲染逻辑走岔了，两个预览显示的图标对不上，反而更容易让人怀疑是不是哪里出错了
+            IconZoomPreview.Source = iconBitmap;
+            TxtIconZoomHint.Visibility = Visibility.Collapsed;
+            TxtIconZoomSizeHint.Text = iconSizeText;
+
+            // type 可能是 "pulse+sway" 这种组合——预览这边没有主图标 drift/fall 专属轨道那个结构性限制
+            // （单图标 + 变换组，8 招怎么组合都是同一套渲染），但校验已经把主图标的 drift/fall 组合挡掉了，
+            // 这里不会真的收到那种非法组合
+            ResetPreviewIconAnimationState(accent);
+            foreach (var t in CustomThemeValidator.SplitAnimationTypes(theme.Animation!.Type!))
+            {
+                StartPreviewIconAnimation(t, theme.Animation.Duration);
+            }
             ApplyPreviewLayers(theme, accent);
         }
 
@@ -158,7 +206,10 @@ namespace PixelLyric8BitFix
                 }
                 PreviewLayersHost.Children.Add(image);
 
-                StartPreviewLayerAnimation(layer.Animation!.Type!.ToLowerInvariant(), layer.Animation.Duration, image, rotate, translate, glow);
+                foreach (var t in CustomThemeValidator.SplitAnimationTypes(layer.Animation!.Type!))
+                {
+                    StartPreviewLayerAnimation(t, layer.Animation.Duration, image, rotate, translate, glow);
+                }
             }
         }
 
@@ -243,14 +294,12 @@ namespace PixelLyric8BitFix
             return new SolidColorBrush(stops.Count > 0 ? stops[0] : Colors.Black);
         }
 
-        // 8 种招式的预览版：参数（幅度/默认时长）照抄 MainWindow.Skins.cs 的 StartCustomIconAnimation，
-        // 保证"预览里看着多快"跟"保存后套到播放器里多快"是一致的观感。跟正式版的差别只有两处——
-        // 这里没有音乐律动调速（编辑页没有音频采集，开不开 musicReactive 动画照样按固定节奏播），
-        // drift/fall 用同一个图标在卡片范围内来回飘/落，不是正式版那种三图标交错起播的效果。
-        private void StartPreviewIconAnimation(string type, double? customDuration, Color accent)
+        // 先清掉上一次挂的动画、回到基准姿态，再决定这次播哪(几)招——每敲一个字都会重新调用这一整套，
+        // 不重置的话，比如从 spin 切成 pulse，图标可能还停在上一次转到一半的角度上；组合多招的情况下
+        // 这个方法只在循环开始前调一次，不要挪进 StartPreviewIconAnimation 里，不然后一招重置的时候
+        // 会把前一招刚设好的状态擦掉
+        private void ResetPreviewIconAnimationState(Color accent)
         {
-            // 先清掉上一次挂的动画、回到基准姿态，再决定这次播哪一招——每敲一个字都会重新调用这个方法，
-            // 不重置的话，比如从 spin 切成 pulse，图标可能还停在上一次转到一半的角度上
             PreviewIconRotate.BeginAnimation(RotateTransform.AngleProperty, null);
             PreviewIconRotate.Angle = 0;
             PreviewIconTranslate.BeginAnimation(TranslateTransform.XProperty, null);
@@ -262,7 +311,15 @@ namespace PixelLyric8BitFix
             PreviewIconGlow.Color = accent;
             PreviewIconGlow.BeginAnimation(DropShadowEffect.OpacityProperty, null);
             PreviewIconGlow.Opacity = 0.6;
+        }
 
+        // 8 种招式的预览版（单招或者用 + 组合几个）：参数（幅度/默认时长）照抄 MainWindow.Skins.cs 的
+        // StartCustomIconAnimation，保证"预览里看着多快"跟"保存后套到播放器里多快"是一致的观感。
+        // 跟正式版的差别只有两处——这里没有音乐律动调速（编辑页没有音频采集，开不开 musicReactive
+        // 动画照样按固定节奏播），drift/fall 用同一个图标在卡片范围内来回飘/落，不是正式版那种三图标
+        // 交错起播的效果。
+        private void StartPreviewIconAnimation(string type, double? customDuration)
+        {
             switch (type)
             {
                 case "pulse":
@@ -335,58 +392,42 @@ namespace PixelLyric8BitFix
             PreviewContent.Visibility = Visibility.Collapsed;
             PreviewLayersHost.Children.Clear();
             TxtPreviewHint.Visibility = Visibility.Visible;
+
+            IconZoomPreview.Source = null;
+            TxtIconZoomHint.Visibility = Visibility.Visible;
+            TxtIconZoomSizeHint.Text = "";
         }
 
-        // 拿现有的 Sunset 皮肤当例子——现成的、已经在用的配色，比瞎编一份更有说服力，也顺便验证了
-        // "内置皮肤" 和 "客制化皮肤" 走的是同一套字段，不是另外发明了一套格式
-        private static string BuildExampleJson() =>
-@"{
-  ""name"": ""我的海边黄昏"",
-  ""font"": ""Segoe UI Light"",
-  ""colors"": {
-    ""title"": ""#FFF3E0"",
-    ""artist"": ""#F2C6A0"",
-    ""accent"": ""#F9C784"",
-    ""lyric"": ""#FFF3E0"",
-    ""glow"": ""#F9C784"",
-    ""glowBlur"": 4,
-    ""lyricBoxBg"": ""#B32A1F40"",
-    ""lyricBoxBorder"": ""#F9C784""
-  },
-  ""background"": {
-    ""type"": ""gradient"",
-    ""direction"": ""vertical"",
-    ""stops"": [""#F2994A"", ""#EA7093"", ""#4A3B78""]
-  },
-  ""icon"": {
-    ""palette"": { ""#"": ""#F9C784"", ""w"": ""#4A3B78"" },
-    ""rows"": [
-      ""........"",
-      ""..####.."",
-      "".######."",
-      ""########"",
-      ""wwwwwwww"",
-      ""wwwwwwww"",
-      ""........"",
-      ""........""
-    ]
-  },
-  ""animation"": { ""type"": ""pulse"", ""duration"": 2.6, ""musicReactive"": true, ""sensitivity"": ""medium"" },
-  ""layers"": [
-    {
-      ""anchor"": ""top-right"",
-      ""icon"": {
-        ""palette"": { ""o"": ""#FFF3E0"" },
-        ""rows"": [ "".oo."", ""o..o"", ""o..o"", "".oo."" ]
-      },
-      ""animation"": { ""type"": ""twinkle"", ""duration"": 1.8 }
-    }
-  ]
-}";
+        // 示例 JSON 抽到了 CustomThemeExample 里共用（CustomThemeSpecDoc 那份下载文档末尾用的是
+        // 同一份文本），这里留一个同名方法只是不想动构造函数那行调用点
+        private static string BuildExampleJson() => CustomThemeExample.Json;
 
         private void BtnCopyExample_Click(object sender, RoutedEventArgs e)
         {
             try { Clipboard.SetText(TxtExample.Text); } catch { /* 剪贴板偶尔会被别的程序占用，不是关键功能，失败就算了 */ }
+        }
+
+        // 完整字段说明存成 .md 文件让用户自己选地方存——结构化的标题/表格，人愿意仔细看的话比页面里
+        // 那几条要点信息量大得多，也方便直接整份丢给 AI 当"生成规则"用（见 CustomThemeSpecDoc 的说明）
+        private void BtnDownloadSpec_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "下载自定义主题详细说明",
+                Filter = "Markdown 文件 (*.md)|*.md|文本文件 (*.txt)|*.txt",
+                FileName = "ZipPlay-自定义主题说明.md",
+            };
+            if (dialog.ShowDialog(this) != true) return;
+
+            try
+            {
+                File.WriteAllText(dialog.FileName, CustomThemeSpecDoc.Build());
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("CustomThemeWindow.BtnDownloadSpec_Click", ex);
+                ShowErrors(new[] { "文档保存失败（可能是磁盘空间或权限问题），详情已经记到日志文件里了。" });
+            }
         }
 
         // 抽一份配好色的草稿直接塞进输入框——设置 Text 会触发 TxtInput_TextChanged，预览卡片跟着立刻更新，
@@ -396,6 +437,7 @@ namespace PixelLyric8BitFix
         private void BtnRandomize_Click(object sender, RoutedEventArgs e)
         {
             HideMessages();
+            PushHistory();
             TxtInput.Text = CustomThemeRandomizer.GenerateJson(CustomThemeAchievement.IsUnlocked());
         }
 
@@ -425,12 +467,84 @@ namespace PixelLyric8BitFix
                 return;
             }
 
+            PushHistory();
             TxtInput.Text = text; // 触发 TxtInput_TextChanged -> UpdatePreview()，读出来是不是合法主题立刻看得出来
 
             // 清掉"正在编辑：xxx"的提示——导入的很可能是完全不相关的另一份主题，留着这个提示的话，
             // 用户容易没注意到还在editing一份旧主题，点保存的时候把手头正在编辑的那份意外覆盖掉
             _editingFileName = null;
             TxtEditingHint.Visibility = Visibility.Collapsed;
+        }
+
+        // 从剪贴板读一段分享码（ZPT1: 开头的 Base64 文本）解回 JSON 塞进输入框——跟"从文件导入"
+        // 走的是同一条后续路径（校验/保存都还是靠输入框里现在这份内容），这里只负责"分享码怎么变回文本"。
+        private void BtnImportShareCode_Click(object sender, RoutedEventArgs e)
+        {
+            HideMessages();
+
+            string clipboard;
+            try { clipboard = Clipboard.GetText(); }
+            catch { clipboard = ""; }
+
+            if (!CustomThemeShareCode.TryDecode(clipboard, out string json))
+            {
+                ShowErrors(new[] { "剪贴板里没找到有效的分享码（应该是一段 ZPT1: 开头的文字），先复制一份分享码再点这个。" });
+                return;
+            }
+
+            PushHistory();
+            TxtInput.Text = json; // 触发 TxtInput_TextChanged -> UpdatePreview()
+            _editingFileName = null; // 分享码大概率是别人的主题，跟导入文件同理，不该被当成"接着编辑手头这份"
+            TxtEditingHint.Visibility = Visibility.Collapsed;
+        }
+
+        // 打开混搭选择窗口，拿到结果就塞进输入框——跟导入/随机生成同一个套路：只改输入框，
+        // 不直接落盘，_editingFileName 也一并清掉（原因跟 BtnImportTheme_Click 一样：混搭出来的
+        // 大概率是一份新东西，不该被理解成"接着编辑刚才那份"）。按钮本身在主题数 < 2 时是禁用状态
+        // （见 RefreshThemeList），这里不重复判断。
+        private void BtnRemix_Click(object sender, RoutedEventArgs e)
+        {
+            HideMessages();
+
+            var picker = new ThemeRemixWindow { Owner = this };
+            if (picker.ShowDialog() != true || picker.ResultJson == null) return;
+
+            PushHistory();
+            TxtInput.Text = picker.ResultJson;
+            _editingFileName = null;
+            TxtEditingHint.Visibility = Visibility.Collapsed;
+            CustomThemeFeatureUsage.MarkRemixUsed(); // 真的拿到一份混搭草稿才算用过，见该方法注释
+        }
+
+        // 点格子画图标——打开前先看当前输入框里有没有一个能续画的 icon（TryExtractIcon 解析不出来就是
+        // null，画板会从空白 8x8 开始，不弹错误）。画完拿到 ResultIcon 之后尝试"智能插入"：解析当前
+        // 输入框为通用 JObject、替换/新增 icon 字段、写回去，保留用户其它字段没动过——这条路失败
+        // （比如输入框现在压根不是合法 JSON，或者是空的）就退化成复制到剪贴板，让用户自己粘。
+        private void BtnPaintIcon_Click(object sender, RoutedEventArgs e)
+        {
+            HideMessages();
+
+            var existingIcon = PixelIconEditor.TryExtractIcon(TxtInput.Text);
+            var painter = new IconPainterWindow(existingIcon) { Owner = this };
+            if (painter.ShowDialog() != true || painter.ResultIcon == null) return;
+
+            CustomThemeFeatureUsage.MarkPainterUsed(); // 画完点了"插入"/"复制片段"才算用过，见该方法注释；插入进 JSON 成不成功不影响这个成就
+
+            string? merged = PixelIconEditor.TryInsertIconIntoJson(TxtInput.Text, painter.ResultIcon);
+            if (merged != null)
+            {
+                PushHistory();
+                TxtInput.Text = merged;
+                TxtSuccess.Text = "✅ 图标已经画好，替换进当前 JSON 的 icon 字段了。";
+                SuccessBox.Visibility = Visibility.Visible;
+                return;
+            }
+
+            // 当前输入框不是合法 JSON（比如还是空的，或者正编辑到一半语法不完整）——没法做"替换字段"
+            // 这种精细手术，退化成复制整份 icon 片段到剪贴板，用户自己找地方粘
+            string fragment = PixelIconEditor.SerializeIconFragment(painter.ResultIcon);
+            try { Clipboard.SetText(fragment); } catch { /* 剪贴板偶尔被占用，不是关键功能，失败就算了 */ }
+            ShowErrors(new[] { "当前输入框不是合法 JSON，没法自动替换 icon 字段——图标已经复制到剪贴板，自己找地方粘吧。" });
         }
 
         // 存好的某个主题导出成独立 .json 文件——直接原样写出 LoadRawJson 读到的文本（保留用户自己的格式/缩进），
@@ -554,10 +668,18 @@ namespace PixelLyric8BitFix
             TxtThemeCount.Text = $"已保存的客制化主题 ({themes.Count}/{CustomThemeStore.MaxThemes})";
             TxtNoThemes.Visibility = themes.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
+            // 混搭至少要 2 个来源才有意义（3 个下拉都选同一个主题的话就是纯复制，允许但没意思）——
+            // 不够的话按钮直接禁用 + 一句提示，不是点了之后才在弹窗里告诉用户"你存的主题不够"
+            BtnRemix.IsEnabled = themes.Count >= 2;
+            BtnRemix.ToolTip = themes.Count >= 2
+                ? "从已存的主题里各挑一个当配色/图标/动画的来源，拼一份新草稿"
+                : $"存够 2 个主题才能混搭，现在有 {themes.Count} 个";
+
             foreach (var entry in themes)
             {
                 var row = new Grid { Margin = new Thickness(0, 4, 0, 4) };
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -587,12 +709,41 @@ namespace PixelLyric8BitFix
                     HideMessages();
                     string? raw = CustomThemeStore.LoadRawJson(entry.FileName);
                     if (raw == null) return;
+                    PushHistory();
                     TxtInput.Text = raw;
                     _editingFileName = entry.FileName;
                     TxtEditingHint.Text = $"正在编辑：{entry.Theme.Name}（保存会覆盖更新这一份，不会新建）";
                     TxtEditingHint.Visibility = Visibility.Visible;
                 };
                 Grid.SetColumn(editBtn, 1);
+
+                var shareBtn = new Button
+                {
+                    Content = "🔗",
+                    Padding = new Thickness(8, 2, 8, 2),
+                    FontSize = 10,
+                    Margin = new Thickness(6, 0, 0, 0),
+                    Background = System.Windows.Media.Brushes.Transparent,
+                    Foreground = System.Windows.Media.Brushes.LightGray,
+                    BorderBrush = System.Windows.Media.Brushes.Gray,
+                    Cursor = System.Windows.Input.Cursors.Hand,
+                    ToolTip = "复制分享码，直接粘贴发给别人（不用发文件）",
+                };
+                var entryForShare = entry;
+                shareBtn.Click += (s, e) =>
+                {
+                    HideMessages();
+                    string? raw = CustomThemeStore.LoadRawJson(entryForShare.FileName);
+                    if (raw == null)
+                    {
+                        ShowErrors(new[] { "这个主题的文件读不出来，可能已经被外部删掉或者改坏了。" });
+                        return;
+                    }
+                    try { Clipboard.SetText(CustomThemeShareCode.Encode(raw)); } catch { /* 剪贴板偶尔被占用，不是关键功能，失败就算了 */ }
+                    TxtSuccess.Text = $"✅ 「{entryForShare.Theme.Name}」的分享码已经复制到剪贴板，直接粘贴发给别人就行，对方点 [🔗 粘贴分享码导入] 就能用。";
+                    SuccessBox.Visibility = Visibility.Visible;
+                };
+                Grid.SetColumn(shareBtn, 2);
 
                 var exportBtn = new Button
                 {
@@ -612,7 +763,7 @@ namespace PixelLyric8BitFix
                     HideMessages();
                     ExportTheme(entryForExport);
                 };
-                Grid.SetColumn(exportBtn, 2);
+                Grid.SetColumn(exportBtn, 3);
 
                 var deleteBtn = new Button
                 {
@@ -639,10 +790,11 @@ namespace PixelLyric8BitFix
                     RefreshThemeList();
                     RefreshRandomizeButtonHint(); // 删到只剩 0 个的话，"主题工匠"就重新锁上了
                 };
-                Grid.SetColumn(deleteBtn, 3);
+                Grid.SetColumn(deleteBtn, 4);
 
                 row.Children.Add(name);
                 row.Children.Add(editBtn);
+                row.Children.Add(shareBtn);
                 row.Children.Add(exportBtn);
                 row.Children.Add(deleteBtn);
                 ThemeListPanel.Children.Add(row);

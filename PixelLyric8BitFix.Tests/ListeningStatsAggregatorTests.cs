@@ -118,5 +118,67 @@ namespace PixelLyric8BitFix.Tests
             Assert.Equal("幽灵歌曲_未知", only.Title);
             Assert.Equal(10, only.Seconds);
         }
+
+        [Fact]
+        public void GetBestDay_ReturnsHighestSingleDayWithinRange()
+        {
+            var stats = BuildSampleStats(); // 1/1 共 130 秒，1/2 共 50 秒，1/3 共 0 秒
+            var (date, seconds) = ListeningStatsAggregator.GetBestDay(stats, DateOnly.MinValue, DateOnly.MaxValue);
+            Assert.Equal(new DateOnly(2026, 1, 1), date);
+            Assert.Equal(130, seconds);
+        }
+
+        [Fact]
+        public void GetBestDay_RangeExcludesTheBestDay_FallsBackToNextHighestInRange()
+        {
+            var stats = BuildSampleStats();
+            var (date, seconds) = ListeningStatsAggregator.GetBestDay(stats, new DateOnly(2026, 1, 2), new DateOnly(2026, 1, 3));
+            Assert.Equal(new DateOnly(2026, 1, 2), date);
+            Assert.Equal(50, seconds);
+        }
+
+        [Fact]
+        public void GetBestDay_NoRecordsInRange_ReturnsNullDateAndZeroSeconds()
+        {
+            var (date, seconds) = ListeningStatsAggregator.GetBestDay(new ListeningStats(), DateOnly.MinValue, DateOnly.MaxValue);
+            Assert.Null(date);
+            Assert.Equal(0, seconds);
+        }
+
+        [Fact]
+        public void GetLongestStreakDays_RangedOverload_ExcludesDaysOutsideRange()
+        {
+            var stats = new ListeningStats();
+            for (int i = 1; i <= 7; i++)
+            {
+                stats.Days[new DateOnly(2026, 1, i).ToString("yyyy-MM-dd")] = new DayStats { TotalSeconds = 60 };
+            }
+            // 全部时间是连续 7 天，但把范围收窄到 1/1~1/3，应该只看得到 3 天
+            Assert.Equal(7, ListeningStatsAggregator.GetLongestStreakDays(stats));
+            Assert.Equal(3, ListeningStatsAggregator.GetLongestStreakDays(stats, new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 3)));
+        }
+
+        [Fact]
+        public void GetUniqueArtistCount_And_GetUniqueTrackCount_RangedOverload_ExcludesOutsideRange()
+        {
+            var stats = BuildSampleStats(); // 歌A/艺人X 横跨 1/1~1/2，歌B/艺人Y 只在 1/1
+            Assert.Equal(2, ListeningStatsAggregator.GetUniqueArtistCount(stats)); // 全部时间：两位艺人都算
+            Assert.Equal(1, ListeningStatsAggregator.GetUniqueArtistCount(stats, new DateOnly(2026, 1, 2), new DateOnly(2026, 1, 2))); // 只看 1/2：只有艺人X
+            Assert.Equal(2, ListeningStatsAggregator.GetUniqueTrackCount(stats));
+            Assert.Equal(1, ListeningStatsAggregator.GetUniqueTrackCount(stats, new DateOnly(2026, 1, 2), new DateOnly(2026, 1, 2)));
+        }
+
+        [Fact]
+        public void BuildSummary_PopulatesNarrativeFields()
+        {
+            var stats = BuildSampleStats();
+            var summary = ListeningStatsAggregator.BuildSummary(stats, DateOnly.MinValue, DateOnly.MaxValue);
+
+            Assert.Equal(2, summary.LongestStreakDays); // 1/1、1/2 连续两天（1/3 是 0 秒不算活跃）
+            Assert.Equal(2, summary.UniqueArtistCount);
+            Assert.Equal(2, summary.UniqueTrackCount);
+            Assert.Equal(new DateOnly(2026, 1, 1), summary.BestDay);
+            Assert.Equal(130, summary.BestDaySeconds);
+        }
     }
 }

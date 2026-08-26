@@ -92,6 +92,16 @@ namespace PixelLyric8BitFix
         public static readonly string[] ValidAnimationTypes = { "pulse", "twinkle", "drift", "fall", "bob", "sway", "spin", "flicker" };
         public static readonly string[] ValidSensitivities = { "low", "medium", "high" };
 
+        // 序列化一个 CustomTheme 对象回 JSON 文本时用这份设置——键名转成 camelCase（"name"/"colors"/
+        // "glowBlur"……），保持跟"怎么写"说明、示例 JSON、随机生成器吐出来的文本是同一套命名习惯。
+        // 解析那边（ParseAndValidate 用的 JsonConvert.DeserializeObject）本来就不区分大小写，
+        // 所以旧主题文件即使是老版本存下来的 PascalCase（"Name"/"Colors"）也照样读得出来，
+        // 这份设置只影响"以后新写出去的文件长什么样"，不影响能不能读旧文件。
+        public static readonly JsonSerializerSettings SerializerSettings = new()
+        {
+            ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver(),
+        };
+
         // 图标网格的行数/每行宽度都必须落在这个范围内，两个方向各自独立判断，不强制正方形——内置皮肤里
         // Steve 就是 8 列 x 16 行的长条形，同一套渲染逻辑（PixelArt.Build）本来就不挑尺寸，渲染这边到
         // 64x64 完全没有技术上的天花板。这两个数纯粹是校验层面的软上限，不是系统限制：MaxIconSize 定这么高
@@ -101,7 +111,7 @@ namespace PixelLyric8BitFix
         public const int MinIconSize = 4;
         public const int MaxIconSize = 64;
 
-        // 额外装饰层：最多 2 个，贴在卡片四个角之一。上限故意压得比 5 个已存主题的上限低很多——
+        // 额外装饰层：最多 2 个，贴在卡片四个角之一。上限故意压得比 10 个已存主题的上限低很多——
         // 层数一多，渲染开销（每层一份独立的 BuildCustomIcon + 一套动画）线性往上涨，2 个已经够表达
         // "主图标 + 一两个点缀"这种常见组合（内置皮肤里最多的樱花/都市夜景也就 2 个动态元素），
         // 真需要更复杂的场景，本来就更适合做成新的内置皮肤，不是客制化主题这条轻量路径该扛的
@@ -185,7 +195,9 @@ namespace PixelLyric8BitFix
                 ValidateIcon(theme.Icon, errors);
             }
 
-            ValidateAnimation(theme.Animation, "animation", errors);
+            // 主图标不许 drift/fall 跟别的招式组合（这两招用的是整张卡片飘过/飘落的专属轨道，跟主图标
+            // 固定在装饰栏这件事本身互斥），层不受这个限制——见 ValidateAnimation 的 allowDriftFallCombo 参数
+            ValidateAnimation(theme.Animation, "animation", errors, allowDriftFallCombo: false);
 
             if (theme.Layers != null)
             {
@@ -217,24 +229,55 @@ namespace PixelLyric8BitFix
                         ValidateIcon(layer.Icon, errors, prefix);
                     }
 
-                    ValidateAnimation(layer.Animation, $"{prefix}.animation", errors);
+                    // 层没有独立的三图标飘过/飘落轨道——drift/fall 在层里走的是跟其它 6 招同一套单图标
+                    // 渲染（见 MainWindow.Skins.cs 的 StartLayerAnimation），没有主图标那个结构性冲突，
+                    // 可以自由组合
+                    ValidateAnimation(layer.Animation, $"{prefix}.animation", errors, allowDriftFallCombo: true);
                 }
             }
 
             return (errors.Count == 0 ? theme : null, errors);
         }
 
-        // 主图标的 animation 和每个 layers[i].animation 是同一套校验规则（type 八选一 / duration 是正数 /
-        // sensitivity 三档之一），抽出来共用一份，不然多层加进来之后同一段逻辑要复制 MaxLayers+1 遍
-        private static void ValidateAnimation(CustomThemeAnimation? animation, string fieldPrefix, List<string> errors)
+        /// <summary>animation.type 现在可以是"pulse"这种单招，也可以是"pulse+sway"这种用 + 连起来的组合——
+        /// 渲染那边（MainWindow.Skins.cs / CustomThemeWindow.xaml.cs）都要按同一个规则切开，抽出来共用一份，
+        /// 不然两边对"怎么切、切完要不要 trim/小写"这些细节容易走岔。空白项（比如手滑打了个 "pulse+"）
+        /// 会被过滤掉，不当成一个空字符串招式。</summary>
+        public static string[] SplitAnimationTypes(string type) =>
+            type.Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Select(t => t.ToLowerInvariant())
+                .ToArray();
+
+        // 主图标的 animation 和每个 layers[i].animation 是同一套校验规则（type 是 8 招组合、duration 是正数、
+        // sensitivity 三档之一），抽出来共用一份，不然多层加进来之后同一段逻辑要复制 MaxLayers+1 遍。
+        // allowDriftFallCombo=false（主图标）时 drift/fall 必须单独出现，不能跟别的招式（也不能跟彼此）
+        // 组合——这两招用的是整张卡片飘过/飘落的专属轨道（三份图标各自动画），主图标同时又要固定显示在
+        // 装饰栏里，两种视觉结构互斥，"drift+pulse"这种组合没法同时画出来。层没有这个专属轨道，
+        // 全部走同一套单图标渲染，allowDriftFallCombo=true 时组合不受限制。
+        private static void ValidateAnimation(CustomThemeAnimation? animation, string fieldPrefix, List<string> errors, bool allowDriftFallCombo)
         {
             if (animation == null || string.IsNullOrWhiteSpace(animation.Type))
             {
-                errors.Add($"\"{fieldPrefix}.type\" 没填，必须是这几种之一：" + string.Join(" / ", ValidAnimationTypes));
+                errors.Add($"\"{fieldPrefix}.type\" 没填，必须是这几种之一（也可以用 + 组合多个，比如 \"pulse+sway\"）：" + string.Join(" / ", ValidAnimationTypes));
             }
-            else if (!ValidAnimationTypes.Contains(animation.Type.ToLowerInvariant()))
+            else
             {
-                errors.Add($"\"{fieldPrefix}.type\" 填的是 \"{animation.Type}\"，不认识这个招式，只能是：" + string.Join(" / ", ValidAnimationTypes));
+                string[] types = SplitAnimationTypes(animation.Type);
+                if (types.Length == 0)
+                {
+                    errors.Add($"\"{fieldPrefix}.type\" 填的是 \"{animation.Type}\"，切出来一个有效招式都没有。");
+                }
+                foreach (var t in types)
+                {
+                    if (!ValidAnimationTypes.Contains(t))
+                    {
+                        errors.Add($"\"{fieldPrefix}.type\" 里的 \"{t}\" 不认识，只能是：" + string.Join(" / ", ValidAnimationTypes));
+                    }
+                }
+                if (!allowDriftFallCombo && types.Length > 1 && types.Any(t => t is "drift" or "fall"))
+                {
+                    errors.Add($"\"{fieldPrefix}.type\" 里的 drift/fall 不能跟别的招式组合（这两招是整张卡片的飘过/飘落轨道，跟主图标固定显示在装饰栏这件事结构上冲突），只能单独用，比如 \"drift\"；额外装饰层（layers）里没有这个限制。");
+                }
             }
 
             // duration 不填就用默认值，但填了的话必须是正数——0 或负数会让 WPF 的动画系统在播放时直接抛异常崩溃

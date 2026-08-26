@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 
@@ -74,6 +75,20 @@ namespace PixelLyric8BitFix
             new[] { "..#.....", "..##....", "..###...", "..####..", "..#####.", "..######", "..###...", "........" }, // 音符
         };
 
+        // 8 招式各自实际控制的是哪个属性——两招落在同一个属性上组合起来没意义（后一个直接盖掉前一个），
+        // 抽组合的时候只从"不同属性"里选第二招，保证抽出来的组合真的是"两个效果叠加"而不是"抽了个寂寞"。
+        // 主图标那边 drift/fall 根本不进 ComboablePool（那两招不能组合，校验会拦），层里没有这个限制，
+        // 层的组合逻辑直接从全部 8 招（AnimationPropertyGroup 的全部 key）里挑，不单独维护一份 8 招池子。
+        private static readonly Dictionary<string, string> AnimationPropertyGroup = new()
+        {
+            ["pulse"] = "glow", ["flicker"] = "glow",
+            ["sway"] = "rotate", ["spin"] = "rotate",
+            ["twinkle"] = "opacity",
+            ["bob"] = "translateY", ["fall"] = "translateY",
+            ["drift"] = "translateX",
+        };
+        private static readonly string[] ComboablePool = { "pulse", "twinkle", "sway", "spin", "flicker", "bob" };
+
         /// <summary>includeExclusive=true 时随机池里多一份 ExclusivePalette（跟其它 8 份概率均等，
         /// 不是"抽完常规再额外判一次"），调用方（CustomThemeWindow）自己决定要不要传 true——
         /// 传不传完全取决于 CustomThemeAchievement.IsUnlocked()，这个方法本身不碰成就/磁盘状态，
@@ -86,6 +101,16 @@ namespace PixelLyric8BitFix
             string font = Fonts[rng.Next(Fonts.Length)];
             var icon = IconShapes[rng.Next(IconShapes.Length)];
             string animType = CustomThemeValidator.ValidAnimationTypes[rng.Next(CustomThemeValidator.ValidAnimationTypes.Length)];
+
+            // 4 成概率给主图标也配一个组合招式——只在抽到的不是 drift/fall 时才有意义（那两招不能组合，
+            // 见 CustomThemeValidator.ValidateAnimation），而且只从"控制的是不同属性"的招式里挑第二个：
+            // 挑同属性的（比如 pulse 又挑 flicker，两个都是控制发光度）后一个会直接盖掉前一个，抽出来的
+            // 组合毫无意义，不如干脆别抽
+            if (animType != "drift" && animType != "fall" && rng.Next(10) < 4)
+            {
+                var candidates = ComboablePool.Where(t => t != animType && AnimationPropertyGroup[t] != AnimationPropertyGroup[animType]).ToArray();
+                if (candidates.Length > 0) animType = $"{animType}+{candidates[rng.Next(candidates.Length)]}";
+            }
 
             // 8 成概率渐变（更贴近内置皮肤的观感），2 成纯色（凑够 2 个站点才有渐变可选，理论上 BgStops 都是 3 个够用）
             bool gradient = p.BgStops.Length >= 2 && rng.Next(10) < 8;
@@ -108,8 +133,15 @@ namespace PixelLyric8BitFix
             if (rng.Next(10) < 4)
             {
                 var layerIcon = IconShapes[rng.Next(IconShapes.Length)];
-                string[] layerAnimTypes = { "pulse", "twinkle", "sway", "spin", "flicker", "bob" };
-                string layerAnimType = layerAnimTypes[rng.Next(layerAnimTypes.Length)];
+                string layerAnimType = ComboablePool[rng.Next(ComboablePool.Length)];
+                // 层没有主图标 drift/fall 那个结构性限制，但这里仍然只从同一个 6 招池子里挑组合——
+                // 跟上面排除 drift/fall 的理由一样，纯粹是"这两招在层里效果跟 sway/bob 分不太出来"，
+                // 不是校验层面不让组合
+                if (rng.Next(10) < 4)
+                {
+                    var comboCandidates = ComboablePool.Where(t => t != layerAnimType && AnimationPropertyGroup[t] != AnimationPropertyGroup[layerAnimType]).ToArray();
+                    if (comboCandidates.Length > 0) layerAnimType = $"{layerAnimType}+{comboCandidates[rng.Next(comboCandidates.Length)]}";
+                }
                 string[] anchors = { "top-left", "top-right", "bottom-left", "bottom-right" };
                 string anchor = anchors[rng.Next(anchors.Length)];
                 double layerDuration = Math.Round(1.2 + rng.NextDouble() * 2.5, 1);
