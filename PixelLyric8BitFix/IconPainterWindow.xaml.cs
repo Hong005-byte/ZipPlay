@@ -32,9 +32,31 @@ namespace PixelLyric8BitFix
     {
         private int _width = 8;
         private int _height = 8;
-        private List<char[,]> _frameGrids = new();
+
+        // 动作模型：_actions[0] 永远是"动作 0"（未命名，对应 icon 自己的 rows/frames——Mini 小方块/
+        // 分享卡片/初次显示这些地方永远只认这一份，Name 恒为 null，不可改名/删除），_actions[1..] 是
+        // 可选的额外动作（CustomThemeIcon.Actions），画之前先在动作条上选中要画哪一个。所有动作共用
+        // 同一个画布尺寸（比 CustomThemeValidator 本身的要求更严格——那边允许每个动作各自尺寸不同，
+        // 但画板作为"同一个图标换姿势"的编辑工具，尺寸跟着动作变没有意义，也没有对应 UI 去表达）。
+        // _frameGrids 保留原来的名字，但改成一个指向"当前选中动作的帧列表"的属性别名，不是独立字段——
+        // 这样原来一大批只认 _frameGrids 的帧操作代码（加/删/复制/重排帧、改尺寸、画布涂色……）完全
+        // 不用改一行，切了动作之后它们自动就是在操作新选中动作的帧。
+        private sealed class PaintedAction
+        {
+            public string? Name; // 动作 0 恒为 null；额外动作默认给个"动作 N"，用户可以改
+            public List<char[,]> FrameGrids = new();
+            public string? FrameDurationText; // 留空 = 继承 icon 顶层的帧间隔，跟 CustomThemeIconAction.FrameDuration 语义一致
+        }
+        private List<PaintedAction> _actions = new() { new PaintedAction() };
+        private int _currentActionIndex;
+        private List<char[,]> _frameGrids
+        {
+            get => _actions[_currentActionIndex].FrameGrids;
+            set => _actions[_currentActionIndex].FrameGrids = value;
+        }
+
         private int _currentFrameIndex;
-        private char[,] _grid = new char[8, 8]; // 永远等于 _frameGrids[_currentFrameIndex]，切帧时重新赋值
+        private char[,] _grid = new char[8, 8]; // 永远等于 _frameGrids[_currentFrameIndex]，切帧/切动作时重新赋值
         private readonly Dictionary<char, Color> _palette = new();
         private char? _selectedChar;
         private bool _isPainting;
@@ -53,7 +75,9 @@ namespace PixelLyric8BitFix
         private readonly List<UndoState> _redoStack = new();
         private const int MaxUndoDepth = 50;
 
-        private sealed record UndoState(List<char[,]> FrameGrids, int Width, int Height, int CurrentFrameIndex);
+        // 撤销快照现在要连"有哪些动作、每个动作叫什么名字/帧间隔覆盖值"一起存——新增/删除/改名动作
+        // 也是"一次操作"，理应能撤销，跟帧的增删复制重排是同一个粒度
+        private sealed record UndoState(List<PaintedAction> Actions, int Width, int Height, int CurrentActionIndex, int CurrentFrameIndex);
 
         // 拖拽帧缩略图调整播放顺序用——记录"按下的是哪一帧"和"按下时的位置"，松手时如果鼠标没挪动
         // 超过阈值就当成普通点击（切到那一帧），挪动够了才当成拖拽重排，两种操作共用同一组鼠标事件，
@@ -97,8 +121,23 @@ namespace PixelLyric8BitFix
             {
                 _width = l.Width;
                 _height = l.Height;
-                _frameGrids = l.Grids;
+                _frameGrids = l.Grids; // _currentActionIndex 还是默认的 0，这就是在写 _actions[0]
                 foreach (var (c, color) in l.Palette) _palette[c] = ToWpfColor(color);
+
+                // 有能续画的动作 0，才有意义去接着摊开 icon.actions——续画失败的话尺寸都不知道，
+                // 额外动作没有一个共同画布尺寸可以核对，干脆整个跳过，从空白单动作开始
+                if (existingIcon!.Actions is { Count: > 0 })
+                {
+                    foreach (var (name, grids, durationOverride) in PixelIconEditor.LoadActions(existingIcon, _width, _height))
+                    {
+                        _actions.Add(new PaintedAction
+                        {
+                            Name = name,
+                            FrameGrids = grids,
+                            FrameDurationText = durationOverride?.ToString("0.##", CultureInfo.InvariantCulture),
+                        });
+                    }
+                }
             }
             else
             {
@@ -116,6 +155,8 @@ namespace PixelLyric8BitFix
             _selectedChar ??= _palette.Count > 0 ? new List<char>(_palette.Keys)[0] : null;
             RebuildCanvas();
             RebuildFrameStrip();
+            RebuildActionStrip();
+            UpdateActionMetaUi();
             UpdatePreviewPlayback();
 
             // 放在最后才订阅——见 XAML 里 TxtFrameDuration 那段注释：这个 TextBox 的初始值是在
@@ -123,6 +164,10 @@ namespace PixelLyric8BitFix
             // TxtPreviewFrameHint 这些排在它后面的控件还没 Connect() 之前就摸上去，直接崩。
             // 到这里其它字段/控件都已经就绪，以后用户自己编辑这个框才会走这个处理器。
             TxtFrameDuration.TextChanged += TxtFrameDuration_TextChanged;
+            // TxtActionFrameDuration 的 XAML 里没写初始 Text（默认空字符串），不会在 InitializeComponent()
+            // 期间触发一次 TextChanged，理论上跟 TxtFrameDuration 那个坑无关，但为了两处行为看着一致、
+            // 也图省事不用再证明一遍"这里到底安不安全"，照抄同一个"最后才订阅"的写法
+            TxtActionFrameDuration.TextChanged += (s, e) => UpdatePreviewPlayback();
         }
 
         // 8 个够用又不重复的常见颜色，给"从空白开始画"的情况垫底——不用一打开画板就面对一个空调色板
@@ -160,8 +205,11 @@ namespace PixelLyric8BitFix
         // ── 撤销/重做 ─────────────────────────────────────────────────────
 
         private UndoState CaptureState() => new(
-            _frameGrids.Select(g => (char[,])g.Clone()).ToList(), // char[,] 是引用类型，不 Clone 的话快照跟"现在"是同一份数组，后面一改这份快照也跟着变
-            _width, _height, _currentFrameIndex);
+            // char[,] 是引用类型，不 Clone 的话快照跟"现在"是同一份数组，后面一改这份快照也跟着变——
+            // PaintedAction 本身也要整个复制一份新对象，不然快照里的 Name/FrameDurationText 后面
+            // 被改名/改帧间隔的操作直接改到了，快照就不再是"改动前"的样子
+            _actions.Select(a => new PaintedAction { Name = a.Name, FrameDurationText = a.FrameDurationText, FrameGrids = a.FrameGrids.Select(g => (char[,])g.Clone()).ToList() }).ToList(),
+            _width, _height, _currentActionIndex, _currentFrameIndex);
 
         /// <summary>在"即将发生一次改动"之前调用，把改动前的状态存一份。任何新操作发生都会让"重做"
         /// 失去意义（改动前的未来已经变了），所以顺手清空 _redoStack——标准撤销栈的行为。</summary>
@@ -174,13 +222,16 @@ namespace PixelLyric8BitFix
 
         private void ApplyState(UndoState s)
         {
-            _frameGrids = s.FrameGrids;
+            _actions = s.Actions;
             _width = s.Width;
             _height = s.Height;
+            _currentActionIndex = Math.Min(s.CurrentActionIndex, _actions.Count - 1);
             _currentFrameIndex = Math.Min(s.CurrentFrameIndex, _frameGrids.Count - 1);
             _grid = _frameGrids[_currentFrameIndex];
             TxtWidth.Text = _width.ToString();
             TxtHeight.Text = _height.ToString();
+            RebuildActionStrip();
+            UpdateActionMetaUi();
             RebuildCanvas();
             RebuildFrameStrip();
             UpdatePreviewPlayback();
@@ -617,6 +668,116 @@ namespace PixelLyric8BitFix
 
         private void TxtFrameDuration_TextChanged(object sender, TextChangedEventArgs e) => UpdatePreviewPlayback();
 
+        // ── 动作（icon.actions，可选：点一下装饰图标能循环切换的额外姿势） ──────────
+
+        private void RebuildActionStrip()
+        {
+            ActionStripPanel.Children.Clear();
+            for (int i = 0; i < _actions.Count; i++)
+            {
+                bool selected = i == _currentActionIndex;
+                string label = i == 0 ? "动作 0（默认）" : (_actions[i].Name is { Length: > 0 } n ? n : $"动作 {i}");
+                var chip = new Border
+                {
+                    Padding = new Thickness(10, 5, 10, 5),
+                    Margin = new Thickness(0, 0, 6, 6),
+                    CornerRadius = new CornerRadius(12),
+                    Background = new SolidColorBrush(selected ? Color.FromRgb(0x3A, 0x4A, 0x3C) : Color.FromRgb(0x1B, 0x21, 0x1C)),
+                    BorderBrush = selected ? Brushes.White : new SolidColorBrush(Color.FromRgb(0x2A, 0x33, 0x2B)),
+                    BorderThickness = new Thickness(selected ? 2 : 1),
+                    Cursor = Cursors.Hand,
+                    Child = new TextBlock { Text = label, Foreground = Brushes.White, FontSize = 11 },
+                };
+                int capturedIndex = i;
+                chip.MouseLeftButtonDown += (s, e) => SwitchToAction(capturedIndex);
+                ActionStripPanel.Children.Add(chip);
+            }
+        }
+
+        private void SwitchToAction(int index)
+        {
+            if (index < 0 || index >= _actions.Count || index == _currentActionIndex) return;
+            _currentActionIndex = index;
+            _currentFrameIndex = 0; // 每个动作独立编号自己的帧，切动作总是从它的第 1 帧开始看
+            _grid = _frameGrids[0];
+            RebuildActionStrip();
+            UpdateActionMetaUi();
+            RebuildCanvas();
+            RebuildFrameStrip();
+            UpdatePreviewPlayback();
+        }
+
+        // 动作 0 是固定的"默认动作"（对应 icon 自己的 rows/frames，没有名字/帧间隔覆盖/删除这些概念——
+        // Mini 小方块/分享卡片这些地方永远只认这一份），选中它的时候把名称/帧间隔/删除这一整块 UI
+        // 收起来，不留几个摸上去也没意义的空输入框
+        private void UpdateActionMetaUi()
+        {
+            bool isExtraAction = _currentActionIndex > 0;
+            ActionMetaPanel.Visibility = isExtraAction ? Visibility.Visible : Visibility.Collapsed;
+            if (!isExtraAction) return;
+
+            var action = _actions[_currentActionIndex];
+            TxtActionName.Text = action.Name ?? $"动作 {_currentActionIndex}";
+            TxtActionFrameDuration.Text = action.FrameDurationText ?? "";
+        }
+
+        private void BtnAddAction_Click(object sender, RoutedEventArgs e)
+        {
+            if (_actions.Count - 1 >= CustomThemeValidator.MaxIconActions)
+            {
+                TxtSizeHint.Text = $"动作最多只能有 {CustomThemeValidator.MaxIconActions} 个（不算动作 0）。";
+                TxtSizeHint.Foreground = System.Windows.Media.Brushes.LightPink;
+                return;
+            }
+
+            PushUndo();
+            int newIndex = _actions.Count;
+            // 新动作从跟当前画布一样大的空白帧开始——画板要求所有动作共用一个尺寸，见 BtnApplySize_Click
+            _actions.Add(new PaintedAction { Name = $"动作 {newIndex}", FrameGrids = new List<char[,]> { NewBlankGrid(_height, _width) } });
+            SwitchToAction(newIndex);
+        }
+
+        private void BtnDeleteAction_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentActionIndex == 0) return; // 动作 0 不可删——它就是 icon 本身
+
+            PushUndo();
+            int deletedIndex = _currentActionIndex;
+            _actions.RemoveAt(deletedIndex);
+            _currentActionIndex = Math.Min(deletedIndex, _actions.Count - 1); // 落到原来那个位置上顶上来的动作，删的是最后一个就落到新的最后一个
+            _currentFrameIndex = 0;
+            _grid = _frameGrids[0];
+            RebuildActionStrip();
+            UpdateActionMetaUi();
+            RebuildCanvas();
+            RebuildFrameStrip();
+            UpdatePreviewPlayback();
+        }
+
+        // 名字/帧间隔改动在失去焦点时才提交（不是敲一个字就存一次撤销记录），撤销粒度跟其它操作一样是
+        // "一次改动"；值没真的变的话不推撤销记录，纯粹点进去又点出来不该占一条撤销栈空间
+        private void TxtActionName_LostFocus(object sender, RoutedEventArgs e)
+        {
+            if (_currentActionIndex == 0) return;
+            string trimmed = TxtActionName.Text.Trim();
+            string current = _actions[_currentActionIndex].Name ?? $"动作 {_currentActionIndex}";
+            if (trimmed == current) return;
+
+            PushUndo();
+            _actions[_currentActionIndex].Name = string.IsNullOrEmpty(trimmed) ? null : trimmed;
+            RebuildActionStrip();
+        }
+
+        private void TxtActionFrameDuration_LostFocus(object sender, RoutedEventArgs e)
+        {
+            if (_currentActionIndex == 0) return;
+            string trimmed = TxtActionFrameDuration.Text.Trim();
+            if (trimmed == (_actions[_currentActionIndex].FrameDurationText ?? "")) return;
+
+            PushUndo();
+            _actions[_currentActionIndex].FrameDurationText = string.IsNullOrEmpty(trimmed) ? null : trimmed;
+        }
+
         // ── 尺寸 / 清空 / 预览 ────────────────────────────────────────────
 
         private void BtnApplySize_Click(object sender, RoutedEventArgs e)
@@ -630,15 +791,21 @@ namespace PixelLyric8BitFix
                 return;
             }
 
-            TxtSizeHint.Text = "4~64 之间，改尺寸会清空全部帧的内容，先想好再改。";
+            TxtSizeHint.Text = _actions.Count > 1
+                ? "4~64 之间，改尺寸会清空全部动作、全部帧的内容（尺寸是所有动作共用的），先想好再改。"
+                : "4~64 之间，改尺寸会清空全部帧的内容，先想好再改。";
             TxtSizeHint.Foreground = new SolidColorBrush(Color.FromRgb(0x5C, 0x6B, 0x5E)); // 跟 App.xaml 的 HintTextBrush 同一个颜色
 
-            // 尺寸是所有帧共用的（校验要求所有帧彼此同尺寸），改一次对全部帧生效——不是只清空当前这一帧，
-            // 不然帧与帧尺寸就对不上了
+            // 尺寸是所有动作、所有帧共用的（校验要求同一个动作内部彼此同尺寸，画板进一步要求跨动作也
+            // 同尺寸，见 PixelIconEditor.LoadActions 的注释）——改一次要对全部动作、全部帧生效，
+            // 只清当前这一个动作的话，别的动作会留着旧尺寸的网格，跟新尺寸对不上
             PushUndo();
             _width = w;
             _height = h;
-            _frameGrids = _frameGrids.Select(_ => NewBlankGrid(_height, _width)).ToList();
+            foreach (var action in _actions)
+            {
+                action.FrameGrids = action.FrameGrids.Select(_ => NewBlankGrid(_height, _width)).ToList();
+            }
             _grid = _frameGrids[_currentFrameIndex];
             RebuildCanvas();
             RebuildFrameStrip();
@@ -672,8 +839,15 @@ namespace PixelLyric8BitFix
                 return;
             }
 
-            TxtPreviewFrameHint.Text = $"循环播放中，共 {_frameGrids.Count} 帧";
-            double seconds = double.TryParse(TxtFrameDuration.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed) && parsed > 0
+            TxtPreviewFrameHint.Text = _currentActionIndex == 0
+                ? $"循环播放中，共 {_frameGrids.Count} 帧"
+                : $"循环播放中，共 {_frameGrids.Count} 帧（这个动作自己的帧间隔，留空则用上面动作 0 那个）";
+            // 动作 0 的预览用顶层 TxtFrameDuration；额外动作有自己的帧间隔覆盖框，填了就按它预览，
+            // 留空就落回顶层那个——跟运行时 CustomThemeValidator.GetFrameDurationSeconds 的回退顺序一致
+            string durationText = _currentActionIndex > 0 && !string.IsNullOrWhiteSpace(TxtActionFrameDuration.Text)
+                ? TxtActionFrameDuration.Text
+                : TxtFrameDuration.Text;
+            double seconds = double.TryParse(durationText, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed) && parsed > 0
                 ? parsed
                 : CustomThemeValidator.DefaultFrameDurationSeconds;
             _previewFrameTimer.Interval = TimeSpan.FromSeconds(seconds);
@@ -845,11 +1019,17 @@ namespace PixelLyric8BitFix
         // ── 结果 ──────────────────────────────────────────────────────────
 
         // 只有 2 帧以上才带 frameDuration——1 帧的话这个字段没有意义，不写进去，产出的 JSON
-        // 保持跟这个功能加进来之前一样干净
+        // 保持跟这个功能加进来之前一样干净。动作 0（icon 自己的 rows/frames）永远是主体，
+        // _actions[1..] 依次变成 icon.actions——没有额外动作的话完全等价于这个功能加进来之前的输出，
+        // 见 PixelIconEditor.BuildIconWithActions 的注释。
         private CustomThemeIcon BuildResultIcon()
         {
-            var icon = PixelIconEditor.BuildFrames(_frameGrids, _width, _height, ToRgbaPalette(_palette));
-            if (_frameGrids.Count > 1)
+            var extraActions = _actions.Skip(1)
+                .Select(a => (a.Name, (IReadOnlyList<char[,]>)a.FrameGrids, ParseOptionalSeconds(a.FrameDurationText)))
+                .ToList();
+
+            var icon = PixelIconEditor.BuildIconWithActions(_actions[0].FrameGrids, _width, _height, ToRgbaPalette(_palette), extraActions);
+            if (_actions[0].FrameGrids.Count > 1)
             {
                 icon.FrameDuration = double.TryParse(TxtFrameDuration.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed) && parsed > 0
                     ? parsed
@@ -857,6 +1037,13 @@ namespace PixelLyric8BitFix
             }
             return icon;
         }
+
+        // 动作自己的帧间隔覆盖是纯可选项——留空/填的不是正数都当"不覆盖，继承 icon 顶层的帧间隔"，
+        // 跟 CustomThemeIconAction.FrameDuration 的校验/回退语义一致，这里不需要额外弹错误提示
+        private static double? ParseOptionalSeconds(string? text) =>
+            !string.IsNullOrWhiteSpace(text) && double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double v) && v > 0
+                ? v
+                : null;
 
         private void BtnInsert_Click(object sender, RoutedEventArgs e)
         {
@@ -870,10 +1057,15 @@ namespace PixelLyric8BitFix
             string fragment = PixelIconEditor.SerializeIconFragment(icon);
             try { Clipboard.SetText(fragment); } catch { /* 剪贴板偶尔被占用，不是关键功能，失败就算了 */ }
 
-            // layers[i].icon 目前不支持逐帧动画（只显示第一帧静态），复制多帧片段过去粘贴依然合法，
-            // 只是贴过去之后动不了——这句提示只在真的是多帧的时候多说一句，单帧完全不受影响
-            TxtSizeHint.Text = _frameGrids.Count > 1
-                ? "✅ 已复制 JSON 片段到剪贴板，粘到 layers[i].icon（或者任何需要一个 icon 对象的地方）就行——提醒一下，layers 目前还不支持逐帧动画，粘过去只会显示第一帧。"
+            // layers[i].icon 目前既不支持逐帧动画（只显示第一帧静态），也不响应点击切动作——两条提醒
+            // 各自独立判断要不要出现，只在真的用到对应功能的时候才多说一句，最常见的"单帧、无动作"
+            // 完全不受影响，还是最干净的那句提示
+            var caveats = new List<string>();
+            if (_actions[0].FrameGrids.Count > 1) caveats.Add("layers 目前还不支持逐帧动画，粘过去只会显示第一帧");
+            if (_actions.Count > 1) caveats.Add("layers 目前也不响应点击切动作，粘过去这部分动作数据不会生效");
+
+            TxtSizeHint.Text = caveats.Count > 0
+                ? $"✅ 已复制 JSON 片段到剪贴板，粘到 layers[i].icon（或者任何需要一个 icon 对象的地方）就行——提醒一下，{string.Join("；", caveats)}。"
                 : "✅ 已复制 JSON 片段到剪贴板，粘到 layers[i].icon（或者任何需要一个 icon 对象的地方）就行。";
             TxtSizeHint.Foreground = new SolidColorBrush(Color.FromRgb(0x7A, 0xE0, 0x8A));
         }

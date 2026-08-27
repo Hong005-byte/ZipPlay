@@ -162,6 +162,104 @@ namespace PixelLyric8BitFix
             return (grids, width!.Value, height!.Value, palette);
         }
 
+        // ── 动作（icon.actions，画板"动作"选择器用）────────────────────────────
+
+        /// <summary>BuildFrames 的"带额外动作"版——action 0（未命名，永远对应 icon 自己的 rows/frames）
+        /// 走跟 BuildFrames 完全一样的规则（1 帧出 rows，2 帧以上出 frames），extraActions 依次变成
+        /// icon.actions[0]/[1]/……。调色板只收全部动作（action 0 + 每一个额外动作）实际用到的字符，
+        /// 不是只看 action 0——不然某个动作专属画的颜色会从 palette 里漏掉，存出来的 JSON 校验不过
+        /// （CustomThemeValidator 会报"actions[i].frames 里用了字符，但 palette 里没配"）。
+        /// extraActions 为空的话 icon.Actions 就是 null，输出跟 BuildFrames 一模一样，不会平白多一个
+        /// 空数组字段。</summary>
+        public static CustomThemeIcon BuildIconWithActions(
+            IReadOnlyList<char[,]> action0Grids, int width, int height,
+            IReadOnlyDictionary<char, RgbaColor> palette,
+            IReadOnlyList<(string? Name, IReadOnlyList<char[,]> Grids, double? FrameDurationOverride)> extraActions)
+        {
+            var usedChars = new HashSet<char>();
+
+            List<List<string>> RowsForGrids(IReadOnlyList<char[,]> grids)
+            {
+                var frameRows = new List<List<string>>(grids.Count);
+                foreach (var grid in grids)
+                {
+                    var rows = new List<string>(height);
+                    for (int y = 0; y < height; y++)
+                    {
+                        var sb = new StringBuilder(width);
+                        for (int x = 0; x < width; x++)
+                        {
+                            char c = grid[y, x];
+                            sb.Append(c);
+                            if (c != '.') usedChars.Add(c);
+                        }
+                        rows.Add(sb.ToString());
+                    }
+                    frameRows.Add(rows);
+                }
+                return frameRows;
+            }
+
+            var action0Rows = RowsForGrids(action0Grids);
+            // action.Frames 永远是"一份帧列表"（哪怕只画了 1 帧也要包成 [rows]）——CustomThemeIconAction
+            // 没有 Rows 这个单帧简写字段，跟顶层 icon 不是同一套形状，见 CustomThemeIconAction 的注释
+            List<CustomThemeIconAction>? actions = extraActions.Count == 0 ? null : extraActions
+                .Select(a => new CustomThemeIconAction { Name = a.Name, Frames = RowsForGrids(a.Grids), FrameDuration = a.FrameDurationOverride })
+                .ToList();
+
+            var paletteDict = new Dictionary<string, string>();
+            foreach (char c in usedChars.OrderBy(c => c))
+            {
+                if (palette.TryGetValue(c, out var color))
+                {
+                    paletteDict[c.ToString()] = ColorToHex(color);
+                }
+            }
+
+            var icon = action0Rows.Count == 1
+                ? new CustomThemeIcon { Rows = action0Rows[0], Palette = paletteDict }
+                : new CustomThemeIcon { Frames = action0Rows, Palette = paletteDict };
+            icon.Actions = actions;
+            return icon;
+        }
+
+        /// <summary>TryLoadFrames 只摊开 action 0（icon 自己的 rows/frames）；这个方法接着把 icon.Actions
+        /// 也摊开成画板能用的网格列表，续画一个已经有动作的图标时用。width/height 传的是 action 0 已经
+        /// 摊开出来的尺寸——画板要求所有动作共用同一个画布尺寸（比 CustomThemeValidator 本身的要求更严格，
+        /// 那边允许每个动作各自尺寸不同，但画板作为"同一个图标换姿势"的编辑工具，尺寸跟着变来变去没有
+        /// 意义，也没有对应的 UI 去表达"这个动作单独多大"）。
+        /// 单个动作解析失败（帧数据本身就有问题、或者尺寸跟 action 0 对不上）就跳过那一个，不影响别的
+        /// 动作正常续画——跟 TryLoadFrames/TryLoadIcon 一贯的"续画工具，宽松优先"原则一致，不是校验入口，
+        /// 一个动作画坏了不该连累其它还好好的动作也没法续画。</summary>
+        public static List<(string? Name, List<char[,]> Grids, double? FrameDurationOverride)> LoadActions(CustomThemeIcon icon, int width, int height)
+        {
+            var result = new List<(string?, List<char[,]>, double?)>();
+            if (icon.Actions == null) return result;
+
+            foreach (var action in icon.Actions)
+            {
+                if (action.Frames is not { Count: > 0 } frames) continue;
+
+                var grids = new List<char[,]>(frames.Count);
+                bool ok = true;
+                foreach (var rows in frames)
+                {
+                    if (rows == null || rows.Count != height) { ok = false; break; }
+                    if (rows.Any(r => r.Length != width)) { ok = false; break; }
+
+                    var grid = new char[height, width];
+                    for (int y = 0; y < height; y++)
+                        for (int x = 0; x < width; x++)
+                            grid[y, x] = rows[y][x];
+                    grids.Add(grid);
+                }
+                if (!ok || grids.Count == 0) continue;
+
+                result.Add((action.Name, grids, action.FrameDuration));
+            }
+            return result;
+        }
+
         /// <summary>反过来：把一个 CustomThemeIcon 摊开成画板能直接用的网格 + 调色板，用来"续画"一个
         /// 已经存在的图标。传进来的 icon 不需要先过完整校验——只要求 rows 非空且每行一样宽，
         /// 这个方法本身不对尺寸范围（4~64）做限制，画板 UI 自己决定要不要收窄，宽松一点方便复用。

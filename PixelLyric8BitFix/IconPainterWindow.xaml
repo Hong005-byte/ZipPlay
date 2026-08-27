@@ -76,10 +76,35 @@
                             Padding="10,4" FontSize="11" Click="BtnExportPng_Click"/>
                 </WrapPanel>
 
+                <!-- 动作（icon.actions，可选）：点一下装饰图标能循环切换的额外姿势/画法，每个动作
+                     自己独立一套"帧"（下面那个"帧"区块编辑的永远是"当前选中这个动作"的帧）。
+                     动作 0 固定是 icon 自己的 rows/frames（Mini 小方块/分享卡片永远只认这一份），
+                     不可改名/删除；额外动作可以任意加/命名/删，所有动作共用同一个画布尺寸。 -->
+                <TextBlock Text="动作（可选，点击装饰图标可循环切换）" Style="{StaticResource SectionHeader}"/>
+                <TextBlock Text="下面&quot;帧&quot;区块编辑的是当前选中这个动作的画面。动作 0 是默认外观（Mini 小方块/分享卡片只认它），额外动作会写进 icon.actions，点一下装饰图标能循环切到下一个，绕完一圈回到动作 0——只换画面，不改移动方式（sway/drift 等仍由上面主题的 animation.type 决定）。"
+                           Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                <WrapPanel x:Name="ActionStripPanel" Margin="0,0,0,6"/>
+                <Button x:Name="BtnAddAction" Content="➕ 新增动作" Style="{StaticResource PillButtonStyle}"
+                        HorizontalAlignment="Left" Padding="10,4" FontSize="11" Margin="0,0,0,6" Click="BtnAddAction_Click"/>
+                <StackPanel x:Name="ActionMetaPanel" Visibility="Collapsed" Margin="0,0,0,6">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <TextBlock Text="名称" Foreground="{StaticResource MutedTextBrush}" FontSize="12" VerticalAlignment="Center"/>
+                        <TextBox x:Name="TxtActionName" Width="120" FontSize="12" Margin="4,0,14,0"
+                                 Background="#1B211C" Foreground="#EEEEEE" BorderBrush="#2A332B" BorderThickness="1" Padding="4,2"
+                                 LostFocus="TxtActionName_LostFocus"/>
+                        <TextBlock Text="帧间隔(秒，留空继承上面)" Foreground="{StaticResource MutedTextBrush}" FontSize="12" VerticalAlignment="Center"/>
+                        <TextBox x:Name="TxtActionFrameDuration" Width="50" FontSize="12" Margin="4,0,0,0"
+                                 Background="#1B211C" Foreground="#EEEEEE" BorderBrush="#2A332B" BorderThickness="1" Padding="4,2"
+                                 LostFocus="TxtActionFrameDuration_LostFocus"/>
+                    </StackPanel>
+                    <Button x:Name="BtnDeleteAction" Content="🗑 删除此动作" Style="{StaticResource PillButtonStyle}"
+                            HorizontalAlignment="Left" Padding="10,4" FontSize="11" Click="BtnDeleteAction_Click"/>
+                </StackPanel>
+
                 <!-- 帧（逐帧动画，可选）：只有 1 帧的话就是普通静态图标，插入到编辑框走的还是老的 icon.rows；
                      2 帧以上才会产出 icon.frames，主图标会真的逐帧循环播放，见 CustomTheme.cs 里
                      icon.frames 的说明。跟 Steve 走路是同一个思路——不是变换（旋转/缩放）动，
-                     是画好几张图交替显示。 -->
+                     是画好几张图交替显示。这里编辑的永远是上面"动作"区块当前选中的那一个。 -->
                 <TextBlock Text="帧（逐帧动画，可选）" Style="{StaticResource SectionHeader}"/>
                 <TextBlock Text="只有 1 帧就是普通静态图标；2 帧以上会在编辑框里生成 icon.frames，主图标会真的逐帧循环播放（跟 Minecraft 皮肤走路换腿同一个原理）。切帧不会丢掉别的帧画的内容，调色板是所有帧共用的同一份。缩略图可以直接拖拽调整播放顺序。"
                            Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,6"/>
