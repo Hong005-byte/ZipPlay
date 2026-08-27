@@ -9,14 +9,14 @@ using Newtonsoft.Json.Linq;
 namespace PixelLyric8BitFix
 {
     /// <summary>抓词结果：原文 LRC 是必有的，翻译 LRC 目前只有网易云那个引擎会给（其它三个引擎接口本身不带翻译）。</summary>
-    internal sealed record LyricsFetchResult(string Lrc, string? TranslationLrc);
+    public sealed record LyricsFetchResult(string Lrc, string? TranslationLrc);
 
     /// <summary>
     /// 多引擎并发抓词：LRCLIB / 网易云 / QQ音乐 / 酷狗，谁先给出"时长对得上"的结果就用谁。
     /// 从 MainWindow 里搬出来单独成类——纯粹是"给个歌名/歌手/期望时长，要么给我一份能用的 LRC，
     /// 要么给 null"，不碰 UI、不碰缓存，以后改抓词逻辑或者单独测试都不用在主窗口那个大文件里翻。
     /// </summary>
-    internal sealed class LyricsFetcher
+    public sealed class LyricsFetcher
     {
         private readonly HttpClient _httpClient;
 
