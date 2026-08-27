@@ -140,6 +140,44 @@ namespace PixelLyric8BitFix.Tests
             }
         }
 
+        [Theory]
+        [InlineData(0)]
+        [InlineData(12)]
+        [InlineData(20)]
+        public void Build_WithCustomSuffix_UsesItInsteadOfDefault(int hour)
+        {
+            // Mini 模式桌宠气泡这条路：传自定义后缀（这里用空字符串模拟），结果里就不该再带
+            // 首页专属的"点这里改资料"提示——那句 CTA 对着一个点了会展开/弹反应的小方块没有意义
+            var now = new DateTime(2026, 1, 1, hour, 30, 0);
+            for (int seed = 0; seed < 10; seed++)
+            {
+                string result = HomeGreetingBuilder.Build(now, "小明", new ListeningStats(), new Random(seed), suffix: "");
+                Assert.Contains("小明", result);
+                Assert.DoesNotContain("点这里改资料", result);
+            }
+        }
+
+        [Fact]
+        public void Build_WithCustomSuffix_AppearsInStatsAwareGreetingToo()
+        {
+            // 自定义后缀不能只在时间段文案池生效，数据相关那条分支（TryBuildStatsGreeting）也得用上
+            var stats = new ListeningStats();
+            var start = new DateOnly(2026, 1, 1);
+            for (int i = 0; i < 5; i++)
+            {
+                stats.Days[start.AddDays(i).ToString("yyyy-MM-dd")] = new DayStats { TotalSeconds = 600 };
+            }
+
+            bool sawCustomSuffixOnStatsLine = false;
+            for (int seed = 0; seed < 100; seed++)
+            {
+                string result = HomeGreetingBuilder.Build(new DateTime(2026, 1, 6, 9, 0, 0), "小明", stats, new Random(seed), suffix: "🐾");
+                if (result.Contains("连续听了") && result.Contains("🐾")) sawCustomSuffixOnStatsLine = true;
+                Assert.DoesNotContain("点这里改资料", result);
+            }
+            Assert.True(sawCustomSuffixOnStatsLine, "跑了 100 个 seed，一次带自定义后缀的\"连续听了\"都没抽到，概率上不太正常");
+        }
+
         [Fact]
         public void Build_With30ActiveDays_CanMentionTotalActiveDays()
         {

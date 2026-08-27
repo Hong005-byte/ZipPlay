@@ -67,6 +67,7 @@ namespace PixelLyric8BitFix
             Top = centerY - MiniModeWindowSize / 2;
 
             SyncAudioVisualizerState();
+            ResetPetWanderIdle(); // 见 MainWindow.PetMode.cs——不要一进 Mini 模式就立刻开始走，先站一会儿
         }
 
         // 展开：不看小方块现在被拖到哪了，直接照搬 EnterMiniMode 时存的原始位置/尺寸
@@ -77,6 +78,7 @@ namespace PixelLyric8BitFix
 
             MiniBadge.Visibility = Visibility.Collapsed;
             MiniVisualizerCanvas.Visibility = Visibility.Collapsed;
+            HidePetBubble(); // 展开的时候气泡还开着就很奇怪——桌宠那部分场景已经不存在了
             MainContentGrid.Visibility = Visibility.Visible;
             TopLeftIconsPanel.Visibility = Visibility.Visible;
             UpdateBadge.Visibility = _updateInfo != null ? Visibility.Visible : Visibility.Collapsed;
@@ -257,14 +259,32 @@ namespace PixelLyric8BitFix
 
         // 小方块本身也能拖着走：借用 DragMove() 的原生拖拽循环（跟窗口其它地方拖拽同一套机制，
         // 不用自己手撸鼠标坐标换算，天然兼容多显示器/缩放）。DragMove() 会一直阻塞到用户松开左键，
-        // 返回后比较一下位置有没有变化——没变就是单纯点了一下，没有拖动，那就当成"点击展开"。
+        // 返回后比较一下位置有没有变化——没变就是单纯点了一下，没有拖动。
+        //
+        // 拖了 → 什么都不做（跟以前一样）。没拖 + 单击（ClickCount==1）→ 桌宠反应（气泡+弹一下），
+        // 不再直接展开；没拖 + 双击（ClickCount>=2）→ 展开，这是以前"单击展开"那个行为搬过来的。
+        // WPF 的双击会先后触发两次 MouseLeftButtonDown（ClickCount 分别是 1、2），意味着真的双击
+        // 一下会先闪一下反应气泡、紧接着展开——这是这个方案的一个小瑕疵，接受它，不为了这个再加
+        // 一个抑制双击的计时器。
+        //
+        // _isDraggingMiniBadge 这个标记是给 MainWindow.PetMode.cs 的 UpdatePetWander 用的：正在拖的
+        // 时候桌宠自己的走位逻辑要让路，不然会跟用户的拖拽手感打架。
         private void MiniBadge_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
             double beforeLeft = Left, beforeTop = Top;
+
+            _isDraggingMiniBadge = true;
             this.DragMove();
+            _isDraggingMiniBadge = false;
+
             bool wasDragged = Math.Abs(Left - beforeLeft) > 1 || Math.Abs(Top - beforeTop) > 1;
-            if (!wasDragged) ExitMiniMode();
+            if (wasDragged) return;
+
+            // 关掉桌宠开关的话，单击也跟着退回最初的"点一下直接展开"，不留半吊子状态
+            // （光是走动关掉、点击互动还留着的话，感觉就是"这个开关到底关没关"说不清楚）
+            if (!_settings.MiniPetWanderEnabled || e.ClickCount >= 2) ExitMiniMode();
+            else ShowPetReaction();
         }
     }
 }

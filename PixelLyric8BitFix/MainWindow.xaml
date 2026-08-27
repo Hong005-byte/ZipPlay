@@ -1257,13 +1257,33 @@
         <Canvas x:Name="MiniVisualizerCanvas" Visibility="Collapsed" IsHitTestVisible="False"/>
 
         <!-- Mini 模式：双击窗口后不整个退出/隐藏，而是缩成一个贴着皮肤主题的小方块（还能拖着走），
-             再点一下（没有拖动的单纯点击）就变回原来的大小、原来的位置。图标/配色在代码里按当前皮肤动态设置。 -->
+             再双击就变回原来的大小、原来的位置；单击（没有拖动）是"桌宠"反应——弹一句话 + 弹一下，
+             不再直接展开，见 MainWindow.PetMode.cs 和 MainWindow.MiniMode.cs 的 MiniBadge_MouseLeftButtonDown。
+             图标/配色在代码里按当前皮肤动态设置。MiniBadgeBounceTransform 是单击反应那下"弹一下"用的，
+             跟 Steve/UFO 那些皮肤专属装饰的跳跃是同一个 PlayBeatBounce，只是作用对象换成了这个方块本身。 -->
         <Border x:Name="MiniBadge" Visibility="Collapsed" CornerRadius="14" BorderThickness="3"
                 Width="64" Height="64" HorizontalAlignment="Center" VerticalAlignment="Center"
-                Cursor="Hand" ToolTip="拖动可以移动；点一下（不拖动）展开"
-                MouseLeftButtonDown="MiniBadge_MouseLeftButtonDown">
+                Cursor="Hand" ToolTip="拖动可以移动；点一下有反应；双击展开"
+                MouseLeftButtonDown="MiniBadge_MouseLeftButtonDown"
+                RenderTransformOrigin="0.5,0.5">
+            <Border.RenderTransform>
+                <TranslateTransform x:Name="MiniBadgeBounceTransform" Y="0"/>
+            </Border.RenderTransform>
             <Image x:Name="MiniBadgeImage" Stretch="Uniform" Margin="6"
                    RenderOptions.BitmapScalingMode="NearestNeighbor"/>
         </Border>
+
+        <!-- 桌宠单击反应气泡——故意不是 ToastBadge 那个窗口内部的 Border（Mini 模式窗口只有 140×140px，
+             一整句话放不下会被窗口边缘裁掉），用 Popup 画在宿主窗口范围外，PlacementTarget 绑
+             MiniBadge，桌宠自己走动的时候气泡会跟着 MiniBadge 一起重新定位。样式照抄 ToastBadge 的
+             配色，边框颜色在代码里按当前皮肤的 MiniBorder 动态设置（ShowPetReaction）。 -->
+        <Popup x:Name="PetBubblePopup" PlacementTarget="{Binding ElementName=MiniBadge}" Placement="Top"
+               AllowsTransparency="True" StaysOpen="True" IsHitTestVisible="False">
+            <Border x:Name="PetBubbleBorder" CornerRadius="9" Background="#CC000000" BorderThickness="1"
+                    Padding="10,6" MaxWidth="220" Margin="0,0,0,8">
+                <TextBlock x:Name="TxtPetBubble" Text="" FontSize="11" Foreground="White" FontWeight="Bold"
+                           TextWrapping="Wrap" TextAlignment="Center"/>
+            </Border>
+        </Popup>
     </Grid>
 </Window>

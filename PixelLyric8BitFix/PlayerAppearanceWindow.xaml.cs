@@ -3,8 +3,9 @@ using System.Windows;
 
 namespace PixelLyric8BitFix
 {
-    /// <summary>窗口尺寸 / 显示模式 / 歌词字号——从 HomeWindow 的"📐 窗口与显示"格子进来，
-    /// 打开读一次 AppSettings，关闭时存回去，自己管自己这三个字段。</summary>
+    /// <summary>窗口尺寸 / 显示模式 / 歌词字号 / Mini 模式桌宠开关——从 HomeWindow 的"📐 窗口与显示"
+    /// 格子进来，打开读一次 AppSettings，关闭时存回去。桌宠开关放在这个页面而不是"🎵 音频律动"
+    /// 页——它跟音频/律动没关系，纯粹是窗口行为，跟这里其它几项是一类。</summary>
     public partial class PlayerAppearanceWindow : Window
     {
         public PlayerAppearanceWindow()
@@ -25,6 +26,8 @@ namespace PixelLyric8BitFix
             RbFontSmall.IsChecked = settings.FontSize == LyricFontSize.Small;
             RbFontMedium.IsChecked = settings.FontSize == LyricFontSize.Medium;
             RbFontLarge.IsChecked = settings.FontSize == LyricFontSize.Large;
+
+            ChkMiniPetWanderEnabled.IsChecked = settings.MiniPetWanderEnabled;
 
             // 预览图标随便找了个通用的音符图标，不是哪套皮肤专属的，纯粹演示"缩放这件事本身长什么样"
             IconScalePreview.Source = PixelArt.CreateNoteIcon();
@@ -58,6 +61,7 @@ namespace PixelLyric8BitFix
                                  : RbFontLarge.IsChecked == true ? LyricFontSize.Large
                                  : LyricFontSize.Medium;
                 toSave.IconScale = SliderIconScale.Value;
+                toSave.MiniPetWanderEnabled = ChkMiniPetWanderEnabled.IsChecked == true;
                 toSave.Save();
             };
         }

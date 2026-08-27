@@ -143,6 +143,13 @@ namespace PixelLyric8BitFix
         /// </summary>
         public bool MiniVisualizerEnabled { get; set; } = true;
 
+        /// <summary>
+        /// Mini 模式小方块会不会自己走动 + 点一下有反应（气泡弹一句听歌统计/随机台词），俗称"桌宠"。
+        /// 默认开启。关掉之后 Mini 模式回到最初的样子：原地不动，单击直接展开——不是"桌宠功能还在
+        /// 但不动"，是整套点击/走动行为一起退回去，不留半吊子状态。见 MainWindow.PetMode.cs。
+        /// </summary>
+        public bool MiniPetWanderEnabled { get; set; } = true;
+
         /// <summary>律动灵敏度档位，默认中。见 AudioVisualizer.ApplySensitivity 具体每档改了哪几个参数。
         /// Mini 模式的像素粒子、下面这个"皮肤音乐律动"共用同一档灵敏度——都是同一份音频分析出来的数据，
         /// 没必要让用户分两个地方各调一次。</summary>
