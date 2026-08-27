@@ -105,11 +105,11 @@ namespace PixelLyric8BitFix
                     IsChecked = settings.Skin == PlayerSkin.Custom && settings.CustomThemeFile == entry.FileName,
                 };
 
-                CustomThemeValidator.TryParseHexColor(entry.Theme.Colors?.Accent ?? "#55FF55", out var accent);
+                CustomThemeColorInterop.TryParseHexColor(entry.Theme.Colors?.Accent ?? "#55FF55", out var accent);
                 var stops = entry.Theme.Background?.Stops ?? new List<string>();
                 Color c1 = accent, c2 = accent;
-                if (stops.Count > 0) CustomThemeValidator.TryParseHexColor(stops[0], out c1);
-                if (stops.Count > 0) CustomThemeValidator.TryParseHexColor(stops[^1], out c2);
+                if (stops.Count > 0) CustomThemeColorInterop.TryParseHexColor(stops[0], out c1);
+                if (stops.Count > 0) CustomThemeColorInterop.TryParseHexColor(stops[^1], out c2);
 
                 rb.Background = new LinearGradientBrush(c1, c2, 90);
                 rb.BorderBrush = new SolidColorBrush(accent);

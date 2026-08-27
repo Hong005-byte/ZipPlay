@@ -10,7 +10,7 @@ namespace PixelLyric8BitFix
     /// 真正的合法性还是靠 TryDecode 成功之后再走一遍 CustomThemeValidator.ParseAndValidate 才能确定，
     /// 这个类只管"文本 ⇄ JSON"这一步转换，不重复校验逻辑。
     /// </summary>
-    internal static class CustomThemeShareCode
+    public static class CustomThemeShareCode
     {
         private const string Prefix = "ZPT1:";
 

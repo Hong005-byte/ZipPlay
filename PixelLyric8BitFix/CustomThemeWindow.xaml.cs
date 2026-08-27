@@ -142,13 +142,13 @@ namespace PixelLyric8BitFix
         private void ApplyPreviewTheme(CustomTheme theme)
         {
             var colors = theme.Colors!;
-            CustomThemeValidator.TryParseHexColor(colors.Title!, out var title);
-            CustomThemeValidator.TryParseHexColor(colors.Artist!, out var artist);
-            CustomThemeValidator.TryParseHexColor(colors.Accent!, out var accent);
-            CustomThemeValidator.TryParseHexColor(colors.Lyric!, out var lyric);
-            CustomThemeValidator.TryParseHexColor(string.IsNullOrWhiteSpace(colors.Glow) ? colors.Accent! : colors.Glow, out var glow);
-            CustomThemeValidator.TryParseHexColor(colors.LyricBoxBg!, out var lyricBoxBg);
-            CustomThemeValidator.TryParseHexColor(colors.LyricBoxBorder!, out var lyricBoxBorder);
+            CustomThemeColorInterop.TryParseHexColor(colors.Title!, out var title);
+            CustomThemeColorInterop.TryParseHexColor(colors.Artist!, out var artist);
+            CustomThemeColorInterop.TryParseHexColor(colors.Accent!, out var accent);
+            CustomThemeColorInterop.TryParseHexColor(colors.Lyric!, out var lyric);
+            CustomThemeColorInterop.TryParseHexColor(string.IsNullOrWhiteSpace(colors.Glow) ? colors.Accent! : colors.Glow, out var glow);
+            CustomThemeColorInterop.TryParseHexColor(colors.LyricBoxBg!, out var lyricBoxBg);
+            CustomThemeColorInterop.TryParseHexColor(colors.LyricBoxBorder!, out var lyricBoxBorder);
 
             var font = new FontFamily(string.IsNullOrWhiteSpace(theme.Font) ? "Segoe UI" : theme.Font);
 
@@ -172,7 +172,7 @@ namespace PixelLyric8BitFix
             // 改成从渲染出来的位图（PixelWidth/PixelHeight）读，不是直接读 theme.Icon.Rows——Rows 在
             // 多帧模式下可能是 null（渲染只认 Frames，见 CustomThemeIcon.Frames 的注释），从位图读
             // 两种情况都对，不用分支判断
-            var iconFrames = CustomThemeValidator.BuildCustomIconFrames(theme.Icon!);
+            var iconFrames = CustomThemeColorInterop.BuildCustomIconFrames(theme.Icon!);
             var iconBitmap = iconFrames[0];
             PreviewIcon.Source = iconBitmap;
             string iconSizeText = $"图标 {iconBitmap.PixelHeight} 行 x {iconBitmap.PixelWidth} 列" + (iconFrames.Length > 1 ? $"，共 {iconFrames.Length} 帧" : "");
@@ -220,7 +220,7 @@ namespace PixelLyric8BitFix
                 // 挡住"层的 icon 里写了 frames"这种情况（ValidateIcon 是主图标/层共用的同一套规则）——
                 // 用 BuildCustomIconFrames 取第一帧当静态图，跟主图标之外那几处（Mini 小方块/drift/fall/
                 // 分享卡片）是同一个退化策略，不会因为用户在层里写了 frames 就直接崩
-                var bitmap = CustomThemeValidator.BuildCustomIconFrames(layer.Icon!)[0];
+                var bitmap = CustomThemeColorInterop.BuildCustomIconFrames(layer.Icon!)[0];
 
                 var rotate = new RotateTransform();
                 var translate = new TranslateTransform();
@@ -329,7 +329,7 @@ namespace PixelLyric8BitFix
         private static Brush BuildBackgroundBrush(CustomThemeBackground bg)
         {
             var stops = (bg.Stops ?? new System.Collections.Generic.List<string>())
-                .Select(s => { CustomThemeValidator.TryParseHexColor(s, out var c); return c; })
+                .Select(s => { CustomThemeColorInterop.TryParseHexColor(s, out var c); return c; })
                 .ToList();
 
             if (string.Equals(bg.Type, "gradient", StringComparison.OrdinalIgnoreCase) && stops.Count >= 2)

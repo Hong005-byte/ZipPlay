@@ -151,7 +151,7 @@ namespace PixelLyric8BitFix.Tests
         {
             var (theme, errors) = CustomThemeValidator.ParseAndValidate(BuildJson(TwoValidFrames));
             Assert.Empty(errors);
-            var bitmaps = CustomThemeValidator.BuildCustomIconFrames(theme!.Icon!);
+            var bitmaps = CustomThemeColorInterop.BuildCustomIconFrames(theme!.Icon!);
             Assert.Equal(2, bitmaps.Length);
         }
 
@@ -160,7 +160,7 @@ namespace PixelLyric8BitFix.Tests
         {
             var (theme, errors) = CustomThemeValidator.ParseAndValidate(BuildJson(@", ""rows"": [""####"", ""####"", ""####"", ""####""]"));
             Assert.Empty(errors);
-            var bitmaps = CustomThemeValidator.BuildCustomIconFrames(theme!.Icon!);
+            var bitmaps = CustomThemeColorInterop.BuildCustomIconFrames(theme!.Icon!);
             Assert.Single(bitmaps);
         }
 

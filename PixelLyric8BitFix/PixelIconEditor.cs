@@ -35,7 +35,7 @@ namespace PixelLyric8BitFix
 
         public static string ColorToHex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
 
-        public static bool TryParseHex(string hex, out Color color) => CustomThemeValidator.TryParseHexColor(hex, out color);
+        public static bool TryParseHex(string hex, out Color color) => CustomThemeColorInterop.TryParseHexColor(hex, out color);
 
         /// <summary>把画板网格（grid[y,x]，'.' 表示空）+ 字符调色板转成 CustomThemeIcon——只保留网格里
         /// 真的用到的颜色，没画上去的颜色不会被带进 palette，输出干净，不会让人误以为"这个符号有用到"。</summary>
