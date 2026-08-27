@@ -143,13 +143,12 @@ PixelLyric8BitFix/
 ├── CustomThemeStore.cs           客制化主题的磁盘存取（最多 10 个）
 ├── ThemeRemixWindow.xaml(.cs)    🔀 混搭已存主题的选择窗口：配色/图标/动画各挑一个来源
 ├── IconPainterWindow.xaml(.cs)   🖌️ 像素画板：点格子画图标，取代手打字符网格
-├── PixelIconEditor.cs            画板的纯逻辑：网格状态 ⇄ CustomThemeIcon JSON 互转，带单元测试
 ├── CustomThemeFeatureUsage.cs    记"用没用过混搭/画板"这两个一次性开关，给「混音师」「像素画师」两个成就用
 ├── CustomThemeAchievement.cs     4 个自定义主题相关成就（主题工匠/混音师/像素画师/收藏家），跟听歌成就是独立的第二条线
 ├── NetworkHelpers.cs             所有对外请求共用的 HttpClient 创建方法，强制走 IPv4 绕开一个实测踩到的 IPv6 连接坑
 ├── PixelArt.cs                   运行时生成像素素材（Steve、小树、篝火、各皮肤图标等）
-├── LyricsFetcher.cs              多引擎并发抓词（LRCLIB / 网易云 / QQ音乐 / 酷狗），网易云那个引擎顺带抓翻译行（现在基本失效）
-├── LiveTranslator.cs             网易云翻译源失效后的兜底：现场调用 Google 翻译网页版接口逐行翻译歌词
+├── LiveTranslator.cs             网易云翻译源失效后的兜底：现场调用 Google 翻译网页版接口逐行翻译歌词（依赖 NetworkHelpers/
+                                     AppLog，这两个是纯 WPF 项目的东西，没有跟着 LyricsFetcher 一起搬去 Core）
 ├── AudioVisualizer.cs            Mini 模式粒子环的数据源：WASAPI 回环采集系统音频 + FFT，聚合成"整体响度"和"节奏冲击"两个数（幅度压缩/冲击检测的纯数学部分搬去了 PixelLyric8Bit.Core）
 ├── TrayIconManager.cs            系统托盘图标（NotifyIcon）的搭建/销毁封装
 ├── LyricsCache.cs                歌词本地缓存的存取（原文 + 翻译各存一份）
@@ -175,13 +174,32 @@ PixelLyric8Bit.Core/                 纯逻辑共享库（net8.0，不带 -windo
                                      渲染成实际位图不在这——那是 UI 渲染，各平台图形 API 不一样，见 WPF 那边的
                                      CustomThemeColorInterop.BuildCustomIconFrames
 ├── CustomThemeRandomizer.cs      🎲 随机生成一份自定义主题草稿（配色/图标/动画/多层装饰组合）
-└── CustomThemeRemixer.cs / CustomThemeShareCode.cs   混搭逻辑 / 主题"分享码"（JSON ⇄ 带识别前缀的 Base64 纯文本）
+├── CustomThemeRemixer.cs / CustomThemeShareCode.cs   混搭逻辑 / 主题"分享码"（JSON ⇄ 带识别前缀的 Base64 纯文本）
+├── PixelIconEditor.cs            画板的纯逻辑：网格状态 ⇄ CustomThemeIcon JSON 互转（含桶装填充/图片导入量化），
+                                     颜色也是 RgbaColor；点格子画图标这个交互本身还在 WPF 那边的 IconPainterWindow
+└── LyricsFetcher.cs              多引擎并发抓词（LRCLIB / 网易云 / QQ音乐 / 酷狗）——HttpClient 是构造函数传进来的，
+                                     跟怎么创建这个 HttpClient（桌面版 NetworkHelpers 强制走 IPv4 那个坑）完全解耦，
+                                     Android 端已经验证过真的能联网抓到真实歌词，见 PixelLyric8Bit.Mobile
 
 PixelLyric8BitFix.Tests/
 └── *Tests.cs                     LrcParser / KaraokeTiming / LyricsFetcher.IsDurationPlausible / AudioVisualizerMath / AchievementCalculator /
                                      ListeningStatsAggregator / ListeningHeatmap / ListeningHighlightsBuilder / CustomThemeShareCode /
                                      CustomThemeRandomizer / CustomThemeRemixer / PixelIconEditor 等的单元测试（xUnit，覆盖
                                      PixelLyric8BitFix 和 PixelLyric8Bit.Core 两边的纯逻辑）
+
+PixelLyric8Bit.Mobile/                探索中的 Android 版本（Uno Platform，net10.0-android），跟桌面版共用
+                                     PixelLyric8Bit.Core 那份"大脑"。目前是验证阶段的骨架，不是完整产品：
+├── MainPage.xaml(.cs)             悬浮歌词骨架页：用 Core 的 LrcParser/LyricsFetcher 做真实的联网抓词 + 按
+                                     系统媒体会话播放位置同步显示，还带一块权限状态调试面板
+├── PixelIconRenderer.cs           把字符网格 + RgbaColor 调色板画成 WriteableBitmap，给 Uno 的 Image 用——
+                                     跟桌面版 PixelArt.cs 是同一套"数据"、不同的渲染代码（两边 WriteableBitmap
+                                     类型来自不同图形栈，没法共享渲染这一步，能共享的是数据）
+└── Platforms/Android/
+    ├── MediaNotificationListenerService.cs  注册成通知监听服务换取 MediaSessionManager 访问权——
+    │                                          桌面版 Windows SMTC 在 Android 上的对应物，读"现在系统里
+    │                                          随便哪个 App 正在播放什么"，真机验证过读到真实 Spotify 歌曲
+    └── FloatingOverlayService.cs      前台 Service + IWindowManager 加一个原生 View 的真悬浮窗（不是 Uno
+                                          渲染的窗口），真机验证过浮在桌面/别的 App 上层，还接了真实抓词
 
 installer/
 └── ZipPlay.iss                   Inno Setup 打包脚本

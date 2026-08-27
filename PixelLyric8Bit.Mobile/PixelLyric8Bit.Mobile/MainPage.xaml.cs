@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using PixelLyric8BitFix;
 
 namespace PixelLyric8Bit.Mobile;
 
@@ -18,6 +19,25 @@ namespace PixelLyric8Bit.Mobile;
 /// </summary>
 public sealed partial class MainPage : Page
 {
+    // 跟桌面版 PixelArt.CreateNoteIcon 完全一样的形状/配色数据（8x8，'#' 画主体、'o' 画点缀细节）——
+    // 两边渲染代码各写各的（见 PixelIconRenderer.cs），这份数据本身照抄过来，保证画出来是同一个图标
+    private static readonly string[] NoteIconRows =
+    {
+        "...##...",
+        "...##...",
+        "...##...",
+        "...##o..",
+        "..###...",
+        ".#####..",
+        ".#o###..",
+        "..###...",
+    };
+    private static readonly Dictionary<char, RgbaColor> NoteIconPalette = new()
+    {
+        ['#'] = new RgbaColor(255, 0x8A, 0xB4, 0xF8),
+        ['o'] = new RgbaColor(255, 0xFF, 0xFF, 0xFF),
+    };
+
     private readonly List<(int TimeMs, string Text)> _lines;
     private readonly DispatcherTimer _timer = new();
     private readonly Stopwatch _stopwatch = new();
@@ -26,6 +46,8 @@ public sealed partial class MainPage : Page
     public MainPage()
     {
         this.InitializeComponent();
+
+        AppIcon.Source = PixelIconRenderer.Render(NoteIconRows, NoteIconPalette);
 
         // 骨架阶段先用一份写死的示例 LRC 循环播放；真正的歌词来源接上系统媒体会话之后再替换这一段
         const string sampleLrc = """

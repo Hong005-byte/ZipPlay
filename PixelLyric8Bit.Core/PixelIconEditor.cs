@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Windows.Media;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -13,8 +12,13 @@ namespace PixelLyric8BitFix
     /// 方便"继续编辑一个已经手写/已经画过的图标"而不是每次都从空白开始。
     /// 不碰 UI（不引用 Window/Grid/Rectangle 这些控件），只处理数据，方便单元测试；
     /// IconPainterWindow 负责"点格子"这件事本身，点完调这里的方法把结果转成 JSON。
+    ///
+    /// 颜色统一用平台无关的 RgbaColor（不是 System.Windows.Media.Color）——这批逻辑连同
+    /// CustomTheme/CustomThemeValidator 一起放在 PixelLyric8Bit.Core，是为了给以后的 Android
+    /// （Uno Platform）版本复用；WPF 那边要显示颜色的地方自己转一层，见 IconPainterWindow.xaml.cs
+    /// 里的 ToWpfColor/ToWpfPalette 这类小转换方法。
     /// </summary>
-    internal static class PixelIconEditor
+    public static class PixelIconEditor
     {
         // 分配给"新颜色"的候选字符池——排掉 "."（固定表示透明）、'"' 和 '\'（JSON 字符串里需要转义，
         // 用作 key 会让生成的 JSON 变得别扭，干脆从候选池里直接排除，不用处理转义）。45 个字符
@@ -33,13 +37,13 @@ namespace PixelLyric8BitFix
             return null;
         }
 
-        public static string ColorToHex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+        public static string ColorToHex(RgbaColor c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
 
-        public static bool TryParseHex(string hex, out Color color) => CustomThemeColorInterop.TryParseHexColor(hex, out color);
+        public static bool TryParseHex(string hex, out RgbaColor color) => CustomThemeValidator.TryParseHexColor(hex, out color);
 
         /// <summary>把画板网格（grid[y,x]，'.' 表示空）+ 字符调色板转成 CustomThemeIcon——只保留网格里
         /// 真的用到的颜色，没画上去的颜色不会被带进 palette，输出干净，不会让人误以为"这个符号有用到"。</summary>
-        public static CustomThemeIcon BuildIcon(char[,] grid, int width, int height, IReadOnlyDictionary<char, Color> palette)
+        public static CustomThemeIcon BuildIcon(char[,] grid, int width, int height, IReadOnlyDictionary<char, RgbaColor> palette)
         {
             var rows = new List<string>(height);
             var usedChars = new HashSet<char>();
@@ -72,7 +76,7 @@ namespace PixelLyric8BitFix
         /// 功能加进来之前"画完只有一张静态图"的输出长得一模一样，不会因为用户压根没碰"帧"这个概念
         /// 就平白多出一层结构；2 帧以上才产出 frames。调色板是所有帧摊平之后一起收集"实际用到的字符"
         /// 算出来的一份，不是每帧各自算——不然帧与帧之间调色板不一致，画出来的字符在另一帧里找不到颜色。</summary>
-        public static CustomThemeIcon BuildFrames(IReadOnlyList<char[,]> grids, int width, int height, IReadOnlyDictionary<char, Color> palette)
+        public static CustomThemeIcon BuildFrames(IReadOnlyList<char[,]> grids, int width, int height, IReadOnlyDictionary<char, RgbaColor> palette)
         {
             var usedChars = new HashSet<char>();
             var frameRows = new List<List<string>>(grids.Count);
@@ -112,7 +116,7 @@ namespace PixelLyric8BitFix
         /// 每帧非空、每帧内部每行等宽、而且所有帧必须彼此同尺寸——最后这条是画板独有的要求（校验器本身
         /// 也这么要求，见 CustomThemeValidator.ValidateFrames），尺寸对不上直接返回 null，不硬凑，
         /// 调用方（IconPainterWindow）当作"没有可续画的"，从空白网格开始。</summary>
-        public static (List<char[,]> Grids, int Width, int Height, Dictionary<char, Color> Palette)? TryLoadFrames(CustomThemeIcon icon)
+        public static (List<char[,]> Grids, int Width, int Height, Dictionary<char, RgbaColor> Palette)? TryLoadFrames(CustomThemeIcon icon)
         {
             List<List<string>>? rowSets = icon.Frames is { Count: > 0 } frames
                 ? frames
@@ -143,7 +147,7 @@ namespace PixelLyric8BitFix
                 grids.Add(grid);
             }
 
-            var palette = new Dictionary<char, Color>();
+            var palette = new Dictionary<char, RgbaColor>();
             if (icon.Palette != null)
             {
                 foreach (var (key, hex) in icon.Palette)
@@ -163,7 +167,7 @@ namespace PixelLyric8BitFix
         /// 这个方法本身不对尺寸范围（4~64）做限制，画板 UI 自己决定要不要收窄，宽松一点方便复用。
         /// 解析不出来（行宽不一致、调色板颜色写挂了……）返回 null，调用方应该当作"没有可续画的"，
         /// 从空白网格开始，而不是弹一堆错误吓跑用户——毕竟这只是个辅助工具，不是校验入口。</summary>
-        public static (char[,] Grid, int Width, int Height, Dictionary<char, Color> Palette)? TryLoadIcon(CustomThemeIcon icon)
+        public static (char[,] Grid, int Width, int Height, Dictionary<char, RgbaColor> Palette)? TryLoadIcon(CustomThemeIcon icon)
         {
             if (icon.Rows == null || icon.Rows.Count == 0) return null;
             int height = icon.Rows.Count;
@@ -180,7 +184,7 @@ namespace PixelLyric8BitFix
                 }
             }
 
-            var palette = new Dictionary<char, Color>();
+            var palette = new Dictionary<char, RgbaColor>();
             if (icon.Palette != null)
             {
                 foreach (var (key, hex) in icon.Palette)
@@ -239,17 +243,17 @@ namespace PixelLyric8BitFix
         /// 这样才能保证这个方法分配出的新字符不会超过调色板 45 种颜色的硬上限。
         /// 返回值里 AssignedColors 只包含"这次新分配出来的颜色"，不包含复用的已有颜色——调用方
         /// 用它来往 _palette 里 merge 新增的部分即可，已有的颜色不需要重新添加一遍。</summary>
-        public static (char[,] Grid, Dictionary<char, Color> AssignedColors) QuantizeToGrid(
-            Color?[,] pixels, IReadOnlyDictionary<char, Color> existingPalette, int maxColors)
+        public static (char[,] Grid, Dictionary<char, RgbaColor> AssignedColors) QuantizeToGrid(
+            RgbaColor?[,] pixels, IReadOnlyDictionary<char, RgbaColor> existingPalette, int maxColors)
         {
             int height = pixels.GetLength(0);
             int width = pixels.GetLength(1);
             var grid = new char[height, width];
 
-            static Color RoundColor(Color c) => Color.FromRgb((byte)(c.R / 32 * 32), (byte)(c.G / 32 * 32), (byte)(c.B / 32 * 32));
+            static RgbaColor RoundColor(RgbaColor c) => new(255, (byte)(c.R / 32 * 32), (byte)(c.G / 32 * 32), (byte)(c.B / 32 * 32));
 
-            var rounded = new Color?[height, width];
-            var freq = new Dictionary<Color, int>();
+            var rounded = new RgbaColor?[height, width];
+            var freq = new Dictionary<RgbaColor, int>();
             for (int y = 0; y < height; y++)
             {
                 for (int x = 0; x < width; x++)
@@ -266,13 +270,13 @@ namespace PixelLyric8BitFix
                 for (int y = 0; y < height; y++)
                     for (int x = 0; x < width; x++)
                         grid[y, x] = '.';
-                return (grid, new Dictionary<char, Color>());
+                return (grid, new Dictionary<char, RgbaColor>());
             }
 
             var kept = freq.OrderByDescending(kv => kv.Value).Take(maxColors).Select(kv => kv.Key).ToList();
 
-            var colorToChar = new Dictionary<Color, char>();
-            var assigned = new Dictionary<char, Color>();
+            var colorToChar = new Dictionary<RgbaColor, char>();
+            var assigned = new Dictionary<char, RgbaColor>();
             var usedChars = new HashSet<char>(existingPalette.Keys);
             foreach (var color in kept)
             {
@@ -308,7 +312,7 @@ namespace PixelLyric8BitFix
 
                     // 没被留下的颜色（出现次数没排进前 maxColors 名）——吸附到已经分配了字符的颜色里
                     // 欧氏距离最近的一个
-                    Color nearest = default;
+                    RgbaColor nearest = default;
                     int bestDist = int.MaxValue;
                     foreach (var candidate in colorToChar.Keys)
                     {

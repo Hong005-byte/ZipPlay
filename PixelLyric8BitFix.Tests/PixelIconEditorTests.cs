@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Windows.Media;
 using PixelLyric8BitFix;
 using Xunit;
 
@@ -7,6 +6,15 @@ namespace PixelLyric8BitFix.Tests
 {
     public class PixelIconEditorTests
     {
+        // PixelIconEditor 现在住在 PixelLyric8Bit.Core，颜色用平台无关的 RgbaColor（不是
+        // System.Windows.Media.Color）——这几个是测试里图方便的几个常用色，对应关系跟 WPF 的
+        // Colors.Red/Blue/Lime/Yellow 一样（WPF 的 Colors.Green 其实是暗绿色，这里不需要用到，
+        // 用到的是纯绿 Colors.Lime）。
+        private static readonly RgbaColor TestRed = new(255, 0xFF, 0x00, 0x00);
+        private static readonly RgbaColor TestBlue = new(255, 0x00, 0x00, 0xFF);
+        private static readonly RgbaColor TestLime = new(255, 0x00, 0xFF, 0x00);
+        private static readonly RgbaColor TestYellow = new(255, 0xFF, 0xFF, 0x00);
+
         [Fact]
         public void NextAvailableChar_SkipsAlreadyUsedChars_ReturnsFirstFreeOne()
         {
@@ -24,7 +32,7 @@ namespace PixelLyric8BitFix.Tests
         [Fact]
         public void ColorToHex_RoundTripsWithTryParseHex()
         {
-            var original = Color.FromRgb(0xF9, 0xC7, 0x84);
+            var original = new RgbaColor(255, 0xF9, 0xC7, 0x84);
             string hex = PixelIconEditor.ColorToHex(original);
             Assert.Equal("#F9C784", hex);
 
@@ -42,10 +50,10 @@ namespace PixelLyric8BitFix.Tests
                 for (int x = 0; x < 4; x++)
                     grid[y, x] = (x == 0 && y == 0) ? '#' : '.';
 
-            var palette = new Dictionary<char, Color>
+            var palette = new Dictionary<char, RgbaColor>
             {
-                ['#'] = Color.FromRgb(0xFF, 0x00, 0x00),
-                ['w'] = Color.FromRgb(0x00, 0xFF, 0x00),
+                ['#'] = new RgbaColor(255, 0xFF, 0x00, 0x00),
+                ['w'] = new RgbaColor(255, 0x00, 0xFF, 0x00),
             };
 
             var icon = PixelIconEditor.BuildIcon(grid, 4, 4, palette);
@@ -65,7 +73,7 @@ namespace PixelLyric8BitFix.Tests
                 for (int x = 0; x < 4; x++)
                     grid[y, x] = '.';
 
-            var icon = PixelIconEditor.BuildIcon(grid, 4, 4, new Dictionary<char, Color>());
+            var icon = PixelIconEditor.BuildIcon(grid, 4, 4, new Dictionary<char, RgbaColor>());
 
             Assert.Empty(icon.Palette!);
             Assert.All(icon.Rows!, row => Assert.Equal("....", row));
@@ -81,7 +89,7 @@ namespace PixelLyric8BitFix.Tests
                     grid[y, x] = '.';
             grid[0, 0] = '#'; grid[0, 1] = '#'; grid[1, 0] = '#'; grid[1, 1] = '#';
 
-            var icon = PixelIconEditor.BuildIcon(grid, 4, 4, new Dictionary<char, Color> { ['#'] = Colors.Red });
+            var icon = PixelIconEditor.BuildIcon(grid, 4, 4, new Dictionary<char, RgbaColor> { ['#'] = TestRed });
             string iconJson = PixelIconEditor.SerializeIconFragment(icon);
 
             string themeJson = $@"{{
@@ -104,7 +112,7 @@ namespace PixelLyric8BitFix.Tests
             for (int y = 0; y < 4; y++)
                 for (int x = 0; x < 4; x++)
                     grid[y, x] = (x + y) % 2 == 0 ? '#' : '.';
-            var palette = new Dictionary<char, Color> { ['#'] = Colors.Blue };
+            var palette = new Dictionary<char, RgbaColor> { ['#'] = TestBlue };
 
             var icon = PixelIconEditor.BuildIcon(grid, 4, 4, palette);
             var loaded = PixelIconEditor.TryLoadIcon(icon);
@@ -114,7 +122,7 @@ namespace PixelLyric8BitFix.Tests
             Assert.Equal(4, loaded.Value.Height);
             Assert.Equal(grid[0, 0], loaded.Value.Grid[0, 0]);
             Assert.Equal(grid[1, 1], loaded.Value.Grid[1, 1]);
-            Assert.Equal(Colors.Blue, loaded.Value.Palette['#']);
+            Assert.Equal(TestBlue, loaded.Value.Palette['#']);
         }
 
         [Fact]
@@ -206,7 +214,7 @@ namespace PixelLyric8BitFix.Tests
             // 不会因为用户压根没碰"帧"这个概念就平白多出一层结构
             var grid = MakeGrid(4, 4, '.');
             grid[0, 0] = '#';
-            var icon = PixelIconEditor.BuildFrames(new[] { grid }, 4, 4, new Dictionary<char, Color> { ['#'] = Colors.Red });
+            var icon = PixelIconEditor.BuildFrames(new[] { grid }, 4, 4, new Dictionary<char, RgbaColor> { ['#'] = TestRed });
 
             Assert.Null(icon.Frames);
             Assert.NotNull(icon.Rows);
@@ -221,7 +229,7 @@ namespace PixelLyric8BitFix.Tests
             var frame2 = MakeGrid(4, 4, '.');
             frame2[0, 1] = '#';
 
-            var icon = PixelIconEditor.BuildFrames(new[] { frame1, frame2 }, 4, 4, new Dictionary<char, Color> { ['#'] = Colors.Red });
+            var icon = PixelIconEditor.BuildFrames(new[] { frame1, frame2 }, 4, 4, new Dictionary<char, RgbaColor> { ['#'] = TestRed });
 
             Assert.Null(icon.Rows);
             Assert.NotNull(icon.Frames);
@@ -239,7 +247,7 @@ namespace PixelLyric8BitFix.Tests
             var frame2 = MakeGrid(4, 4, '.');
             frame2[0, 0] = 'w';
 
-            var palette = new Dictionary<char, Color> { ['#'] = Colors.Red, ['w'] = Colors.Blue };
+            var palette = new Dictionary<char, RgbaColor> { ['#'] = TestRed, ['w'] = TestBlue };
             var icon = PixelIconEditor.BuildFrames(new[] { frame1, frame2 }, 4, 4, palette);
 
             Assert.Equal(2, icon.Palette!.Count);
@@ -253,7 +261,7 @@ namespace PixelLyric8BitFix.Tests
             frame1[0, 0] = '#';
             var frame2 = MakeGrid(4, 4, '.');
             frame2[0, 1] = '#';
-            var icon = PixelIconEditor.BuildFrames(new[] { frame1, frame2 }, 4, 4, new Dictionary<char, Color> { ['#'] = Colors.Red });
+            var icon = PixelIconEditor.BuildFrames(new[] { frame1, frame2 }, 4, 4, new Dictionary<char, RgbaColor> { ['#'] = TestRed });
             string iconJson = PixelIconEditor.SerializeIconFragment(icon);
 
             string themeJson = $@"{{
@@ -275,7 +283,7 @@ namespace PixelLyric8BitFix.Tests
             frame1[0, 0] = '#';
             var frame2 = MakeGrid(4, 4, '.');
             frame2[1, 1] = '#';
-            var icon = PixelIconEditor.BuildFrames(new[] { frame1, frame2 }, 4, 4, new Dictionary<char, Color> { ['#'] = Colors.Blue });
+            var icon = PixelIconEditor.BuildFrames(new[] { frame1, frame2 }, 4, 4, new Dictionary<char, RgbaColor> { ['#'] = TestBlue });
 
             var loaded = PixelIconEditor.TryLoadFrames(icon);
 
@@ -285,7 +293,7 @@ namespace PixelLyric8BitFix.Tests
             Assert.Equal(4, loaded.Value.Height);
             Assert.Equal('#', loaded.Value.Grids[0][0, 0]);
             Assert.Equal('#', loaded.Value.Grids[1][1, 1]);
-            Assert.Equal(Colors.Blue, loaded.Value.Palette['#']);
+            Assert.Equal(TestBlue, loaded.Value.Palette['#']);
         }
 
         [Fact]
@@ -376,8 +384,8 @@ namespace PixelLyric8BitFix.Tests
         [Fact]
         public void QuantizeToGrid_NullPixel_BecomesTransparentDot()
         {
-            var pixels = new Color?[1, 2] { { Colors.Red, null } };
-            var (grid, _) = PixelIconEditor.QuantizeToGrid(pixels, new Dictionary<char, Color>(), maxColors: 10);
+            var pixels = new RgbaColor?[1, 2] { { TestRed, null } };
+            var (grid, _) = PixelIconEditor.QuantizeToGrid(pixels, new Dictionary<char, RgbaColor>(), maxColors: 10);
 
             Assert.NotEqual('.', grid[0, 0]);
             Assert.Equal('.', grid[0, 1]);
@@ -386,8 +394,8 @@ namespace PixelLyric8BitFix.Tests
         [Fact]
         public void QuantizeToGrid_ColorMatchingExistingPalette_ReusesExistingCharInsteadOfAssigningNew()
         {
-            var existing = new Dictionary<char, Color> { ['#'] = Colors.Red };
-            var pixels = new Color?[1, 1] { { Colors.Red } };
+            var existing = new Dictionary<char, RgbaColor> { ['#'] = TestRed };
+            var pixels = new RgbaColor?[1, 1] { { TestRed } };
 
             var (grid, newColors) = PixelIconEditor.QuantizeToGrid(pixels, existing, maxColors: 10);
 
@@ -399,12 +407,12 @@ namespace PixelLyric8BitFix.Tests
         public void QuantizeToGrid_MoreDistinctColorsThanBudget_NeverExceedsMaxColors()
         {
             // 4 种截然不同的颜色，但只给 2 个名额——量化完新增的颜色种类不能超过预算
-            var pixels = new Color?[1, 4]
+            var pixels = new RgbaColor?[1, 4]
             {
-                { Colors.Red, Colors.Lime, Colors.Blue, Colors.Yellow },
+                { TestRed, TestLime, TestBlue, TestYellow },
             };
 
-            var (grid, newColors) = PixelIconEditor.QuantizeToGrid(pixels, new Dictionary<char, Color>(), maxColors: 2);
+            var (grid, newColors) = PixelIconEditor.QuantizeToGrid(pixels, new Dictionary<char, RgbaColor>(), maxColors: 2);
 
             Assert.True(newColors.Count <= 2);
             // 网格里每一格都必须落在"新分配出来的颜色"这个集合里——没有孤立的、没被分配字符的符号
@@ -415,8 +423,8 @@ namespace PixelLyric8BitFix.Tests
         [Fact]
         public void QuantizeToGrid_AllPixelsTransparent_ProducesAllDotsAndNoNewColors()
         {
-            var pixels = new Color?[2, 2];
-            var (grid, newColors) = PixelIconEditor.QuantizeToGrid(pixels, new Dictionary<char, Color>(), maxColors: 10);
+            var pixels = new RgbaColor?[2, 2];
+            var (grid, newColors) = PixelIconEditor.QuantizeToGrid(pixels, new Dictionary<char, RgbaColor>(), maxColors: 10);
 
             Assert.Empty(newColors);
             for (int y = 0; y < 2; y++)
