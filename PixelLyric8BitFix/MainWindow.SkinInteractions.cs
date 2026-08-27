@@ -365,6 +365,16 @@ namespace PixelLyric8BitFix
             PlaySteveJump();
         }
 
+        // 客制化主题装饰图标（主图标 + drift/fall 那三份重影图标，6 个 Image 元素都挂这一个处理器）：
+        // 点一下循环切到下一个 icon.actions，没有 actions 的主题（绝大多数）直接原样放行——不设
+        // e.Handled，让点击照旧穿透去 Window 的双击进 Mini 模式，不会因为加了这个功能就意外拦截。
+        private void CustomIcon_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (_customTheme?.Icon?.Actions is not { Count: > 0 }) return;
+            e.Handled = true;
+            CycleCustomIconAction();
+        }
+
         // 戳一下篝火：图标"旺"一下（缩放脉冲），特意不碰 CampfireGlow.Opacity——那个属性已经被
         // CampfireAnimation 那个 Forever 循环占着，插一手会跟它打架；缩放是完全不相关的另一个属性。
         //

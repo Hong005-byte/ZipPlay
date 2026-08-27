@@ -74,6 +74,24 @@ namespace PixelLyric8BitFix
         // 每帧播放多久（秒），只有 Frames 有值时才有意义。不填默认见 CustomThemeValidator.DefaultFrameDurationSeconds
         // （0.25，对齐 Steve 换腿大约 250ms 一帧的节奏，不是瞎猜的数字）。
         public double? FrameDuration { get; set; }
+
+        // 可选：额外的可点击切换的"动作"。图标自己的 Rows/Frames 永远是"动作 0"（不用取名字，
+        // Mini 小方块/分享卡片/初次显示这些地方都还是只认这一套，不用改），Actions[0]/[1]/……依次排
+        // 在后面；点一下装饰图标（见 MainWindow.SkinInteractions.cs 的 CustomIcon_MouseLeftButtonDown）
+        // 永久切到下一个，绕完一圈回到动作 0。只换帧，不连带切换 animation.type 那套移动方式——
+        // sway/drift 这些是主题选定的单一移动方式，不会因为切了动作就跟着变。不给这个字段（或者给
+        // 空数组）就是这个字段加进来之前的样子：图标不会响应点击，双击照样能穿透进 Mini 模式。
+        public List<CustomThemeIconAction>? Actions { get; set; }
+    }
+
+    /// <summary>一个可点击切换到的额外动作——形状规则跟 CustomThemeIcon.Frames 完全一样（复用同一套
+    /// ValidateFrames），只是换了个字段名方便挂在 Actions 列表里。Name 纯粹给人看，报错定位/以后如果
+    /// 做画板 UI 选择器会用到，不参与渲染逻辑。</summary>
+    public sealed class CustomThemeIconAction
+    {
+        public string? Name { get; set; }
+        public List<List<string>>? Frames { get; set; }
+        public double? FrameDuration { get; set; } // 不填就落回 icon 顶层的 FrameDuration（再没有就是默认值）
     }
 
     public sealed class CustomThemeAnimation
@@ -150,6 +168,11 @@ namespace PixelLyric8BitFix
         // 真需要更复杂的场景，本来就更适合做成新的内置皮肤，不是客制化主题这条轻量路径该扛的
         public const int MaxLayers = 2;
         public static readonly string[] ValidAnchors = { "top-left", "top-right", "bottom-left", "bottom-right" };
+
+        // icon.actions 数量上限——纯粹是校验层面给个保守的圆整数字（跟 CustomThemeStore.MaxThemes
+        // 那种做法一致），不是系统层面的技术瓶颈。切换动作是点一下循环到下一个，10 个已经够表达
+        // "好几套姿势轮流切换"这种场景，真需要更多更适合考虑别的表达方式（比如干脆做成新皮肤）。
+        public const int MaxIconActions = 10;
 
         public static (CustomTheme? Theme, List<string> Errors) ParseAndValidate(string json)
         {
@@ -390,6 +413,39 @@ namespace PixelLyric8BitFix
             if (icon.FrameDuration is double fd && fd <= 0)
             {
                 errors.Add($"\"{frameDurationField}\" 填的是 {fd}，必须是大于 0 的数字（不填就用默认的 {DefaultFrameDurationSeconds} 秒）。");
+            }
+
+            // Actions：可选的额外可点击切换动作，跟 icon.frames 是同一套形状校验（ValidateFrames），
+            // 用到的字符统一并进 framesErrorSourceForPalette 一起核对调色板——不用每个动作单独配一份调色板，
+            // 图标只有一份 Palette，所有动作共用
+            if (icon.Actions is { Count: > 0 } actions)
+            {
+                string actionsField = fieldPrefix == "icon" ? "icon.actions" : $"{fieldPrefix}.icon.actions";
+                if (actions.Count > MaxIconActions)
+                {
+                    errors.Add($"\"{actionsField}\" 最多只能有 {MaxIconActions} 个，现在是 {actions.Count} 个。");
+                }
+
+                for (int i = 0; i < actions.Count; i++)
+                {
+                    var action = actions[i];
+                    string actionFramesField = $"{actionsField}[{i}].frames";
+                    string actionDurationField = $"{actionsField}[{i}].frameDuration";
+
+                    if (action.Frames is not { Count: > 0 })
+                    {
+                        errors.Add($"\"{actionFramesField}\" 没填——每个动作至少要有 1 帧。");
+                        continue;
+                    }
+
+                    ValidateFrames(action.Frames, actionFramesField, errors, out var actionFlattenedRows);
+                    framesErrorSourceForPalette = framesErrorSourceForPalette.Concat(actionFlattenedRows).ToList();
+
+                    if (action.FrameDuration is double afd && afd <= 0)
+                    {
+                        errors.Add($"\"{actionDurationField}\" 填的是 {afd}，必须是大于 0 的数字（不填就落回 \"{frameDurationField}\"，再没有就是默认的 {DefaultFrameDurationSeconds} 秒）。");
+                    }
+                }
             }
 
             // "icon.palette" 必须存在——就算图标全是 "." 空白格用不上任何颜色，也留一个空对象 {}。

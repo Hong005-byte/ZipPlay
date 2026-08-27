@@ -109,6 +109,13 @@ namespace PixelLyric8BitFix
         private double _customIconFrameSensitivity = 1.0;
         private double _customIconFrameSpeedRatio = 1.0; // 音乐律动开着时，当前这一刻换帧应该多快——UpdateMusicReactiveSkin 里算
 
+        // 点击装饰图标切换 icon.actions：0 = 图标自己的 Rows/Frames（"动作 0"，不用取名字），
+        // >0 对应 theme.Icon.Actions[index-1]。_customIconFrameApply 是"当前该把新的一帧画到哪个/
+        // 哪几个 Image 上"——drift/fall 分支要同时写 3 份重影图标，主图标分支只写 CustomIcon 一个，
+        // 抽成委托而不是散落的 if/else，见 MainWindow.Skins.cs 的 ApplyCustomSkinVisuals/CycleCustomIconAction。
+        private int _customIconActionIndex;
+        private Action<BitmapSource>? _customIconFrameApply;
+
         private string _lastTrackId = "";
         private CancellationTokenSource? _lyricFetchCts;
 
