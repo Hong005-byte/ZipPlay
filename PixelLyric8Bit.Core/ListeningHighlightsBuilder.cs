@@ -9,7 +9,7 @@ namespace PixelLyric8BitFix
     /// 页面里两个入口都留着，不是互相替代。不碰 UI/磁盘，方便单元测试；ListeningHighlightsWindow 只管
     /// 照着这份卡片列表一张张翻。
     /// </summary>
-    internal static class ListeningHighlightsBuilder
+    public static class ListeningHighlightsBuilder
     {
         public sealed record HighlightSlide(string Icon, string Headline, string Subtext);
 

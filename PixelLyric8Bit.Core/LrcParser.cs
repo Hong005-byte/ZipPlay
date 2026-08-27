@@ -11,7 +11,7 @@ namespace PixelLyric8BitFix
     /// 时间戳正则 + 毫秒归一化逻辑，两份几乎一样的代码分居两个文件，改一处容易漏改另一处。
     /// 现在统一到这，两边都调这一份；顺带因为不碰任何 UI/网络，方便单独写单元测试。
     /// </summary>
-    internal static class LrcParser
+    public static class LrcParser
     {
         private static readonly Regex LineRegex = new(@"\[(?<min>\d+):(?<sec>\d+)[\.:](?<ms>\d+)\](?<text>.*)", RegexOptions.Compiled);
 

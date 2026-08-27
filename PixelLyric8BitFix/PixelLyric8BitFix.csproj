@@ -22,6 +22,12 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
 
+  <!-- 歌词解析/卡拉OK估算/成就判定/听歌统计聚合这批纯逻辑搬去了 PixelLyric8Bit.Core（给以后的
+       Android/Uno 版本复用），命名空间还是原来的 PixelLyric8BitFix，这边不用改任何 using —— -->
+  <ItemGroup>
+    <ProjectReference Include="..\PixelLyric8Bit.Core\PixelLyric8Bit.Core.csproj" />
+  </ItemGroup>
+
   <!-- UseWindowsForms 会自动加 System.Windows.Forms / System.Drawing 的隐式 global using，
        跟 UseWPF 的 System.Windows 撞名（Application、Color 等），这里去掉，
        托盘图标那几处代码改用别名（Forms.xxx）或者写全限定名（System.Drawing.xxx）就够了 -->

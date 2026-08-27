@@ -24,7 +24,7 @@ namespace PixelLyric8BitFix
     /// "已解锁"持久化状态，stats.json 清空了成就自然跟着清零，不会出现"成就已解锁但统计数据是空的"
     /// 这种自相矛盾的状态。
     /// </summary>
-    internal static class AchievementCalculator
+    public static class AchievementCalculator
     {
         public static readonly AchievementDefinition FirstHour = new()
         { Id = "first_hour", Icon = "🎧", Name = "初次启程", Description = "累计听满 1 小时" };
