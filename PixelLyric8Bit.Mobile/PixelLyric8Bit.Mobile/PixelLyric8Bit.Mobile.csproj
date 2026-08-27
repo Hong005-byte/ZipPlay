@@ -1,0 +1,37 @@
+<Project Sdk="Uno.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0-android;net10.0</TargetFrameworks>
+
+    <OutputType>Exe</OutputType>
+    <UnoSingleProject>true</UnoSingleProject>
+
+    <!-- Display name -->
+    <ApplicationTitle>PixelLyric8Bit.Mobile</ApplicationTitle>
+    <!-- App Identifier -->
+    <ApplicationId>com.zipplay.mobile</ApplicationId>
+    <!-- Versions -->
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <ApplicationVersion>1</ApplicationVersion>
+    <!-- Package Publisher -->
+    <ApplicationPublisher>PixelLyric8Bit.Mobile</ApplicationPublisher>
+    <!-- Package Description -->
+    <Description>PixelLyric8Bit.Mobile powered by Uno Platform.</Description>
+
+    <!--
+      UnoFeatures are used to quickly add and manage features enabled for your app.
+      https://aka.platform.uno/singleproject-features
+    -->
+    <UnoFeatures>
+      SkiaRenderer;
+    </UnoFeatures>
+  </PropertyGroup>
+
+  <!-- 验证"共享大脑"这个计划本身站不站得住：Core 是纯 net8.0 类库，这里引用它给 net10.0-android
+       这个平台专属 TFM 用——.NET 的正向兼容保证一个更具体/更新的 TFM 能引用一个更早/更通用的 TFM，
+       这条引用编译得过，说明 LrcParser/KaraokeTiming 这些歌词解析逻辑真的能原样搬到 Android 上用，
+       不用重新写一遍。 -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\PixelLyric8Bit.Core\PixelLyric8Bit.Core.csproj" />
+  </ItemGroup>
+
+</Project>
