@@ -1,17 +1,28 @@
-﻿<Page x:Class="PixelLyric8Bit.Mobile.MainPage"
+<Page x:Class="PixelLyric8Bit.Mobile.MainPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:local="using:PixelLyric8Bit.Mobile"
-      Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-  <ScrollViewer IsTabStop="True">
-    <Grid>
-      <StackPanel
-        HorizontalAlignment="Center"
-        VerticalAlignment="Center">
-        <TextBlock x:Name="HelloTextBlock" AutomationProperties.AutomationId="HelloTextBlock"
-          Text="Hello Uno Platform!"
-          HorizontalAlignment="Center" />
-      </StackPanel>
-    </Grid>
-  </ScrollViewer>
+      Background="#0D0D0D">
+
+  <!-- 悬浮歌词界面骨架——跟桌面版 MainWindow.xaml 的核心结构（标题行 + 歌词框）呼应，但这只是骨架：
+       现在显示的是一份写死的示例歌词循环播放，不是真实系统媒体会话读出来的东西，也还没做成真正的
+       悬浮窗（SYSTEM_ALERT_WINDOW + 前台 Service）——那两块是下一步要接的，见 MainPage.xaml.cs 顶部
+       的说明。这一步先验证"歌词按时间戳切换"这条链路在 Uno/Android 上能不能跑通，而且走的是
+       PixelLyric8Bit.Core 里跟桌面版同一份 LrcParser，不是重新写一遍解析逻辑。 -->
+  <Grid Padding="24">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+    </Grid.RowDefinitions>
+
+    <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,12">
+      <TextBlock x:Name="TxtSongTitle" Text="ZipPlay Mobile" FontFamily="Consolas" Foreground="White" FontSize="20" FontWeight="Bold"/>
+      <TextBlock x:Name="TxtArtist" Text=" 悬浮歌词骨架" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="8,5,0,0" VerticalAlignment="Center"/>
+    </StackPanel>
+
+    <Border Grid.Row="1" Background="#D9111111" BorderBrush="#222222" BorderThickness="2" Padding="16" VerticalAlignment="Center" CornerRadius="8">
+      <TextBlock x:Name="TxtDynamicLyric" Text="LOADING..." FontFamily="Consolas" Foreground="#FFFF55" FontSize="22"
+                 TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center"/>
+    </Border>
+  </Grid>
 </Page>
