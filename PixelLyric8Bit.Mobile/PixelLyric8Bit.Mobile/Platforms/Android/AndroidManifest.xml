@@ -1,4 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-  <application android:allowBackup="true" android:supportsRtl="true"></application>
+  <!-- 悬浮窗——不是运行时权限，用户得自己去设置里手动开一次，见 FloatingOverlayService -->
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+  <!-- 前台服务需要这个权限才能调用 StartForegroundService（Android 9/API 28 起） -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <!-- FloatingOverlayService 声明的 ForegroundServiceType.SpecialUse 要求配一条这个属性，说明"这个
+       特殊用途具体是干嘛的"——Android 14/API 34 起，两边缺一个都会在启动前台服务时直接抛异常崩溃 -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+  <application android:allowBackup="true" android:supportsRtl="true">
+    <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="floating_lyrics_overlay" />
+  </application>
 </manifest>

@@ -12,6 +12,7 @@
   <Grid Padding="24">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
       <RowDefinition Height="*"/>
     </Grid.RowDefinitions>
 
@@ -20,7 +21,20 @@
       <TextBlock x:Name="TxtArtist" Text=" 悬浮歌词骨架" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="8,5,0,0" VerticalAlignment="Center"/>
     </StackPanel>
 
-    <Border Grid.Row="1" Background="#D9111111" BorderBrush="#222222" BorderThickness="2" Padding="16" VerticalAlignment="Center" CornerRadius="8">
+    <!-- 系统媒体会话 / 悬浮窗权限这两块骨架专用的状态区——跟正式产品的设置页不是一回事，
+         纯粹是这一步"验证这两个权限能不能申请到、申请到之后数据/悬浮窗能不能用"的调试面板 -->
+    <StackPanel Grid.Row="1" Margin="0,0,0,16">
+      <TextBlock x:Name="TxtMediaSessionStatus" Text="通知使用权：检查中…" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" TextWrapping="Wrap"/>
+      <Button x:Name="BtnOpenNotificationSettings" Content="去开启「通知使用权」" Click="BtnOpenNotificationSettings_Click" Margin="0,6,0,0" HorizontalAlignment="Left"/>
+
+      <TextBlock x:Name="TxtOverlayStatus" Text="悬浮窗权限：检查中…" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,12,0,0" TextWrapping="Wrap"/>
+      <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+        <Button x:Name="BtnOpenOverlaySettings" Content="去开启「悬浮窗权限」" Click="BtnOpenOverlaySettings_Click" Margin="0,0,8,0"/>
+        <Button x:Name="BtnToggleOverlay" Content="显示悬浮窗" Click="BtnToggleOverlay_Click"/>
+      </StackPanel>
+    </StackPanel>
+
+    <Border Grid.Row="2" Background="#D9111111" BorderBrush="#222222" BorderThickness="2" Padding="16" VerticalAlignment="Center" CornerRadius="8">
       <TextBlock x:Name="TxtDynamicLyric" Text="LOADING..." FontFamily="Consolas" Foreground="#FFFF55" FontSize="22"
                  TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center"/>
     </Border>
