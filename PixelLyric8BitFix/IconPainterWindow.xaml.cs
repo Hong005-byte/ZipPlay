@@ -98,7 +98,7 @@ namespace PixelLyric8BitFix
                 _width = l.Width;
                 _height = l.Height;
                 _frameGrids = l.Grids;
-                foreach (var (c, color) in l.Palette) _palette[c] = color;
+                foreach (var (c, color) in l.Palette) _palette[c] = ToWpfColor(color);
             }
             else
             {
@@ -147,6 +147,15 @@ namespace PixelLyric8BitFix
                     grid[y, x] = '.';
             return grid;
         }
+
+        // PixelIconEditor（连同 CustomTheme/CustomThemeValidator）现在住在 PixelLyric8Bit.Core，颜色用的是
+        // 平台无关的 RgbaColor，不是这边到处在用的 System.Windows.Media.Color——这几个小转换方法就是
+        // 两边的桥，调 PixelIconEditor 的地方把 _palette（WPF Color）转一下再传，拿到结果再转回来，
+        // 这个类自己内部（渲染、_palette 字段本身）完全不用碰 RgbaColor，只在跟 Core 打交道的边界转一次。
+        private static Color ToWpfColor(RgbaColor c) => Color.FromArgb(c.A, c.R, c.G, c.B);
+        private static RgbaColor ToRgba(Color c) => new(c.A, c.R, c.G, c.B);
+        private static Dictionary<char, RgbaColor> ToRgbaPalette(IReadOnlyDictionary<char, Color> palette) =>
+            palette.ToDictionary(kv => kv.Key, kv => ToRgba(kv.Value));
 
         // ── 撤销/重做 ─────────────────────────────────────────────────────
 
@@ -226,7 +235,7 @@ namespace PixelLyric8BitFix
                     BorderBrush = selected ? Brushes.White : new SolidColorBrush(Color.FromRgb(0x2A, 0x33, 0x2B)),
                     BorderThickness = new Thickness(selected ? 2 : 1),
                     Cursor = Cursors.Hand,
-                    ToolTip = $"{PixelIconEditor.ColorToHex(color)}（{c}）— 左键选中，右键删除",
+                    ToolTip = $"{PixelIconEditor.ColorToHex(ToRgba(color))}（{c}）— 左键选中，右键删除",
                 };
                 char capturedChar = c;
                 swatch.MouseLeftButtonDown += (s, e) =>
@@ -276,13 +285,13 @@ namespace PixelLyric8BitFix
             if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
 
             var picked = Color.FromRgb(dialog.Color.R, dialog.Color.G, dialog.Color.B);
-            string pickedHex = PixelIconEditor.ColorToHex(picked);
+            string pickedHex = PixelIconEditor.ColorToHex(ToRgba(picked));
 
             // 已经有一模一样的颜色了就直接选中它，不重复分配一个新字符——不然调色板里会出现
             // 两个字符对应同一个颜色，浪费掉本来就有限的可分配字符池
             foreach (var (c, color) in _palette)
             {
-                if (PixelIconEditor.ColorToHex(color) == pickedHex)
+                if (PixelIconEditor.ColorToHex(ToRgba(color)) == pickedHex)
                 {
                     _selectedChar = c;
                     RebuildPaletteUi();
@@ -692,7 +701,7 @@ namespace PixelLyric8BitFix
             };
             if (dialog.ShowDialog() != true) return;
 
-            Color?[,] pixels;
+            RgbaColor?[,] pixels;
             try
             {
                 pixels = DecodeImageToPixelGrid(dialog.FileName, _width, _height);
@@ -708,8 +717,8 @@ namespace PixelLyric8BitFix
             // 最坏情况下图片里的颜色一个都没法复用调色板里已有的，budget 按"还剩多少个字符可以分配"算，
             // 保证 QuantizeToGrid 无论如何都不会超过 45 种颜色的硬上限（见 PixelIconEditor.AssignableChars）
             int budget = Math.Max(1, PixelIconEditor.AssignableChars.Length - _palette.Count);
-            var (grid, newColors) = PixelIconEditor.QuantizeToGrid(pixels, _palette, budget);
-            foreach (var (c, color) in newColors) _palette[c] = color;
+            var (grid, newColors) = PixelIconEditor.QuantizeToGrid(pixels, ToRgbaPalette(_palette), budget);
+            foreach (var (c, color) in newColors) _palette[c] = ToWpfColor(color);
             _frameGrids[_currentFrameIndex] = grid;
             _grid = grid;
             _selectedChar ??= _palette.Count > 0 ? _palette.Keys.First() : null;
@@ -727,7 +736,7 @@ namespace PixelLyric8BitFix
         // 把图片解码成 targetWidth×targetHeight 的颜色矩阵——每个目标格子取它对应的那一块原图像素的
         // 平均颜色（区块平均降采样），比最近邻更适合把普通照片"像素化"，不会因为凑巧采样到一个
         // 边缘像素就整格颜色跑偏。平均下来的透明度低于 64（约 25%）就当这一格是空的（null）。
-        private static Color?[,] DecodeImageToPixelGrid(string path, int targetWidth, int targetHeight)
+        private static RgbaColor?[,] DecodeImageToPixelGrid(string path, int targetWidth, int targetHeight)
         {
             var bmp = new BitmapImage();
             bmp.BeginInit();
@@ -740,7 +749,7 @@ namespace PixelLyric8BitFix
             var raw = new byte[srcH * srcW * 4];
             converted.CopyPixels(raw, srcW * 4, 0);
 
-            var result = new Color?[targetHeight, targetWidth];
+            var result = new RgbaColor?[targetHeight, targetWidth];
             for (int ty = 0; ty < targetHeight; ty++)
             {
                 int sy0 = ty * srcH / targetHeight;
@@ -764,7 +773,7 @@ namespace PixelLyric8BitFix
 
                     if (count == 0) { result[ty, tx] = null; continue; }
                     byte avgA = (byte)(sumA / count);
-                    result[ty, tx] = avgA < 64 ? null : Color.FromRgb((byte)(sumR / count), (byte)(sumG / count), (byte)(sumB / count));
+                    result[ty, tx] = avgA < 64 ? null : new RgbaColor(255, (byte)(sumR / count), (byte)(sumG / count), (byte)(sumB / count));
                 }
             }
             return result;
@@ -839,7 +848,7 @@ namespace PixelLyric8BitFix
         // 保持跟这个功能加进来之前一样干净
         private CustomThemeIcon BuildResultIcon()
         {
-            var icon = PixelIconEditor.BuildFrames(_frameGrids, _width, _height, _palette);
+            var icon = PixelIconEditor.BuildFrames(_frameGrids, _width, _height, ToRgbaPalette(_palette));
             if (_frameGrids.Count > 1)
             {
                 icon.FrameDuration = double.TryParse(TxtFrameDuration.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed) && parsed > 0
