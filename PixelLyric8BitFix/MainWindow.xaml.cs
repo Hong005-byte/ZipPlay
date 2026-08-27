@@ -583,11 +583,6 @@ namespace PixelLyric8BitFix
             if (_isMiniMode)
             {
                 UpdateMiniVisualizer();
-
-                if (_settings.MiniPetWanderEnabled && !_isDraggingMiniBadge)
-                {
-                    UpdatePetWander();
-                }
             }
 
             if (_isMusicReactiveSkin && _settings.SkinAudioReactiveEnabled)
