@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- LyricsFetcher 联网抓词要用——普通权限，装完就自动有，不用像下面那两个特殊权限一样手动去设置开 -->
+  <uses-permission android:name="android.permission.INTERNET" />
   <!-- 悬浮窗——不是运行时权限，用户得自己去设置里手动开一次，见 FloatingOverlayService -->
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
   <!-- 前台服务需要这个权限才能调用 StartForegroundService（Android 9/API 28 起） -->
