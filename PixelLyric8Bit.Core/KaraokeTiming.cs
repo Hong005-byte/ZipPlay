@@ -9,7 +9,7 @@ namespace PixelLyric8BitFix
     /// 从 MainWindow 里搬出来单独成类——这套带经验参数（每字多少毫秒、超时倍数）的估算逻辑
     /// 最容易在下次调参时悄悄跑偏，独立出来才方便写单元测试钉住行为。
     /// </summary>
-    internal static class KaraokeTiming
+    public static class KaraokeTiming
     {
         // 大部分歌词行，"这一句到下一句"的区间本来就大致等于唱这句话要用的时间，直接线性铺开
         // 速度就是自然的。只有少数"唱得很快 + 后面跟一大段前奏间奏"的极端情况，区间会明显

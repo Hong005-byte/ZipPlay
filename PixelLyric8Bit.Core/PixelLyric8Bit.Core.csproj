@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 纯逻辑共享库：歌词解析/卡拉OK估算/成就判定/听歌统计聚合，这些东西不碰 UI、不碰 Windows 专属 API，
+       从 PixelLyric8BitFix（WPF）里搬出来单独成库，是为了给以后的 Android（Uno Platform）版本复用——
+       两边共用同一份"大脑"，以后改一次统计口径/成就门槛，两个平台一起生效，不用分别改两遍。
+       目标框架故意是纯 net8.0（不带 -windows），保证真的不会被谁不小心引进 WPF 类型。 -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>

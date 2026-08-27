@@ -7,7 +7,7 @@ namespace PixelLyric8BitFix
     /// 单元测试里跑真实音频，但"压缩幅度""区间平均""判断是不是一次冲击"这几个函数的边界行为
     /// （比如刚好卡在阈值上、baseline 还是 0 的时候）能钉住，以后再调灵敏度参数不用靠肉眼反复听/看。
     /// </summary>
-    internal static class AudioVisualizerMath
+    public static class AudioVisualizerMath
     {
         /// <summary>
         /// 把 FFT 幅度压成 0~1：log 压缩，把人眼更敏感的中低能量部分拉开，不然视觉上会显得"要么灭、要么爆表"。

@@ -130,12 +130,7 @@ PixelLyric8BitFix/
 ├── LocalDataWindow.xaml(.cs)     本地数据页：歌词缓存统计/清空、诊断日志入口
 ├── AboutWindow.xaml(.cs)         关于与更新页：版本号、手动检查更新、使用小贴士
 ├── CustomThemeWindow.xaml(.cs)   自定义主题页：粘贴/编辑 JSON、校验报错、管理最多 10 个主题
-├── AchievementCalculator.cs      8 个成就（含限定皮肤解锁条件）的纯计算逻辑，带单元测试
-├── ListeningStats.cs             听歌统计的数据模型（按天记录时长/曲目）
-├── ListeningStatsAggregator.cs   听歌统计的纯计算部分：总时长/活跃天数/连续天数/热门艺人榜/热门歌曲榜，带单元测试
-├── ListeningHeatmap.cs           🔥 听歌热力图的纯计算：秒数 -> 强度档位（0~4）、日期 -> 第几周/星期几的摆位坐标，带单元测试
-├── ListeningHighlightsBuilder.cs ✨ 亮点回顾的纯逻辑：把 ListeningSummary 拆成几张"图标 + 大字标题 + 小字说明"的卡片，带单元测试
-├── ListeningStatsStore.cs        听歌统计的磁盘存取
+├── ListeningStatsStore.cs        听歌统计的磁盘存取（数据模型 ListeningStats、聚合计算 ListeningStatsAggregator 搬去了 PixelLyric8Bit.Core，这里只管存取）
 ├── ProfileBundle.cs              个人资料导出/导入用的数据打包（昵称 + 头像 + 听歌统计）与本地合并逻辑
 ├── AvatarStore.cs                用户头像：本地存一份缩过尺寸的 PNG，不存原图
 ├── ShareCardBuilder.cs           听歌统计分享卡片（PNG 图片）的渲染，离屏渲染方法（RenderToBitmap）也给 LyricShareCardBuilder 复用
@@ -156,20 +151,31 @@ PixelLyric8BitFix/
 ├── PixelArt.cs                   运行时生成像素素材（Steve、小树、篝火、各皮肤图标等）
 ├── LyricsFetcher.cs              多引擎并发抓词（LRCLIB / 网易云 / QQ音乐 / 酷狗），网易云那个引擎顺带抓翻译行（现在基本失效）
 ├── LiveTranslator.cs             网易云翻译源失效后的兜底：现场调用 Google 翻译网页版接口逐行翻译歌词
-├── LrcParser.cs                  LRC 文本解析/取最后时间戳，抓词校验和主窗口歌词解析共用同一份逻辑
-├── AudioVisualizer.cs            Mini 模式粒子环的数据源：WASAPI 回环采集系统音频 + FFT，聚合成"整体响度"和"节奏冲击"两个数
-├── AudioVisualizerMath.cs        AudioVisualizer 里不碰音频硬件的纯数学部分（幅度压缩/区间平均/冲击检测），带单元测试
-├── KaraokeTiming.cs              卡拉OK扫光"唱到第几个字"的估算逻辑，纯函数，带单元测试
+├── AudioVisualizer.cs            Mini 模式粒子环的数据源：WASAPI 回环采集系统音频 + FFT，聚合成"整体响度"和"节奏冲击"两个数（幅度压缩/冲击检测的纯数学部分搬去了 PixelLyric8Bit.Core）
 ├── TrayIconManager.cs            系统托盘图标（NotifyIcon）的搭建/销毁封装
 ├── LyricsCache.cs                歌词本地缓存的存取（原文 + 翻译各存一份）
 ├── AppLog.cs                     本地诊断日志
 ├── UpdateChecker.cs               查 GitHub Release 判断有没有新版本（后台自动 + 关于页手动都用它）
 └── Icon.ico                      应用图标
 
+PixelLyric8Bit.Core/                 纯逻辑共享库（net8.0，不带 -windows，不引用任何 WPF/Windows 专属类型）：歌词解析、
+                                     卡拉OK估算、成就判定、听歌统计聚合这批"大脑"从 PixelLyric8BitFix 搬出来单独成库，
+                                     命名空间还是 PixelLyric8BitFix（先图省事，以后要拆更干净随时能改），目的是给以后
+                                     的 Android（Uno Platform）版本复用，两边共用同一份算法，不用分别维护两套。
+├── LrcParser.cs                  LRC 文本解析/取最后时间戳，抓词校验和主窗口歌词解析共用同一份逻辑
+├── KaraokeTiming.cs              卡拉OK扫光"唱到第几个字"的估算逻辑，纯函数
+├── AudioVisualizerMath.cs        AudioVisualizer 里不碰音频硬件的纯数学部分（幅度压缩/区间平均/冲击检测）
+├── AchievementCalculator.cs      8 个成就（含限定皮肤解锁条件）的纯计算逻辑
+├── ListeningStats.cs             听歌统计的数据模型（按天记录时长/曲目）
+├── ListeningStatsAggregator.cs   听歌统计的纯计算部分：总时长/活跃天数/连续天数/热门艺人榜/热门歌曲榜
+├── ListeningHeatmap.cs           🔥 听歌热力图的纯计算：秒数 -> 强度档位（0~4）、日期 -> 第几周/星期几的摆位坐标
+└── ListeningHighlightsBuilder.cs ✨ 亮点回顾的纯逻辑：把 ListeningSummary 拆成几张"图标 + 大字标题 + 小字说明"的卡片
+
 PixelLyric8BitFix.Tests/
 └── *Tests.cs                     LrcParser / KaraokeTiming / LyricsFetcher.IsDurationPlausible / AudioVisualizerMath / AchievementCalculator /
                                      ListeningStatsAggregator / ListeningHeatmap / ListeningHighlightsBuilder / CustomThemeShareCode /
-                                     CustomThemeRandomizer / CustomThemeRemixer / PixelIconEditor 等的单元测试（xUnit）
+                                     CustomThemeRandomizer / CustomThemeRemixer / PixelIconEditor 等的单元测试（xUnit，覆盖
+                                     PixelLyric8BitFix 和 PixelLyric8Bit.Core 两边的纯逻辑）
 
 installer/
 └── ZipPlay.iss                   Inno Setup 打包脚本

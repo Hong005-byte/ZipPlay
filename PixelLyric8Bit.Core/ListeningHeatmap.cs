@@ -9,7 +9,7 @@ namespace PixelLyric8BitFix
     /// 格子的坐标，UI 只管照着这份坐标画格子，不用自己算某个日期落在第几周第几行。不碰 UI/磁盘，
     /// 跟 KaraokeTiming / AudioVisualizerMath 是同一个套路，方便单元测试。
     /// </summary>
-    internal static class ListeningHeatmap
+    public static class ListeningHeatmap
     {
         // 强度档位边界（秒）：0 完全没听，超过第 N 个门槛就是第 N 档（1~4）。用固定阈值而不是"相对
         // 这段范围里最高的一天算比例"，是为了让"档位 3 是什么感觉"每年、每个人都一样——不会出现

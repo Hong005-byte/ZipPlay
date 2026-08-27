@@ -9,7 +9,7 @@ namespace PixelLyric8BitFix
     /// 热门艺人、热门歌曲。不碰磁盘、不碰 UI，方便直接写单元测试——跟 KaraokeTiming/LrcParser
     /// 是同一个套路（纯函数 + internal static，独立于负责 I/O 的 ListeningStatsStore）。
     /// </summary>
-    internal static class ListeningStatsAggregator
+    public static class ListeningStatsAggregator
     {
         public static int GetTotalSeconds(ListeningStats stats, DateOnly from, DateOnly to)
         {
