@@ -48,16 +48,16 @@ namespace PixelLyric8BitFix
         internal static SkinTheme BuildSkinThemeFromCustom(CustomTheme custom)
         {
             var colors = custom.Colors!;
-            CustomThemeValidator.TryParseHexColor(colors.Title!, out var title);
-            CustomThemeValidator.TryParseHexColor(colors.Artist!, out var artist);
-            CustomThemeValidator.TryParseHexColor(colors.Accent!, out var accent);
-            CustomThemeValidator.TryParseHexColor(colors.Lyric!, out var lyric);
-            CustomThemeValidator.TryParseHexColor(string.IsNullOrWhiteSpace(colors.Glow) ? colors.Accent! : colors.Glow, out var glow);
-            CustomThemeValidator.TryParseHexColor(colors.LyricBoxBg!, out var lyricBoxBg);
-            CustomThemeValidator.TryParseHexColor(colors.LyricBoxBorder!, out var lyricBoxBorder);
+            CustomThemeColorInterop.TryParseHexColor(colors.Title!, out var title);
+            CustomThemeColorInterop.TryParseHexColor(colors.Artist!, out var artist);
+            CustomThemeColorInterop.TryParseHexColor(colors.Accent!, out var accent);
+            CustomThemeColorInterop.TryParseHexColor(colors.Lyric!, out var lyric);
+            CustomThemeColorInterop.TryParseHexColor(string.IsNullOrWhiteSpace(colors.Glow) ? colors.Accent! : colors.Glow, out var glow);
+            CustomThemeColorInterop.TryParseHexColor(colors.LyricBoxBg!, out var lyricBoxBg);
+            CustomThemeColorInterop.TryParseHexColor(colors.LyricBoxBorder!, out var lyricBoxBorder);
 
             var bgStops = custom.Background!.Stops!
-                .Select(s => { CustomThemeValidator.TryParseHexColor(s, out var c); return c; })
+                .Select(s => { CustomThemeColorInterop.TryParseHexColor(s, out var c); return c; })
                 .ToList();
             Color miniBg = bgStops.Count > 0 ? bgStops[0] : Color.FromRgb(0x22, 0x22, 0x22);
 
@@ -69,7 +69,7 @@ namespace PixelLyric8BitFix
             var iconRows = (custom.Icon!.Frames is { Count: > 0 } frames ? frames[0] : custom.Icon.Rows!).ToArray();
             var iconPalette = custom.Icon.Palette!.ToDictionary(
                 kv => kv.Key[0],
-                kv => { CustomThemeValidator.TryParseHexColor(kv.Value, out var c); return c; });
+                kv => { CustomThemeColorInterop.TryParseHexColor(kv.Value, out var c); return c; });
             if (!iconPalette.ContainsKey('.')) iconPalette['.'] = Colors.Transparent;
 
             return new SkinTheme
@@ -363,7 +363,7 @@ namespace PixelLyric8BitFix
         private void ApplyCustomSkinVisuals(CustomTheme theme)
         {
             var stops = theme.Background!.Stops!
-                .Select(s => { CustomThemeValidator.TryParseHexColor(s, out var c); return c; })
+                .Select(s => { CustomThemeColorInterop.TryParseHexColor(s, out var c); return c; })
                 .ToList();
 
             Brush bgBrush;
@@ -386,7 +386,7 @@ namespace PixelLyric8BitFix
                 bgBrush = new SolidColorBrush(stops.Count > 0 ? stops[0] : Colors.Black);
             }
 
-            CustomThemeValidator.TryParseHexColor(theme.Colors!.Accent!, out var accent);
+            CustomThemeColorInterop.TryParseHexColor(theme.Colors!.Accent!, out var accent);
 
             CustomSkinBg.Background = bgBrush;
             CustomSkinBg.BorderBrush = new SolidColorBrush(accent);
@@ -397,7 +397,7 @@ namespace PixelLyric8BitFix
             // iconBitmap 取第一帧——drift/fall 那两条轨道和这个方法末尾的 ApplyCustomExtraLayers
             // 暂时都还只认第一帧（静态），只有下面 else 分支（主图标固定贴装饰栏）真的会逐帧切换，
             // 见开头讨论时定的范围。
-            var iconFrames = CustomThemeValidator.BuildCustomIconFrames(theme.Icon!);
+            var iconFrames = CustomThemeColorInterop.BuildCustomIconFrames(theme.Icon!);
             var iconBitmap = iconFrames[0];
 
             // animation.type 可以是 "pulse" 这种单招，也可以是 "pulse+sway" 这种用 + 连起来的组合——
@@ -478,7 +478,7 @@ namespace PixelLyric8BitFix
                 // 挡住"层的 icon 里写了 frames"这种情况（ValidateIcon 是主图标/层共用的同一套规则）——
                 // 用 BuildCustomIconFrames 取第一帧当静态图，跟主图标之外那几处（Mini 小方块/drift/fall/
                 // 分享卡片）是同一个退化策略，不会因为用户在层里写了 frames 就直接崩
-                var bitmap = CustomThemeValidator.BuildCustomIconFrames(layer.Icon!)[0];
+                var bitmap = CustomThemeColorInterop.BuildCustomIconFrames(layer.Icon!)[0];
 
                 var rotate = new RotateTransform();
                 var translate = new TranslateTransform();

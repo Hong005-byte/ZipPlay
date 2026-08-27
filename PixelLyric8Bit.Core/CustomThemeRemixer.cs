@@ -12,7 +12,7 @@ namespace PixelLyric8BitFix
     /// 见 CustomThemeSpecDoc 当初栽过的那个坑），也不需要重新校验来源本身合不合法，
     /// CustomThemeStore.ListAll() 拿到手的就已经是校验通过的。
     /// </summary>
-    internal static class CustomThemeRemixer
+    public static class CustomThemeRemixer
     {
         /// <summary>colorSource 提供 name 的一部分、font、colors、background；iconSource 提供 icon 和
         /// layers（同一个主题的图标和额外装饰通常是配套设计的，一起带走比拆开更协调）；animationSource

@@ -137,14 +137,13 @@ PixelLyric8BitFix/
 ├── LyricShareCardBuilder.cs      🖼️ 歌词分享卡片（PNG 图片）的渲染：一句歌词 + 歌名/艺人 + 主题吉祥物图标
 ├── AppSettings.cs                本地配置的读写与枚举定义
 ├── SkinTheme.cs                  内置皮肤的配色/字体/图标集中定义
-├── CustomTheme.cs                客制化主题的数据模型 + 详细校验
+├── CustomThemeColorInterop.cs    CustomThemeValidator（在 PixelLyric8Bit.Core，颜色是平台无关的 RgbaColor）
+                                     跟这边 WPF 渲染之间的桥：转成 System.Windows.Media.Color、渲染成
+                                     BitmapSource（BuildCustomIconFrames），这两步天生跟 WPF 绑定，留在这边
 ├── CustomThemeStore.cs           客制化主题的磁盘存取（最多 10 个）
-├── CustomThemeRandomizer.cs      🎲 随机生成一份自定义主题草稿（配色/图标/动画/多层装饰组合）
 ├── ThemeRemixWindow.xaml(.cs)    🔀 混搭已存主题的选择窗口：配色/图标/动画各挑一个来源
-├── CustomThemeRemixer.cs         混搭逻辑：从三份已存主题里各摘一块拼成新草稿
 ├── IconPainterWindow.xaml(.cs)   🖌️ 像素画板：点格子画图标，取代手打字符网格
 ├── PixelIconEditor.cs            画板的纯逻辑：网格状态 ⇄ CustomThemeIcon JSON 互转，带单元测试
-├── CustomThemeShareCode.cs       🔗 主题"分享码"：JSON ⇄ 一段带识别前缀的 Base64 纯文本，带单元测试
 ├── CustomThemeFeatureUsage.cs    记"用没用过混搭/画板"这两个一次性开关，给「混音师」「像素画师」两个成就用
 ├── CustomThemeAchievement.cs     4 个自定义主题相关成就（主题工匠/混音师/像素画师/收藏家），跟听歌成就是独立的第二条线
 ├── NetworkHelpers.cs             所有对外请求共用的 HttpClient 创建方法，强制走 IPv4 绕开一个实测踩到的 IPv6 连接坑
@@ -169,7 +168,14 @@ PixelLyric8Bit.Core/                 纯逻辑共享库（net8.0，不带 -windo
 ├── ListeningStats.cs             听歌统计的数据模型（按天记录时长/曲目）
 ├── ListeningStatsAggregator.cs   听歌统计的纯计算部分：总时长/活跃天数/连续天数/热门艺人榜/热门歌曲榜
 ├── ListeningHeatmap.cs           🔥 听歌热力图的纯计算：秒数 -> 强度档位（0~4）、日期 -> 第几周/星期几的摆位坐标
-└── ListeningHighlightsBuilder.cs ✨ 亮点回顾的纯逻辑：把 ListeningSummary 拆成几张"图标 + 大字标题 + 小字说明"的卡片
+├── ListeningHighlightsBuilder.cs ✨ 亮点回顾的纯逻辑：把 ListeningSummary 拆成几张"图标 + 大字标题 + 小字说明"的卡片
+├── RgbaColor.cs                  纯数据的 ARGB 颜色，不依赖任何 UI 框架——CustomTheme 相关这批纯逻辑原来用的
+                                     System.Windows.Media.Color 是 WPF 专属类型，Android/Uno 那边没有，用这个代替
+├── CustomTheme.cs                客制化主题的数据模型 + 详细校验（CustomThemeValidator），颜色统一用 RgbaColor；
+                                     渲染成实际位图不在这——那是 UI 渲染，各平台图形 API 不一样，见 WPF 那边的
+                                     CustomThemeColorInterop.BuildCustomIconFrames
+├── CustomThemeRandomizer.cs      🎲 随机生成一份自定义主题草稿（配色/图标/动画/多层装饰组合）
+└── CustomThemeRemixer.cs / CustomThemeShareCode.cs   混搭逻辑 / 主题"分享码"（JSON ⇄ 带识别前缀的 Base64 纯文本）
 
 PixelLyric8BitFix.Tests/
 └── *Tests.cs                     LrcParser / KaraokeTiming / LyricsFetcher.IsDurationPlausible / AudioVisualizerMath / AchievementCalculator /

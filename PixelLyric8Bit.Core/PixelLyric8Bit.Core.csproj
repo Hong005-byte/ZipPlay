@@ -10,4 +10,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- CustomThemeValidator 解析/序列化主题 JSON 要用到，版本跟 PixelLyric8BitFix.csproj 保持一致 -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+
 </Project>

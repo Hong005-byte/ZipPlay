@@ -17,7 +17,7 @@ namespace PixelLyric8BitFix
     /// 顺序即"稀有程度递增"，UI 层可以直接用这个顺序判断"要不要庆祝"。</summary>
     public enum PaletteRarity { Common, Rare, Epic, Limited }
 
-    internal static class CustomThemeRandomizer
+    public static class CustomThemeRandomizer
     {
         private sealed class Palette
         {

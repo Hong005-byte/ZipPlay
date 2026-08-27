@@ -1,10 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace PixelLyric8BitFix
 {
@@ -487,32 +484,22 @@ namespace PixelLyric8BitFix
             }
         }
 
-        /// <summary>把 icon.palette（单字符 -> 十六进制颜色字符串）转成 PixelArt.Build 直接吃得下的
-        /// Dictionary&lt;char, Color&gt;，"." 没显式配色的话补一个透明——渲染现场（MainWindow.Skins.cs）和
-        /// 编辑页的实时预览（CustomThemeWindow.xaml.cs）都要做这同一步转换，抽出来共用一份，不然两边
-        /// 各写一遍，以后调色逻辑（比如要支持简写的 3 位十六进制）改了容易漏改一边。
-        /// 调用前应该已经过 ValidateIcon 校验，这里不重复校验，纯粹是格式转换。</summary>
-        public static Dictionary<char, Color> BuildIconPalette(CustomThemeIcon icon)
+        /// <summary>把 icon.palette（单字符 -> 十六进制颜色字符串）转成一份 Dictionary&lt;char, RgbaColor&gt;，
+        /// "." 没显式配色的话补一个透明——渲染现场（WPF 那边是 MainWindow.Skins.cs / CustomThemeWindow.
+        /// xaml.cs，经 CustomThemeColorInterop 转成 System.Windows.Media.Color 再喂给 PixelArt.Build；
+        /// Android 端以后会有自己的转换）都要做这同一步转换，抽出来共用一份，不然各平台各写一遍，
+        /// 以后调色逻辑（比如要支持简写的 3 位十六进制）改了容易漏改。
+        /// 调用前应该已经过 ValidateIcon 校验，这里不重复校验，纯粹是格式转换。
+        /// 渲染成实际位图（BuildCustomIconFrames）不在这里——那是画位图的动作，是 UI 渲染而不是数据转换，
+        /// 各平台自己的图形 API 不一样（WPF 是 BitmapSource，Android 会是别的东西），见 WPF 那边的
+        /// CustomThemeColorInterop.BuildCustomIconFrames。</summary>
+        public static Dictionary<char, RgbaColor> BuildIconPalette(CustomThemeIcon icon)
         {
             var palette = icon.Palette!.ToDictionary(
                 kv => kv.Key[0],
                 kv => { TryParseHexColor(kv.Value, out var c); return c; });
-            if (!palette.ContainsKey('.')) palette['.'] = Colors.Transparent;
+            if (!palette.ContainsKey('.')) palette['.'] = RgbaColor.Transparent;
             return palette;
-        }
-
-        /// <summary>把一份 icon 渲染成一串位图——没有 Frames 就是长度为 1 的数组（跟这个字段加进来之前
-        /// "只有一张静态图"完全一样的行为），有 Frames 就按顺序逐帧渲染。调用方（正式渲染 MainWindow.
-        /// Skins.cs、编辑页预览 CustomThemeWindow.xaml.cs）拿到这个数组之后自己决定要不要做逐帧切换——
-        /// 这里只管"数据转位图"，不碰 UI/计时器。调用前应该已经过 ValidateIcon 校验，这里不重复校验。</summary>
-        public static BitmapSource[] BuildCustomIconFrames(CustomThemeIcon icon)
-        {
-            var palette = BuildIconPalette(icon);
-            if (icon.Frames is { Count: > 0 } frames)
-            {
-                return frames.Select(f => PixelArt.BuildCustomIcon(f.ToArray(), palette)).ToArray();
-            }
-            return new[] { PixelArt.BuildCustomIcon(icon.Rows!.ToArray(), palette) };
         }
 
         /// <summary>frameDuration 没填就用默认值——校验已经保证填了的话一定是正数，这里不重复校验。</summary>
@@ -536,9 +523,9 @@ namespace PixelLyric8BitFix
         };
 
         /// <summary>#RRGGBB 或 #AARRGGBB，缺 alpha 就当完全不透明。公开给渲染那边直接复用，不用再解析一遍。</summary>
-        public static bool TryParseHexColor(string hex, out Color color)
+        public static bool TryParseHexColor(string hex, out RgbaColor color)
         {
-            color = Colors.Transparent;
+            color = RgbaColor.Transparent;
             if (string.IsNullOrWhiteSpace(hex)) return false;
 
             string s = hex.Trim().TrimStart('#');
@@ -549,7 +536,7 @@ namespace PixelLyric8BitFix
                     byte r = Convert.ToByte(s.Substring(0, 2), 16);
                     byte g = Convert.ToByte(s.Substring(2, 2), 16);
                     byte b = Convert.ToByte(s.Substring(4, 2), 16);
-                    color = Color.FromRgb(r, g, b);
+                    color = new RgbaColor(255, r, g, b);
                     return true;
                 }
                 if (s.Length == 8)
@@ -558,7 +545,7 @@ namespace PixelLyric8BitFix
                     byte r = Convert.ToByte(s.Substring(2, 2), 16);
                     byte g = Convert.ToByte(s.Substring(4, 2), 16);
                     byte b = Convert.ToByte(s.Substring(6, 2), 16);
-                    color = Color.FromArgb(a, r, g, b);
+                    color = new RgbaColor(a, r, g, b);
                     return true;
                 }
             }
