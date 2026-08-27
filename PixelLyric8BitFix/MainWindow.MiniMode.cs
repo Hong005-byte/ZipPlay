@@ -260,11 +260,14 @@ namespace PixelLyric8BitFix
         // 不用自己手撸鼠标坐标换算，天然兼容多显示器/缩放）。DragMove() 会一直阻塞到用户松开左键，
         // 返回后比较一下位置有没有变化——没变就是单纯点了一下，没有拖动。
         //
-        // 拖了 → 什么都不做（跟以前一样）。没拖 + 单击（ClickCount==1）→ 桌宠反应（气泡+弹一下），
-        // 不再直接展开；没拖 + 双击（ClickCount>=2）→ 展开，这是以前"单击展开"那个行为搬过来的。
-        // WPF 的双击会先后触发两次 MouseLeftButtonDown（ClickCount 分别是 1、2），意味着真的双击
-        // 一下会先闪一下反应气泡、紧接着展开——这是这个方案的一个小瑕疵，接受它，不为了这个再加
-        // 一个抑制双击的计时器。
+        // 拖了 → 什么都不做（跟以前一样）。没拖 + 单击 → 桌宠反应（气泡+弹一下），不再直接展开；
+        // 没拖 + 双击 → 展开，这是以前"单击展开"那个行为搬过来的。
+        //
+        // 双击判定是手动做的（对比 _lastMiniBadgeClickUtc 和系统双击间隔 SystemInformation.
+        // DoubleClickTime），不用 e.ClickCount：DragMove() 会把这次点击的按下→抬起吞进系统的
+        // 非客户区拖动循环，不走 WPF 正常的鼠标消息路径，于是 WPF 自己算的 ClickCount 在这条路径
+        // 上不准——实测真双击经常两次都量成 ClickCount==1，导致永远走不到 ExitMiniMode()，
+        // 双击卡在只有反应气泡、回不去主界面。改成自己按时间戳判定后就稳了。
         private void MiniBadge_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
@@ -273,10 +276,19 @@ namespace PixelLyric8BitFix
             this.DragMove();
 
             bool wasDragged = Math.Abs(Left - beforeLeft) > 1 || Math.Abs(Top - beforeTop) > 1;
-            if (wasDragged) return;
+            if (wasDragged)
+            {
+                _lastMiniBadgeClickUtc = DateTime.MinValue; // 拖拽不算点击，避免"拖一下+点一下"被误判成双击
+                return;
+            }
+
+            var now = DateTime.UtcNow;
+            bool isDoubleClick = (now - _lastMiniBadgeClickUtc).TotalMilliseconds <= Forms.SystemInformation.DoubleClickTime;
+            // 判定成双击就清空，不让紧接着的第三下被算成又一次双击
+            _lastMiniBadgeClickUtc = isDoubleClick ? DateTime.MinValue : now;
 
             // 关掉这个开关的话，单击也跟着退回最初的"点一下直接展开"
-            if (!_settings.MiniPetReactionEnabled || e.ClickCount >= 2) ExitMiniMode();
+            if (!_settings.MiniPetReactionEnabled || isDoubleClick) ExitMiniMode();
             else ShowPetReaction();
         }
     }

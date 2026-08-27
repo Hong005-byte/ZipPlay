@@ -172,6 +172,12 @@ namespace PixelLyric8BitFix
         private double _preMiniWidth, _preMiniHeight, _preMiniLeft, _preMiniTop;
         private const double MiniBadgeSize = 64; // 方块本体大小，要跟 MainWindow.xaml 里 MiniBadge 的 Width/Height 对上
 
+        // 上一次"没拖动的 MiniBadge 点击"发生的时间——手动判定双击用，见 MiniBadge_MouseLeftButtonDown
+        // 为什么不直接用 e.ClickCount：Window.DragMove() 会把这次点击的按下→抬起吞进系统的
+        // 非客户区拖动循环里，不会正常经过 WPF 的鼠标消息处理，下一次按下时 WPF 自己维护的
+        // "上次点击时间/位置"状态是错的，ClickCount 在这条路径上量不准（实测双击经常量成两个 1）。
+        private DateTime _lastMiniBadgeClickUtc = DateTime.MinValue;
+
         // Mini 状态下窗口比方块本体（64）大一整圈，多出来的这圈放两层同心粒子环；方块视觉大小不变，
         // 只是 Mini 窗口整体比原来（就是方块本身那么大）大了一圈，留出地方给粒子环
         private const double MiniModeWindowSize = 140;
