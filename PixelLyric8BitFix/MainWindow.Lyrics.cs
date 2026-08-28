@@ -106,11 +106,20 @@ namespace PixelLyric8BitFix
             string previousTrackId = _lastTrackId;
             _lastTrackId = trackId;
             FlushListeningStats(previousTrackId); // 上一首歌剩下还没攒够阈值的零头秒数，切歌前先记到它名下
-            ResetCustomIconAutoSwitchTrackState(); // "连续播放同一首歌"这件事本来就该随着换歌重新计起
 
             // 1. 切歌一瞬间，UI 立刻响应，绝不等待网络
+            //
+            // ResetCustomIconAutoSwitchTrackState 挪进了这个 Dispatcher.Invoke 里，不能留在外面直接调——
+            // 这个方法（HandleTrackChangeAsync）是从 SMTC 的 MediaPropertiesChanged/CurrentSessionChanged
+            // 这两个 WinRT 事件触发的（见 MainWindow.xaml.cs 的 BindSessionEventsAsync），那两个事件在
+            // 系统自己的后台线程上触发，不是 WPF 的 UI 线程——这也是为什么下面这堆 UI 赋值本来就包在
+            // Dispatcher.Invoke 里，不是可以省略的装饰。ResetCustomIconAutoSwitchTrackState 会经
+            // SetCustomIconActionIndex 摸到 RowDecor/CustomIcon 这些真正的 UI 元素，直接在外面调
+            // 会在非 UI 线程碰 UI 对象，抛 InvalidOperationException("The calling thread cannot access
+            // this object because a different thread owns it.")——这正是实测复现到的那个崩溃。
             Dispatcher.Invoke(() =>
             {
+                ResetCustomIconAutoSwitchTrackState(); // "连续播放同一首歌"这件事本来就该随着换歌重新计起
                 TxtSongTitle.Text = title.ToUpper();
                 TxtArtist.Text = $"BY {artist.ToUpper()}";
                 TxtDynamicLyric.Text = "⛏️ MINING NEW TRACK...";
