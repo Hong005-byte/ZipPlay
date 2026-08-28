@@ -595,18 +595,22 @@
                     </Image.Effect>
                 </Image>
 
-                <!-- 客制化"来回走"动画专属（animation.type = walk）：跟 Minecraft 皮肤 Steve 走路同一套
-                     手法——左对齐（不写 Canvas.Right，默认贴在 Canvas 左边界），TranslateTransform.X 在
-                     两个边界之间来回摆（AutoReverse），走的是这条跟 Steve/火车完全同一条装饰带
-                     （同一个 Grid.Row、同一个 Panel.ZIndex="10"），不会被卡片下面的歌词内容挡住。
-                     独立于 CustomIcon 是单独一张图标（不是共用同一个 Image 元素）——CustomIcon 固定
-                     锚在右下角不动，walk 需要横穿整条带，两种定位方式没法用同一个元素表达，
-                     ApplyCustomIconMovement 里这两个图标的 Visibility 互斥，同一时刻只显示一个。 -->
-                <Image x:Name="CustomWalkIcon" Width="30" Height="30" Canvas.Bottom="2" Stretch="Uniform"
+                <!-- 客制化"来回走"动画专属（animation.type = walk）：跟 CustomIcon 用同一个锚点
+                     （Canvas.Right="14" Canvas.Bottom="2"，同样 36x36）——静止时（TranslateTransform.X=0）
+                     跟图标平时待的位置完全重合，看起来就是"这个图标自己走起来了"，不是凭空在别的地方
+                     冒出一个新图标。X 在 [-leftDistance, 0] 之间来回摆（AutoReverse）：从原位出发向左走，
+                     走到头再走回原位，不是 Steve 那种在两个固定端点之间摆——原位对 walk 来说更自然，
+                     跟"图标本来就该待在这里，只是偶尔走出去逛一圈再回来"这个直觉一致。
+                     走的是这条跟 Steve/火车完全同一条装饰带（同一个 Grid.Row、同一个
+                     Panel.ZIndex="10"），不会被卡片下面的歌词内容挡住。
+                     独立于 CustomIcon 是单独一张图标（不是共用同一个 Image 元素）——两个图标叠在
+                     同一个位置，ApplyCustomIconMovement 里靠 Visibility 互斥，同一时刻只显示一个,
+                     不会真的重叠可见。 -->
+                <Image x:Name="CustomWalkIcon" Width="36" Height="36" Canvas.Right="14" Canvas.Bottom="2" Stretch="Uniform"
                        RenderOptions.BitmapScalingMode="NearestNeighbor"
                        MouseLeftButtonDown="CustomIcon_MouseLeftButtonDown" Visibility="Collapsed">
                     <Image.RenderTransform>
-                        <TranslateTransform x:Name="CustomWalkTransform" X="20"/>
+                        <TranslateTransform x:Name="CustomWalkTransform"/>
                     </Image.RenderTransform>
                 </Image>
             </Canvas>

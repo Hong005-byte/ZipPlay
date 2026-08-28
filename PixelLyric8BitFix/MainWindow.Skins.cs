@@ -820,9 +820,12 @@ namespace PixelLyric8BitFix
         }
 
         // 客制化图标"来回走"专属（animation.type = walk）：跟 Minecraft 皮肤 Steve 走路（见下面
-        // StartSteveWalking）同一套手法——TranslateTransform.X 在 [20, rightBound] 之间来回摆
-        // （AutoReverse），rightBound 按窗口实际宽度算，不写死，小窗口不会走出界、大窗口也走得满。
-        // 70 = CustomWalkIcon 自身宽度(30) + 两侧留白，跟 UFO 那条没有额外装饰物占位的横穿动画
+        // StartSteveWalking）借的是同一套"AutoReverse 往返"手法，但起点不一样——Steve 在两个固定
+        // 端点之间摆，walk 是从图标平时待着的原位（CustomWalkTransform.X=0，跟 CustomIcon 同一个
+        // 锚点，见 MainWindow.xaml 里 CustomWalkIcon 的注释）出发向左走，走到头再走回原位，符合
+        // "图标本来待在这，只是偶尔走出去逛一圈再回来"这个直觉，而不是凭空站在别的地方来回摆。
+        // leftDistance（走多远）按窗口实际宽度算，不写死，小窗口不会走出界、大窗口也走得满；
+        // 70 = CustomWalkIcon 自身宽度(36) + 两侧留白，跟 UFO 那条没有额外装饰物占位的横穿动画
         // （StartUfoDrift）算法思路一样，不是照抄 Steve 的 110（那个 110 里包含了 Minecraft 皮肤专属的
         // 小树占位，客制化图标这条装饰带没有树）。
         //
@@ -831,8 +834,8 @@ namespace PixelLyric8BitFix
         // 被镜像——想要"朝左朝右换个样子"的话，用 icon.frames 自己画两帧不同朝向的图更安全、更可控。
         private void StartCustomWalkAnimation(double? customDuration, bool musicReactive, double sensitivity)
         {
-            double rightBound = Math.Max(60, Width - 70);
-            var anim = new DoubleAnimation(20, rightBound, TimeSpan.FromSeconds(SafeDuration(customDuration, 7)))
+            double leftDistance = Math.Max(60, Width - 70);
+            var anim = new DoubleAnimation(0, -leftDistance, TimeSpan.FromSeconds(SafeDuration(customDuration, 7)))
             {
                 AutoReverse = true,
                 RepeatBehavior = RepeatBehavior.Forever,
