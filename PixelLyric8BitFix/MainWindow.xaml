@@ -1280,6 +1280,8 @@
                 Width="64" Height="64" HorizontalAlignment="Center" VerticalAlignment="Center"
                 Cursor="Hand" ToolTip="拖动可以移动；点一下有反应；双击展开"
                 MouseLeftButtonDown="MiniBadge_MouseLeftButtonDown"
+                MouseMove="MiniBadge_MouseMove"
+                MouseLeftButtonUp="MiniBadge_MouseLeftButtonUp"
                 RenderTransformOrigin="0.5,0.5">
             <Border.RenderTransform>
                 <TranslateTransform x:Name="MiniBadgeBounceTransform" Y="0"/>
