@@ -106,6 +106,7 @@ namespace PixelLyric8BitFix
             string previousTrackId = _lastTrackId;
             _lastTrackId = trackId;
             FlushListeningStats(previousTrackId); // 上一首歌剩下还没攒够阈值的零头秒数，切歌前先记到它名下
+            ResetCustomIconAutoSwitchTrackState(); // "连续播放同一首歌"这件事本来就该随着换歌重新计起
 
             // 1. 切歌一瞬间，UI 立刻响应，绝不等待网络
             Dispatcher.Invoke(() =>

@@ -122,6 +122,13 @@ namespace PixelLyric8BitFix
         // 是一个没自定义 animation 的动作）都会让正在播的 sway/pulse 从头炸一下重新开始，观感很跳。
         private CustomThemeAnimation? _customIconActiveAnimationOverride;
 
+        // 数据驱动切动作用：当前这首歌"连续播放"了多久，跟 _pendingListenSeconds 同一个 tick
+        // （MainWindow.ListeningStats.cs 的 UpdateListeningStats）同一套暂停不计时/大间隔不计入的
+        // 门槛一起累加，但用途不一样——这个不进历史统计，只喂给 MainWindow.Skins.cs 的
+        // EvaluateAutoSwitchIconAction 去判断有没有跨过某个动作的 icon.actions[i].
+        // autoSwitchAfterSeconds 阈值。切歌那一刻清零，见 MainWindow.Lyrics.cs 的 HandleTrackChangeAsync。
+        private double _customIconContinuousTrackSeconds;
+
         private string _lastTrackId = "";
         private CancellationTokenSource? _lyricFetchCts;
 

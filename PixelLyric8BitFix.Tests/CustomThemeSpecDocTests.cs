@@ -72,6 +72,11 @@ namespace PixelLyric8BitFix.Tests
       ],
       ""frameDuration"": 0.2,
       ""animation"": { ""type"": ""spin"", ""duration"": 1.5 }
+    },
+    {
+      ""name"": ""投入"",
+      ""frames"": [[""#...."", "".###."", ""..#.."", "".#.#.""]],
+      ""autoSwitchAfterSeconds"": 120
     }
   ]
 }";
@@ -91,6 +96,7 @@ namespace PixelLyric8BitFix.Tests
             Assert.True(errors.Count == 0, string.Join(" | ", errors));
             Assert.NotNull(theme);
             Assert.Equal("spin", theme!.Icon!.Actions![0].Animation!.Type);
+            Assert.Equal(120, theme.Icon.Actions[1].AutoSwitchAfterSeconds);
         }
 
         [Fact]
@@ -103,6 +109,17 @@ namespace PixelLyric8BitFix.Tests
 
             Assert.Contains("drift", doc);
             Assert.Contains("musicReactive", doc);
+        }
+
+        [Fact]
+        public void Build_MentionsAutoSwitchAfterSeconds()
+        {
+            // icon.actions[i].autoSwitchAfterSeconds（数据驱动的自动切换）同理——粗粒度检查关键词，
+            // 详细规则由 CustomThemeIconActionAutoSwitchTests / …SelectorTests 覆盖
+            string doc = CustomThemeSpecDoc.Build();
+
+            Assert.Contains("autoSwitchAfterSeconds", doc);
+            Assert.Contains("连续播放", doc);
         }
     }
 }

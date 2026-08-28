@@ -106,6 +106,15 @@ namespace PixelLyric8BitFix
         // 就是 drift/fall，图标本来就已经活在专属轨道里，这种情况下任何动作都不能再单独指定
         // animation。两条规则校验都会挡，见 CustomThemeValidator。
         public CustomThemeAnimation? Animation { get; set; }
+
+        // 可选：数据驱动的自动切换阈值（秒）——当前正在播的这首歌"连续播放"（暂停不计时，切歌清零，
+        // 见 MainWindow.ListeningStats.cs 的 _customIconContinuousTrackSeconds）满这个秒数之后，
+        // 自动切到这个动作，不用等用户点。多个动作都设了这个字段的话，取"阈值已经被跨过的里面数值
+        // 最大"的那个（数值越大代表越靠后才该出现的阶段，见 MainWindow.Skins.cs 的
+        // EvaluateAutoSwitchIconAction）；已经手动点到（或者被更高阶段自动切到）更靠后的动作时不会
+        // 被拉回来——只会把索引往前推，不会跟用户已经做出的选择打架。不填就是这个字段加进来之前
+        // 唯一的行为：完全靠点击手动切换，不会有任何数据驱动的自动切换发生。
+        public double? AutoSwitchAfterSeconds { get; set; }
     }
 
     public sealed class CustomThemeAnimation
@@ -493,6 +502,14 @@ namespace PixelLyric8BitFix
                         {
                             errors.Add($"\"{actionAnimField}.type\" 不能包含 drift/fall——这两招需要图标整个活在应用主题时才搭好的专属飘过/飘落轨道里，不是切动作能随时换的，只能用其它 6 招：pulse/twinkle/bob/sway/spin/flicker（可以用 + 组合）。");
                         }
+                    }
+
+                    // 自动切换阈值：不填就是纯手动点击，填了必须是正数——道理跟 frameDuration/animation.duration
+                    // 一样，0 或负数没有意义（"连续播放 0 秒就自动切"等于一开始就该是这个动作，那应该直接
+                    // 把它内容画成动作 0，不需要这个字段）
+                    if (action.AutoSwitchAfterSeconds is double asas && asas <= 0)
+                    {
+                        errors.Add($"\"{actionsField}[{i}].autoSwitchAfterSeconds\" 填的是 {asas}，必须是大于 0 的数字（不填就是纯手动点击切换，不会自动触发）。");
                     }
                 }
             }

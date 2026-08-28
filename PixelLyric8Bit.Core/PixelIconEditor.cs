@@ -164,6 +164,22 @@ namespace PixelLyric8BitFix
 
         // ── 动作（icon.actions，画板"动作"选择器用）────────────────────────────
 
+        /// <summary>LoadActions 产出、BuildIconWithActions 接收的中间形态——一个动作的字段基本对应
+        /// CustomThemeIconAction，只是 Frames 已经摊开成画板能直接用的网格列表（不是字符串行）。
+        /// 两个方法对称往返，用同一个类型而不是各自的 tuple 形状，是为了不丢东西：Animation 画板目前
+        /// 没有对应的 UI 选择器（见 IconPainterWindow.xaml 里"动作"区块的说明），但如果续画的是一个
+        /// 已经手写了 animation 字段的动作，这个字段必须原样带着走过 Load→（画板里改帧/改名/改
+        /// 帧间隔/改自动切换阈值）→Build 这一整趟，不然用户明明只是想加一帧、结果"插入到编辑框"
+        /// 之后手写的 animation 却被悄悄冲掉了——这是比"这个功能画板还不支持"更糟的"直接丢用户数据"。</summary>
+        public sealed class LoadedIconAction
+        {
+            public string? Name { get; set; }
+            public List<char[,]> Grids { get; set; } = new();
+            public double? FrameDurationOverride { get; set; }
+            public double? AutoSwitchAfterSeconds { get; set; }
+            public CustomThemeAnimation? Animation { get; set; } // 画板不编辑这个，只负责原样保留
+        }
+
         /// <summary>BuildFrames 的"带额外动作"版——action 0（未命名，永远对应 icon 自己的 rows/frames）
         /// 走跟 BuildFrames 完全一样的规则（1 帧出 rows，2 帧以上出 frames），extraActions 依次变成
         /// icon.actions[0]/[1]/……。调色板只收全部动作（action 0 + 每一个额外动作）实际用到的字符，
@@ -174,7 +190,7 @@ namespace PixelLyric8BitFix
         public static CustomThemeIcon BuildIconWithActions(
             IReadOnlyList<char[,]> action0Grids, int width, int height,
             IReadOnlyDictionary<char, RgbaColor> palette,
-            IReadOnlyList<(string? Name, IReadOnlyList<char[,]> Grids, double? FrameDurationOverride)> extraActions)
+            IReadOnlyList<LoadedIconAction> extraActions)
         {
             var usedChars = new HashSet<char>();
 
@@ -204,7 +220,14 @@ namespace PixelLyric8BitFix
             // action.Frames 永远是"一份帧列表"（哪怕只画了 1 帧也要包成 [rows]）——CustomThemeIconAction
             // 没有 Rows 这个单帧简写字段，跟顶层 icon 不是同一套形状，见 CustomThemeIconAction 的注释
             List<CustomThemeIconAction>? actions = extraActions.Count == 0 ? null : extraActions
-                .Select(a => new CustomThemeIconAction { Name = a.Name, Frames = RowsForGrids(a.Grids), FrameDuration = a.FrameDurationOverride })
+                .Select(a => new CustomThemeIconAction
+                {
+                    Name = a.Name,
+                    Frames = RowsForGrids(a.Grids),
+                    FrameDuration = a.FrameDurationOverride,
+                    AutoSwitchAfterSeconds = a.AutoSwitchAfterSeconds,
+                    Animation = a.Animation,
+                })
                 .ToList();
 
             var paletteDict = new Dictionary<string, string>();
@@ -231,9 +254,9 @@ namespace PixelLyric8BitFix
         /// 单个动作解析失败（帧数据本身就有问题、或者尺寸跟 action 0 对不上）就跳过那一个，不影响别的
         /// 动作正常续画——跟 TryLoadFrames/TryLoadIcon 一贯的"续画工具，宽松优先"原则一致，不是校验入口，
         /// 一个动作画坏了不该连累其它还好好的动作也没法续画。</summary>
-        public static List<(string? Name, List<char[,]> Grids, double? FrameDurationOverride)> LoadActions(CustomThemeIcon icon, int width, int height)
+        public static List<LoadedIconAction> LoadActions(CustomThemeIcon icon, int width, int height)
         {
-            var result = new List<(string?, List<char[,]>, double?)>();
+            var result = new List<LoadedIconAction>();
             if (icon.Actions == null) return result;
 
             foreach (var action in icon.Actions)
@@ -255,7 +278,14 @@ namespace PixelLyric8BitFix
                 }
                 if (!ok || grids.Count == 0) continue;
 
-                result.Add((action.Name, grids, action.FrameDuration));
+                result.Add(new LoadedIconAction
+                {
+                    Name = action.Name,
+                    Grids = grids,
+                    FrameDurationOverride = action.FrameDuration,
+                    AutoSwitchAfterSeconds = action.AutoSwitchAfterSeconds,
+                    Animation = action.Animation,
+                });
             }
             return result;
         }

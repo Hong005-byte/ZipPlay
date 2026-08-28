@@ -31,6 +31,12 @@ namespace PixelLyric8BitFix
             if (_isPlaying && !string.IsNullOrEmpty(_lastTrackId) && elapsed > 0 && elapsed < StatsMaxTickGapSeconds)
             {
                 _pendingListenSeconds += elapsed;
+
+                // 客制化主题 icon.actions 的数据驱动自动切换：这首歌连续播放了多久喂给
+                // EvaluateAutoSwitchIconAction（MainWindow.Skins.cs）——没有任何动作用到
+                // autoSwitchAfterSeconds 的话这一步什么都不做，纯粹多比较几个 double，可以忽略的开销
+                _customIconContinuousTrackSeconds += elapsed;
+                EvaluateAutoSwitchIconAction();
             }
 
             if (_pendingListenSeconds >= StatsFlushThresholdSeconds)

@@ -46,6 +46,12 @@ namespace PixelLyric8BitFix
             public string? Name; // 动作 0 恒为 null；额外动作默认给个"动作 N"，用户可以改
             public List<char[,]> FrameGrids = new();
             public string? FrameDurationText; // 留空 = 继承 icon 顶层的帧间隔，跟 CustomThemeIconAction.FrameDuration 语义一致
+            public string? AutoSwitchSecondsText; // 留空 = 纯手动点击切换，跟 CustomThemeIconAction.AutoSwitchAfterSeconds 语义一致
+
+            // 画板目前没有对应的 UI 去编辑动作专属的移动方式（CustomThemeIconAction.Animation）——
+            // 这里只负责原样带着走：续画一个已经手写了 animation 字段的动作时，不能因为画板不认识
+            // 这个字段就在"插入到编辑框"的时候把它冲掉，那是比"这个功能画板还不支持"更糟的丢用户数据。
+            public CustomThemeAnimation? Animation;
         }
         private List<PaintedAction> _actions = new() { new PaintedAction() };
         private int _currentActionIndex;
@@ -128,13 +134,15 @@ namespace PixelLyric8BitFix
                 // 额外动作没有一个共同画布尺寸可以核对，干脆整个跳过，从空白单动作开始
                 if (existingIcon!.Actions is { Count: > 0 })
                 {
-                    foreach (var (name, grids, durationOverride) in PixelIconEditor.LoadActions(existingIcon, _width, _height))
+                    foreach (var loadedAction in PixelIconEditor.LoadActions(existingIcon, _width, _height))
                     {
                         _actions.Add(new PaintedAction
                         {
-                            Name = name,
-                            FrameGrids = grids,
-                            FrameDurationText = durationOverride?.ToString("0.##", CultureInfo.InvariantCulture),
+                            Name = loadedAction.Name,
+                            FrameGrids = loadedAction.Grids,
+                            FrameDurationText = loadedAction.FrameDurationOverride?.ToString("0.##", CultureInfo.InvariantCulture),
+                            AutoSwitchSecondsText = loadedAction.AutoSwitchAfterSeconds?.ToString("0.##", CultureInfo.InvariantCulture),
+                            Animation = loadedAction.Animation, // 画板没有 UI 编这个，原样带着走
                         });
                     }
                 }
@@ -719,6 +727,7 @@ namespace PixelLyric8BitFix
             var action = _actions[_currentActionIndex];
             TxtActionName.Text = action.Name ?? $"动作 {_currentActionIndex}";
             TxtActionFrameDuration.Text = action.FrameDurationText ?? "";
+            TxtActionAutoSwitchSeconds.Text = action.AutoSwitchSecondsText ?? "";
         }
 
         private void BtnAddAction_Click(object sender, RoutedEventArgs e)
@@ -776,6 +785,16 @@ namespace PixelLyric8BitFix
 
             PushUndo();
             _actions[_currentActionIndex].FrameDurationText = string.IsNullOrEmpty(trimmed) ? null : trimmed;
+        }
+
+        private void TxtActionAutoSwitchSeconds_LostFocus(object sender, RoutedEventArgs e)
+        {
+            if (_currentActionIndex == 0) return;
+            string trimmed = TxtActionAutoSwitchSeconds.Text.Trim();
+            if (trimmed == (_actions[_currentActionIndex].AutoSwitchSecondsText ?? "")) return;
+
+            PushUndo();
+            _actions[_currentActionIndex].AutoSwitchSecondsText = string.IsNullOrEmpty(trimmed) ? null : trimmed;
         }
 
         // ── 尺寸 / 清空 / 预览 ────────────────────────────────────────────
@@ -1025,7 +1044,14 @@ namespace PixelLyric8BitFix
         private CustomThemeIcon BuildResultIcon()
         {
             var extraActions = _actions.Skip(1)
-                .Select(a => (a.Name, (IReadOnlyList<char[,]>)a.FrameGrids, ParseOptionalSeconds(a.FrameDurationText)))
+                .Select(a => new PixelIconEditor.LoadedIconAction
+                {
+                    Name = a.Name,
+                    Grids = a.FrameGrids,
+                    FrameDurationOverride = ParseOptionalSeconds(a.FrameDurationText),
+                    AutoSwitchAfterSeconds = ParseOptionalSeconds(a.AutoSwitchSecondsText),
+                    Animation = a.Animation, // 画板没有 UI 编这个，原样带着走（见 PaintedAction.Animation 的注释）
+                })
                 .ToList();
 
             var icon = PixelIconEditor.BuildIconWithActions(_actions[0].FrameGrids, _width, _height, ToRgbaPalette(_palette), extraActions);

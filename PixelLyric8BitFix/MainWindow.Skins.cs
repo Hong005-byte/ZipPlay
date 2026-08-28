@@ -478,17 +478,28 @@ namespace PixelLyric8BitFix
         }
 
         // 点击装饰图标（CustomIcon_MouseLeftButtonDown）触发：循环切到下一个 icon.actions，绕完一圈
-        // 回到"动作 0"（图标自己的 Rows/Frames）。换帧之外，如果这个动作自己带了一份 animation
-        // （CustomThemeIconAction.Animation），也在这里一并切过去——见下面 ApplyCustomIconActionAnimation。
-        // BuildCustomIconFrames 本来就是纯粹"数据转位图"，借同一份 Palette 换一套 Frames 现造一个
-        // CustomThemeIcon 传进去，不用改这个方法一行。
+        // 回到"动作 0"。数据驱动的自动切换（EvaluateAutoSwitchIconAction）用的是同一套"切到第 index
+        // 个动作"逻辑，两条触发路径共用 SetCustomIconActionIndex，不会各自维护一份走岔。
         private void CycleCustomIconAction()
         {
-            if (_customTheme?.Icon is not { } icon || _customIconFrameApply is not { } applyFrame) return;
-
+            if (_customTheme?.Icon is not { } icon) return;
             var actions = icon.Actions ?? new List<CustomThemeIconAction>();
-            _customIconActionIndex = (_customIconActionIndex + 1) % (actions.Count + 1);
-            CustomThemeIconAction? selectedAction = _customIconActionIndex == 0 ? null : actions[_customIconActionIndex - 1];
+            SetCustomIconActionIndex((_customIconActionIndex + 1) % (actions.Count + 1));
+        }
+
+        // 把图标真正切到第 index 个动作（0 = 图标自己的 Rows/Frames，"动作 0"；>0 对应
+        // theme.Icon.Actions[index-1]）：换帧 + 如果这个动作自己带了一份 animation
+        // （CustomThemeIconAction.Animation）也一并切过去，见下面 ApplyCustomIconActionAnimation。
+        // BuildCustomIconFrames 本来就是纯粹"数据转位图"，借同一份 Palette 换一套 Frames 现造一个
+        // CustomThemeIcon 传进去，不用改这个方法一行。
+        private void SetCustomIconActionIndex(int index)
+        {
+            if (_customTheme?.Icon is not { } icon || _customIconFrameApply is not { } applyFrame) return;
+            var actions = icon.Actions ?? new List<CustomThemeIconAction>();
+            if (index < 0 || index > actions.Count) return; // 越界的话什么都不做，比如主题被换掉之后动作数量变少，旧索引不再有效
+
+            _customIconActionIndex = index;
+            CustomThemeIconAction? selectedAction = index == 0 ? null : actions[index - 1];
 
             BitmapSource[] frames;
             double frameDurationSeconds;
@@ -510,6 +521,35 @@ namespace PixelLyric8BitFix
             applyFrame(frames[0]); // 立刻生效，不用等下一个 tick
 
             ApplyCustomIconActionAnimation(selectedAction?.Animation);
+        }
+
+        // 数据驱动的自动切换：当前歌曲"连续播放"（_customIconContinuousTrackSeconds，见 MainWindow.
+        // ListeningStats.cs——暂停不计时，切歌清零）满某个动作设定的 autoSwitchAfterSeconds 秒数，
+        // 就自动切过去，不用等用户点。每个播放 tick（UpdateListeningStats）都会调一次。挑选/"只往前推
+        // 不往回拉"这条规则本身是纯逻辑，抽到 Core 的 CustomThemeIconActionAutoSwitch 里单独测了，
+        // 这里只管接上真实的播放状态。
+        private void EvaluateAutoSwitchIconAction()
+        {
+            if (_customTheme?.Icon?.Actions is not { Count: > 0 } actions) return;
+
+            int desiredIndex = CustomThemeIconActionAutoSwitch.GetDesiredActionIndex(actions, _customIconContinuousTrackSeconds, _customIconActionIndex);
+            if (desiredIndex != _customIconActionIndex) SetCustomIconActionIndex(desiredIndex);
+        }
+
+        // 换歌那一刻调用（MainWindow.Lyrics.cs 的 HandleTrackChangeAsync）：连续播放计时器清零——
+        // "连续听同一首歌多久"这件事本来就该随着换歌重新计起，不该带着上一首歌攒的时长。
+        //
+        // 只有这份主题真的有任何一个动作配了 autoSwitchAfterSeconds，才会顺带把姿势拉回"动作 0"
+        // 重新开始——没配这个字段的主题（绝大多数）完全不受影响，换歌不会打断用户手动点选的姿势，
+        // 跟这个功能加进来之前一模一样。真配了的主题才需要这个重置：不然新歌一开始，图标可能还顶着
+        // 上一首歌攒出来的"投入很久"那个姿势，跟新歌的实际播放时长对不上。
+        private void ResetCustomIconAutoSwitchTrackState()
+        {
+            _customIconContinuousTrackSeconds = 0;
+            if (_customTheme?.Icon?.Actions is { Count: > 0 } actions && actions.Any(a => a.AutoSwitchAfterSeconds is > 0))
+            {
+                SetCustomIconActionIndex(0);
+            }
         }
 
         // 动作专属的移动方式：override 为 null（"动作 0"，或者这个动作没写自己的 animation）就落回

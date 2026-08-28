@@ -81,7 +81,7 @@
                      动作 0 固定是 icon 自己的 rows/frames（Mini 小方块/分享卡片永远只认这一份），
                      不可改名/删除；额外动作可以任意加/命名/删，所有动作共用同一个画布尺寸。 -->
                 <TextBlock Text="动作（可选，点击装饰图标可循环切换）" Style="{StaticResource SectionHeader}"/>
-                <TextBlock Text="下面&quot;帧&quot;区块编辑的是当前选中这个动作的画面。动作 0 是默认外观（Mini 小方块/分享卡片只认它），额外动作会写进 icon.actions，点一下装饰图标能循环切到下一个，绕完一圈回到动作 0——只换画面，不改移动方式（sway/drift 等仍由上面主题的 animation.type 决定）。"
+                <TextBlock Text="下面&quot;帧&quot;区块编辑的是当前选中这个动作的画面。动作 0 是默认外观（Mini 小方块/分享卡片只认它），额外动作会写进 icon.actions，点一下装饰图标能循环切到下一个，绕完一圈回到动作 0，或者填了下面的自动切换阈值就不用点。每个动作还能有自己的移动方式（animation，覆盖上面主题的 sway/drift 等），这个画板暂时还没有对应的选择器，想用的话在“插入到编辑框”之后手动往这个动作的 JSON 里加一个 animation 字段（形状跟顶层 animation 一样，drift/fall 不能用），详见“下载详细说明”。"
                            Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,6"/>
                 <WrapPanel x:Name="ActionStripPanel" Margin="0,0,0,6"/>
                 <Button x:Name="BtnAddAction" Content="➕ 新增动作" Style="{StaticResource PillButtonStyle}"
@@ -97,6 +97,13 @@
                                  Background="#1B211C" Foreground="#EEEEEE" BorderBrush="#2A332B" BorderThickness="1" Padding="4,2"
                                  LostFocus="TxtActionFrameDuration_LostFocus"/>
                     </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <TextBlock Text="自动切换阈值(秒，留空=纯手动点击)" Foreground="{StaticResource MutedTextBrush}" FontSize="12" VerticalAlignment="Center"/>
+                        <TextBox x:Name="TxtActionAutoSwitchSeconds" Width="50" FontSize="12" Margin="4,0,0,0"
+                                 Background="#1B211C" Foreground="#EEEEEE" BorderBrush="#2A332B" BorderThickness="1" Padding="4,2"
+                                 LostFocus="TxtActionAutoSwitchSeconds_LostFocus"/>
+                    </StackPanel>
+                    <TextBlock Text="填了的话，当前歌曲不用点击、连续播放满这么多秒就自动切到这个动作（暂停不计时，换歌重新计）。" Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,4"/>
                     <Button x:Name="BtnDeleteAction" Content="🗑 删除此动作" Style="{StaticResource PillButtonStyle}"
                             HorizontalAlignment="Left" Padding="10,4" FontSize="11" Click="BtnDeleteAction_Click"/>
                 </StackPanel>

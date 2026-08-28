@@ -342,7 +342,7 @@ namespace PixelLyric8BitFix.Tests
             var palette = new Dictionary<char, RgbaColor> { ['#'] = TestRed };
 
             var icon = PixelIconEditor.BuildIconWithActions(new[] { grid }, 4, 4, palette,
-                new List<(string?, IReadOnlyList<char[,]>, double?)>());
+                new List<PixelIconEditor.LoadedIconAction>());
 
             Assert.Null(icon.Actions); // 没有额外动作就不该多出一个空数组字段
             Assert.NotNull(icon.Rows);
@@ -359,7 +359,7 @@ namespace PixelLyric8BitFix.Tests
 
             var icon = PixelIconEditor.BuildIconWithActions(new[] { action0 }, 4, 4,
                 new Dictionary<char, RgbaColor> { ['#'] = TestRed },
-                new List<(string?, IReadOnlyList<char[,]>, double?)> { ("挥手", new[] { action1Frame }, 0.5) });
+                new List<PixelIconEditor.LoadedIconAction> { new() { Name = "挥手", Grids = new List<char[,]> { action1Frame }, FrameDurationOverride = 0.5 } });
 
             Assert.NotNull(icon.Actions);
             Assert.Single(icon.Actions!);
@@ -381,7 +381,7 @@ namespace PixelLyric8BitFix.Tests
 
             var palette = new Dictionary<char, RgbaColor> { ['#'] = TestRed, ['w'] = TestBlue };
             var icon = PixelIconEditor.BuildIconWithActions(new[] { action0 }, 4, 4, palette,
-                new List<(string?, IReadOnlyList<char[,]>, double?)> { (null, new[] { action1Frame }, null) });
+                new List<PixelIconEditor.LoadedIconAction> { new() { Grids = new List<char[,]> { action1Frame } } });
 
             Assert.Equal(2, icon.Palette!.Count);
             Assert.Contains("w", icon.Palette.Keys);
@@ -397,7 +397,7 @@ namespace PixelLyric8BitFix.Tests
 
             var icon = PixelIconEditor.BuildIconWithActions(new[] { action0 }, 4, 4,
                 new Dictionary<char, RgbaColor> { ['#'] = TestRed },
-                new List<(string?, IReadOnlyList<char[,]>, double?)> { ("动作 1", new[] { action1Frame }, null) });
+                new List<PixelIconEditor.LoadedIconAction> { new() { Name = "动作 1", Grids = new List<char[,]> { action1Frame } } });
             string iconJson = PixelIconEditor.SerializeIconFragment(icon);
 
             string themeJson = $@"{{
@@ -422,7 +422,7 @@ namespace PixelLyric8BitFix.Tests
 
             var icon = PixelIconEditor.BuildIconWithActions(new[] { action0 }, 4, 4,
                 new Dictionary<char, RgbaColor> { ['#'] = TestRed },
-                new List<(string?, IReadOnlyList<char[,]>, double?)> { ("挥手", new[] { action1Frame }, 0.3) });
+                new List<PixelIconEditor.LoadedIconAction> { new() { Name = "挥手", Grids = new List<char[,]> { action1Frame }, FrameDurationOverride = 0.3 } });
 
             var loaded = PixelIconEditor.LoadActions(icon, 4, 4);
 
@@ -431,6 +431,29 @@ namespace PixelLyric8BitFix.Tests
             Assert.Equal(0.3, loaded[0].FrameDurationOverride);
             Assert.Single(loaded[0].Grids);
             Assert.Equal('#', loaded[0].Grids[0][0, 1]);
+        }
+
+        [Fact]
+        public void LoadActions_RoundTripsAutoSwitchAndAnimation()
+        {
+            // 画板没有 UI 编 Animation，但必须原样带着走，不然"续画一个已经手写了 animation 的动作"
+            // 会在插入回编辑框的时候把这份 animation 悄悄冲掉——这是 IconPainterWindow.xaml.cs 里
+            // PaintedAction.Animation 那段注释说的"比功能不支持更糟的丢数据"场景，这里在 Core 层验证
+            // BuildIconWithActions/LoadActions 这一对方法本身确实做到了完整往返
+            var action0 = MakeGrid(4, 4, '.');
+            var action1Frame = MakeGrid(4, 4, '.');
+            var animation = new CustomThemeAnimation { Type = "spin", Duration = 1.5 };
+
+            var icon = PixelIconEditor.BuildIconWithActions(new[] { action0 }, 4, 4,
+                new Dictionary<char, RgbaColor>(),
+                new List<PixelIconEditor.LoadedIconAction> { new() { Grids = new List<char[,]> { action1Frame }, AutoSwitchAfterSeconds = 90, Animation = animation } });
+
+            Assert.Equal(90, icon.Actions![0].AutoSwitchAfterSeconds);
+            Assert.Same(animation, icon.Actions[0].Animation);
+
+            var loaded = PixelIconEditor.LoadActions(icon, 4, 4);
+            Assert.Equal(90, loaded[0].AutoSwitchAfterSeconds);
+            Assert.Same(animation, loaded[0].Animation);
         }
 
         [Fact]
