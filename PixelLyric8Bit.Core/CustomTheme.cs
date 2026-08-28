@@ -92,6 +92,20 @@ namespace PixelLyric8BitFix
         public string? Name { get; set; }
         public List<List<string>>? Frames { get; set; }
         public double? FrameDuration { get; set; } // 不填就落回 icon 顶层的 FrameDuration（再没有就是默认值）
+
+        // 可选：这个动作自己的移动方式，形状跟顶层 animation 完全一样（type/duration/musicReactive/
+        // sensitivity）。不填就是这个字段加进来之前唯一的行为——所有动作共用 icon 顶层那一个
+        // animation，切动作只换画面不换动法。填了的话是一份完整独立的动画配置（跟 layers[i].animation
+        // 一样的""要么不填、要么整份自己给全""的规则，不是往顶层动画上打补丁——Duration/MusicReactive/
+        // Sensitivity 各自用自己的默认值，不会继承顶层那份的对应字段）。
+        //
+        // 唯一的限制：这里不能选 drift/fall。那两招意味着图标整个搬进""飘过/飘落卡片""的专属三重影
+        // 轨道（CustomDriftOverlay/CustomFallOverlay），这套轨道是应用主题的时候一次性搭好的固定布局，
+        // 不是点一下切动作就能随时搬进搬出的东西——所以只对不需要专属轨道的另外 6 招开放
+        // （pulse/twinkle/bob/sway/spin/flicker，一样可以用 + 组合）。同理，如果 icon 顶层自己选的
+        // 就是 drift/fall，图标本来就已经活在专属轨道里，这种情况下任何动作都不能再单独指定
+        // animation。两条规则校验都会挡，见 CustomThemeValidator。
+        public CustomThemeAnimation? Animation { get; set; }
     }
 
     public sealed class CustomThemeAnimation
@@ -254,6 +268,26 @@ namespace PixelLyric8BitFix
             // 主图标不许 drift/fall 跟别的招式组合（这两招用的是整张卡片飘过/飘落的专属轨道，跟主图标
             // 固定在装饰栏这件事本身互斥），层不受这个限制——见 ValidateAnimation 的 allowDriftFallCombo 参数
             ValidateAnimation(theme.Animation, "animation", errors, allowDriftFallCombo: false);
+
+            // icon.actions[i].animation 只对主图标有意义去检查这条冲突——图标顶层一旦选的就是
+            // drift/fall，就已经活在应用主题时搭好的专属三重影轨道里，这时候任何动作都不能再单独指定
+            // animation（没有""临时换个位置""这回事）。层（layers）没有这套专属轨道——drift/fall 在层
+            // 那边退化成原地小幅摆动（见 ApplyCustomExtraLayers 的注释），不受这条限制，这里只查
+            // theme.Icon，不递归查 theme.Layers。
+            if (theme.Icon?.Actions is { Count: > 0 } iconActions)
+            {
+                string[] topLevelTypes = string.IsNullOrWhiteSpace(theme.Animation?.Type) ? Array.Empty<string>() : SplitAnimationTypes(theme.Animation!.Type!);
+                if (topLevelTypes.Length > 0 && topLevelTypes[0] is "drift" or "fall")
+                {
+                    for (int i = 0; i < iconActions.Count; i++)
+                    {
+                        if (iconActions[i].Animation != null)
+                        {
+                            errors.Add($"\"icon.actions[{i}].animation\" 不能出现——顶层 \"animation.type\" 已经是 \"{topLevelTypes[0]}\"，图标整个活在飘过/飘落卡片的专属轨道里，这种情况下所有动作都只能沿用这个顶层动画，不能再单独指定。");
+                        }
+                    }
+                }
+            }
 
             if (theme.Layers != null)
             {
@@ -444,6 +478,21 @@ namespace PixelLyric8BitFix
                     if (action.FrameDuration is double afd && afd <= 0)
                     {
                         errors.Add($"\"{actionDurationField}\" 填的是 {afd}，必须是大于 0 的数字（不填就落回 \"{frameDurationField}\"，再没有就是默认的 {DefaultFrameDurationSeconds} 秒）。");
+                    }
+
+                    // 动作自己的 animation：不填就是这个字段加进来之前的行为（沿用 icon 顶层的
+                    // animation）。填了的话跟 layers[i].animation 一样是一份完整独立的配置——
+                    // type 必填，形状规则复用 ValidateAnimation；drift/fall 在这里一律不许出现
+                    // （不看组合，单独用也不行），道理见 CustomThemeIconAction.Animation 的注释；
+                    // 这里只查形状本身，"顶层是不是 drift/fall"那条交叉检查在 ParseAndValidate 里做。
+                    if (action.Animation != null)
+                    {
+                        string actionAnimField = $"{actionsField}[{i}].animation";
+                        ValidateAnimation(action.Animation, actionAnimField, errors, allowDriftFallCombo: true); // 组合规则不额外限制，drift/fall 下面统一禁，避免同一个字段报两遍不同角度的错
+                        if (!string.IsNullOrWhiteSpace(action.Animation.Type) && SplitAnimationTypes(action.Animation.Type).Any(t => t is "drift" or "fall"))
+                        {
+                            errors.Add($"\"{actionAnimField}.type\" 不能包含 drift/fall——这两招需要图标整个活在应用主题时才搭好的专属飘过/飘落轨道里，不是切动作能随时换的，只能用其它 6 招：pulse/twinkle/bob/sway/spin/flicker（可以用 + 组合）。");
+                        }
                     }
                 }
             }

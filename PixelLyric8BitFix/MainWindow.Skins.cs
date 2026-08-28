@@ -405,6 +405,7 @@ namespace PixelLyric8BitFix
             _customIconActionIndex = 0;
             _customIconFrames = null;
             _customIconFrameApply = null;
+            _customIconActiveAnimationOverride = null; // 动作 0 没有自己的 animation，永远落回下面这份顶层的
             bool hasActions = theme.Icon!.Actions is { Count: > 0 };
 
             // animation.type 可以是 "pulse" 这种单招，也可以是 "pulse+sway" 这种用 + 连起来的组合——
@@ -477,29 +478,29 @@ namespace PixelLyric8BitFix
         }
 
         // 点击装饰图标（CustomIcon_MouseLeftButtonDown）触发：循环切到下一个 icon.actions，绕完一圈
-        // 回到"动作 0"（图标自己的 Rows/Frames）。只换帧，不碰 animation.type 那套移动方式——drift/fall/
-        // sway 这些是主题选定的单一移动方式，轨道/变换在 ApplyCustomSkinVisuals 里已经启动好了，这里
-        // 不会重新触发一遍。BuildCustomIconFrames 本来就是纯粹"数据转位图"，借同一份 Palette 换一套
-        // Frames 现造一个 CustomThemeIcon 传进去，不用改这个方法一行。
+        // 回到"动作 0"（图标自己的 Rows/Frames）。换帧之外，如果这个动作自己带了一份 animation
+        // （CustomThemeIconAction.Animation），也在这里一并切过去——见下面 ApplyCustomIconActionAnimation。
+        // BuildCustomIconFrames 本来就是纯粹"数据转位图"，借同一份 Palette 换一套 Frames 现造一个
+        // CustomThemeIcon 传进去，不用改这个方法一行。
         private void CycleCustomIconAction()
         {
             if (_customTheme?.Icon is not { } icon || _customIconFrameApply is not { } applyFrame) return;
 
             var actions = icon.Actions ?? new List<CustomThemeIconAction>();
             _customIconActionIndex = (_customIconActionIndex + 1) % (actions.Count + 1);
+            CustomThemeIconAction? selectedAction = _customIconActionIndex == 0 ? null : actions[_customIconActionIndex - 1];
 
             BitmapSource[] frames;
             double frameDurationSeconds;
-            if (_customIconActionIndex == 0)
+            if (selectedAction == null)
             {
                 frames = CustomThemeColorInterop.BuildCustomIconFrames(icon);
                 frameDurationSeconds = CustomThemeValidator.GetFrameDurationSeconds(icon);
             }
             else
             {
-                var action = actions[_customIconActionIndex - 1];
-                frames = CustomThemeColorInterop.BuildCustomIconFrames(new CustomThemeIcon { Palette = icon.Palette, Frames = action.Frames });
-                frameDurationSeconds = action.FrameDuration is double d && d > 0 ? d : CustomThemeValidator.GetFrameDurationSeconds(icon);
+                frames = CustomThemeColorInterop.BuildCustomIconFrames(new CustomThemeIcon { Palette = icon.Palette, Frames = selectedAction.Frames });
+                frameDurationSeconds = selectedAction.FrameDuration is double d && d > 0 ? d : CustomThemeValidator.GetFrameDurationSeconds(icon);
             }
 
             _customIconFrames = frames.Length > 1 ? frames : null; // 只有 1 帧就没什么好"切换"的，跟别处的判断一致
@@ -507,6 +508,37 @@ namespace PixelLyric8BitFix
             _customIconFrameIndex = 0;
             _customIconFrameTickCounter = 0;
             applyFrame(frames[0]); // 立刻生效，不用等下一个 tick
+
+            ApplyCustomIconActionAnimation(selectedAction?.Animation);
+        }
+
+        // 动作专属的移动方式：override 为 null（"动作 0"，或者这个动作没写自己的 animation）就落回
+        // icon 顶层那份，效果跟这个字段加进来之前完全一样。只有真的换了不一样的 animation（按引用比较
+        // _customIconActiveAnimationOverride）才会 Reset+重新 Start 一遍——不然每次点击（哪怕点到的
+        // 是一个没自定义 animation 的动作）都会让正在播的 sway/pulse 从头跳一下重新开始，观感很糟。
+        //
+        // 不用管 drift/fall 这两个分支：CustomThemeValidator 已经保证"icon 顶层选了 drift/fall 的话，
+        // 任何动作都不能再单独指定 animation"，所以这里能拿到的 effective animation（不管来自动作
+        // 覆盖还是顶层兜底）永远不会是 drift/fall——真出现（比如未来校验漏了什么）也只是安静地不做事，
+        // 不会崩，也不会误把 CustomIcon 这几个""普通"分支专属元素当成 drift/fall 分支来用。
+        private void ApplyCustomIconActionAnimation(CustomThemeAnimation? actionAnimation)
+        {
+            if (actionAnimation == _customIconActiveAnimationOverride) return; // 同一份（都是 null，或者同一个动作再点一次绕回来），什么都不用变
+            _customIconActiveAnimationOverride = actionAnimation;
+
+            if (_customTheme is not { } theme) return;
+            var animation = actionAnimation ?? theme.Animation;
+            if (string.IsNullOrWhiteSpace(animation?.Type)) return; // 顶层 animation.type 理论上校验早保证过必填，这里只是防御
+
+            string[] animTypes = CustomThemeValidator.SplitAnimationTypes(animation.Type!);
+            if (animTypes.Length == 0 || animTypes[0] is "drift" or "fall") return;
+
+            CustomThemeColorInterop.TryParseHexColor(theme.Colors?.Accent ?? "#FFFFFF", out var accent);
+            bool musicReactive = animation.MusicReactive && _settings.SkinAudioReactiveEnabled;
+            double sensitivity = CustomThemeValidator.SensitivityToMultiplier(animation.Sensitivity);
+
+            ResetCustomIconAnimationState(accent);
+            foreach (var t in animTypes) StartCustomIconAnimation(t, animation.Duration, musicReactive, sensitivity);
         }
 
         // theme.layers（可选，最多 2 个）：每层自己的图标 + 动画，贴在卡片四个角之一，叠加在主图标/主动画

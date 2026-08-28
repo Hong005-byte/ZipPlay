@@ -70,23 +70,39 @@ namespace PixelLyric8BitFix.Tests
         [""#...."", "".###."", ""..#.."", "".#.#.""],
         [""....#"", "".###."", ""..#.."", "".#.#.""]
       ],
-      ""frameDuration"": 0.2
+      ""frameDuration"": 0.2,
+      ""animation"": { ""type"": ""spin"", ""duration"": 1.5 }
     }
   ]
 }";
             Assert.Contains(iconSnippet, CustomThemeSpecDoc.Build());
 
+            // 示例叙述里顶层是 "sway"（""默认站姿是 sway 轻摆""）——action.animation 是 "spin"，
+            // 两个都不是 drift/fall，这个组合应该完全合法
             string themeJson = $@"{{
               ""name"": ""test"",
               ""colors"": {{ ""title"": ""#FFFFFF"", ""artist"": ""#FFFFFF"", ""accent"": ""#FFFFFF"", ""lyric"": ""#FFFFFF"", ""lyricBoxBg"": ""#000000"", ""lyricBoxBorder"": ""#000000"" }},
               ""background"": {{ ""type"": ""solid"", ""stops"": [""#000000""] }},
               ""icon"": {iconSnippet},
-              ""animation"": {{ ""type"": ""pulse"" }}
+              ""animation"": {{ ""type"": ""sway"" }}
             }}";
 
             var (theme, errors) = CustomThemeValidator.ParseAndValidate(themeJson);
             Assert.True(errors.Count == 0, string.Join(" | ", errors));
             Assert.NotNull(theme);
+            Assert.Equal("spin", theme!.Icon!.Actions![0].Animation!.Type);
+        }
+
+        [Fact]
+        public void Build_MentionsActionAnimation()
+        {
+            // icon.actions[i].animation（动作专属的移动方式）也是一个只看这份文档/丢给 AI 读的人
+            // 完全没法知道存在的字段，除非写进去——粗粒度检查关键词，详细规则由
+            // CustomThemeIconActionAnimationTests 覆盖
+            string doc = CustomThemeSpecDoc.Build();
+
+            Assert.Contains("drift", doc);
+            Assert.Contains("musicReactive", doc);
         }
     }
 }

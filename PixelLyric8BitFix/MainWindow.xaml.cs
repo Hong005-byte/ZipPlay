@@ -116,6 +116,12 @@ namespace PixelLyric8BitFix
         private int _customIconActionIndex;
         private Action<BitmapSource>? _customIconFrameApply;
 
+        // 当前正在播的"动作专属 animation"——null 表示正在用 icon 顶层那份（"动作 0"，或者这个动作
+        // 没写自己的 animation，都落在这个 null 状态）。只在真的换了不一样的 animation 才重新
+        // Reset+Start 一遍（CycleCustomIconAction 里按引用比较这个字段），不然每次点击（哪怕点到的
+        // 是一个没自定义 animation 的动作）都会让正在播的 sway/pulse 从头炸一下重新开始，观感很跳。
+        private CustomThemeAnimation? _customIconActiveAnimationOverride;
+
         private string _lastTrackId = "";
         private CancellationTokenSource? _lyricFetchCts;
 
