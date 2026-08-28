@@ -115,14 +115,14 @@ namespace PixelLyric8BitFix
   - `frameDuration`：可选，数字（秒），不填就落回上面 icon 顶层的 `frameDuration`（再没有就是
     默认的 0.25）。
   - `animation`：可选，这个动作自己的移动方式，形状跟下面「动画 animation」完全一样
-    （`type`/`duration`/`musicReactive`/`sensitivity`）。**不填就沿用 icon 顶层的 `animation`**，
-    这是这个字段加进来之前唯一的行为；填了的话是一份完整独立的配置，不是往顶层动画上打补丁——
-    `duration`/`musicReactive`/`sensitivity` 各自用自己的默认值，不会继承顶层那份的对应字段。
-    **这里不能选 `drift`/`fall`**（不管单独用还是组合），只能用其它 6 招：
-    `pulse`/`twinkle`/`bob`/`sway`/`spin`/`flicker`（一样可以用 `+` 组合）——`drift`/`fall`
-    需要图标整个活在应用主题时才搭好的专属飘过/飘落轨道里，不是点一下切动作就能随时搬进搬出的东西。
-    同理，**如果 icon 顶层自己选的就是 `drift`/`fall`**，图标已经活在那条专属轨道里，这时候
-    任何动作都不能再单独指定 `animation`（校验会挡）。
+    （`type`/`duration`/`musicReactive`/`sensitivity`，**包括 `drift`/`fall`**）。
+    **不填就沿用 icon 顶层的 `animation`**，这是这个字段加进来之前唯一的行为；填了的话是一份
+    完整独立的配置，不是往顶层动画上打补丁——`duration`/`musicReactive`/`sensitivity` 各自用
+    自己的默认值，不会继承顶层那份的对应字段。点到一个把 `type` 写成 `drift`/`fall` 的动作，
+    图标会真的搬进那条飘过/飘落卡片的专属轨道；再点回一个用普通招式（或者沿用顶层）的动作，
+    又会搬回固定的装饰栏位置——顶层选的是哪招跟每个动作各自选的是哪招完全独立，互不限制。
+    唯一的规则：`drift`/`fall` 不能跟别的招式组合（也不能互相组合），跟顶层 `animation` 的
+    组合规则一模一样，只能单独出现，比如 `""drift""` 而不是 `""drift+pulse""`。
   - `autoSwitchAfterSeconds`：可选，数字（秒），必须大于 0。**数据驱动的自动切换**——不用等用户点，
     当前正在播的这首歌""连续播放""（暂停不计时，切下一首歌就清零重新计）满这么多秒之后，自动切到
     这个动作。多个动作都设了这个字段的话，取""秒数已经够了的里面这个数字最大""的那个（数字越大代表
@@ -136,7 +136,9 @@ namespace PixelLyric8BitFix
 
 示例（默认站姿是 `sway` 轻摆，""挥手""动作换了张脸还带自己的 `spin` 转圈，点一下切过去，
 再点一下切回默认站姿连带切回 `sway`；""投入""动作没写点击就能到，是这首歌连续播满 120 秒之后
-自动切过去的，不用点）：
+自动切过去的，不用点——顶层是 `sway`（图标固定贴在装饰栏），但""投入""这个动作自己写了
+`drift`，一旦自动切过去，图标会真的搬进飘过整张卡片的专属轨道，不再固定在装饰栏；再点一下
+切回""挥手""或者默认站姿，又会搬回来）：
 
 ```json
 ""icon"": {
@@ -160,7 +162,8 @@ namespace PixelLyric8BitFix
     {
       ""name"": ""投入"",
       ""frames"": [[""#...."", "".###."", ""..#.."", "".#.#.""]],
-      ""autoSwitchAfterSeconds"": 120
+      ""autoSwitchAfterSeconds"": 120,
+      ""animation"": { ""type"": ""drift"", ""duration"": 10 }
     }
   ]
 }

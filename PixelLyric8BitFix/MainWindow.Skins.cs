@@ -393,86 +393,22 @@ namespace PixelLyric8BitFix
             CustomSkinGlow.Color = accent;
             CustomSkinBg.Visibility = Visibility.Visible;
 
-            // frames 数组：没有 icon.frames 就是长度 1（跟这个字段加进来之前完全一样的行为）。
-            // iconBitmap 取第一帧——这个方法末尾的 ApplyCustomExtraLayers（额外装饰层）暂时还只认
-            // 第一帧（静态）；drift/fall 这两条轨道现在也支持逐帧切换了（跟主图标固定贴装饰栏那个
-            // 分支走同一套 _customIconFrames 状态，只是 _customIconFrameApply 写去不同的 Image）。
-            var iconFrames = CustomThemeColorInterop.BuildCustomIconFrames(theme.Icon!);
-            var iconBitmap = iconFrames[0];
-
             // 每次真正应用一个客制化主题都重新走一遍——点击切换过动作的话，换皮肤/重开窗口要从
-            // "动作 0"（图标自己的 Rows/Frames）重新开始，不该记着上次切到了第几个
+            // "动作 0"（图标自己的 Rows/Frames）重新开始，不该记着上次切到了第几个。
+            // _customIconActiveAnimationOverride 重置成专门的""还没初始化过""哨兵（不是 null）——
+            // 见 UninitializedIconAnimation 字段的注释：如果这里也直接置 null，下面
+            // SetCustomIconActionIndex(0) 里""动作 0 的 animation 本来就是 null""这次调用会被误判成
+            // ""跟上次一样，什么都不用做""，图标会维持在 ApplySkin 清空时设的全部 Collapsed，什么都
+            // 不显示。
             _customIconActionIndex = 0;
             _customIconFrames = null;
             _customIconFrameApply = null;
-            _customIconActiveAnimationOverride = null; // 动作 0 没有自己的 animation，永远落回下面这份顶层的
-            bool hasActions = theme.Icon!.Actions is { Count: > 0 };
+            _customIconActiveAnimationOverride = UninitializedIconAnimation;
 
-            // animation.type 可以是 "pulse" 这种单招，也可以是 "pulse+sway" 这种用 + 连起来的组合——
-            // 校验已经保证：要么整个数组只有 drift 或 fall 一个（走三图标飘过/飘落轨道），要么完全不含
-            // drift/fall（走下面 else 分支，可以是 1~6 招的任意组合）。两种情况不会混在一起，这里不用
-            // 再重新判一遍"含不含 drift/fall"，直接看 animTypes[0] 是不是那两个之一就够了。
-            string[] animTypes = CustomThemeValidator.SplitAnimationTypes(theme.Animation!.Type!);
-            double? customDuration = theme.Animation.Duration;
-            // "跟着音乐律动"是通用开关，不挑招式组合里的哪一个——不管选了几种，都统一用 SpeedRatio
-            // 让这些动画的播放速度跟着音乐响度/鼓点变，见 BeginMusicReactiveAnimation
-            bool musicReactive = theme.Animation.MusicReactive && _settings.SkinAudioReactiveEnabled;
-            // "反应多强"跟"要不要反应"是两回事——sensitivity 只在 musicReactive 为 true 时才有意义，
-            // 这里提前算好传下去，各个 Start*Animation 不用各自再判一遍 MusicReactive 开关
-            double sensitivity = CustomThemeValidator.SensitivityToMultiplier(theme.Animation.Sensitivity);
-
-            // 统一"启用逐帧切换"这一步，三个分支（drift/fall/主图标）共用——只是把新的一帧画去哪个/
-            // 哪几个 Image 不一样（drift/fall 是三份重影图标一起换，主图标只有它自己）。立刻应用一次
-            // 第一帧，不用等 SmoothTimer_Tick 第一次跑到才有内容；只有真的 >1 帧才建立逐帧状态，
-            // 1 帧（或者压根没填 frames，且没有 actions）就跟这些字段加进来之前完全一样，
-            // SmoothTimer_Tick 里 `if (_customIconFrames != null)` 天然不会命中，不会多一份空转开销。
-            void EnableCustomIconFrames(BitmapSource[] frames, Action<BitmapSource> applyFrame)
-            {
-                applyFrame(frames[0]);
-                _customIconFrameApply = applyFrame;
-                if (frames.Length > 1)
-                {
-                    _customIconFrames = frames;
-                    _customIconFrameDurationSeconds = CustomThemeValidator.GetFrameDurationSeconds(theme.Icon!);
-                    _customIconFrameIndex = 0;
-                    _customIconFrameTickCounter = 0;
-                    _customIconFramesMusicReactive = musicReactive;
-                    _customIconFrameSensitivity = sensitivity;
-                    _customIconFrameSpeedRatio = 1.0;
-                }
-            }
-
-            if (animTypes[0] == "drift")
-            {
-                RowDecor.Height = new GridLength(0);
-                CustomDriftOverlay.Visibility = Visibility.Visible;
-                CustomDriftIcon1.Cursor = CustomDriftIcon2.Cursor = CustomDriftIcon3.Cursor = hasActions ? Cursors.Hand : Cursors.Arrow;
-                EnableCustomIconFrames(iconFrames, bmp => CustomDriftIcon1.Source = CustomDriftIcon2.Source = CustomDriftIcon3.Source = bmp);
-                StartCustomDriftAnimation(CustomDrift1Transform, customDuration ?? 14, 0, musicReactive, sensitivity);
-                StartCustomDriftAnimation(CustomDrift2Transform, (customDuration ?? 14) * 1.35, 2, musicReactive, sensitivity);
-                StartCustomDriftAnimation(CustomDrift3Transform, (customDuration ?? 14) * 1.7, 5, musicReactive, sensitivity);
-            }
-            else if (animTypes[0] == "fall")
-            {
-                RowDecor.Height = new GridLength(0);
-                CustomFallOverlay.Visibility = Visibility.Visible;
-                CustomFallIcon1.Cursor = CustomFallIcon2.Cursor = CustomFallIcon3.Cursor = hasActions ? Cursors.Hand : Cursors.Arrow;
-                EnableCustomIconFrames(iconFrames, bmp => CustomFallIcon1.Source = CustomFallIcon2.Source = CustomFallIcon3.Source = bmp);
-                StartCustomFallAnimation(CustomFall1Transform, customDuration ?? 6, 0, -6, 8, musicReactive, sensitivity);
-                StartCustomFallAnimation(CustomFall2Transform, (customDuration ?? 6) * 1.3, 1.5, 4, -10, musicReactive, sensitivity);
-                StartCustomFallAnimation(CustomFall3Transform, (customDuration ?? 6) * 1.6, 3, -8, 6, musicReactive, sensitivity);
-            }
-            else
-            {
-                RowDecor.Height = new GridLength(50);
-                CustomIconDecorCanvas.Visibility = Visibility.Visible;
-                CustomIcon.Cursor = hasActions ? Cursors.Hand : Cursors.Arrow;
-                EnableCustomIconFrames(iconFrames, bmp => CustomIcon.Source = bmp);
-                // 重置放在循环外面，只做一次——挪进循环里的话，组合里后一招重置的时候会把前一招刚设好的
-                // 状态（比如 sway 已经在转的角度）擦掉，等于每加一招都在跟前面打架
-                ResetCustomIconAnimationState(accent);
-                foreach (var t in animTypes) StartCustomIconAnimation(t, customDuration, musicReactive, sensitivity);
-            }
+            // 图标该待在哪条轨道（普通装饰栏 / drift 三重影 / fall 三重影）、播什么帧/动画，全部交给
+            // SetCustomIconActionIndex(0) 去做——跟点击装饰图标/数据驱动自动切换走的是同一条路径，
+            // 不用在这里再维护一份重复的分支逻辑，两份逻辑也不会有慢慢走岔的风险
+            SetCustomIconActionIndex(0);
 
             ApplyCustomExtraLayers(theme, accent);
         }
@@ -488,18 +424,23 @@ namespace PixelLyric8BitFix
         }
 
         // 把图标真正切到第 index 个动作（0 = 图标自己的 Rows/Frames，"动作 0"；>0 对应
-        // theme.Icon.Actions[index-1]）：换帧 + 如果这个动作自己带了一份 animation
-        // （CustomThemeIconAction.Animation）也一并切过去，见下面 ApplyCustomIconActionAnimation。
-        // BuildCustomIconFrames 本来就是纯粹"数据转位图"，借同一份 Palette 换一套 Frames 现造一个
-        // CustomThemeIcon 传进去，不用改这个方法一行。
+        // theme.Icon.Actions[index-1]）：先让 ApplyCustomIconMovement 决定这个动作该用哪条移动轨道
+        // （普通装饰栏 / drift 三重影 / fall 三重影——如果这个动作自己带了 animation 就可能真的换轨道，
+        // 见该方法注释），这一步必须在算帧/应用帧之前做，因为它会顺带把 _customIconFrameApply 指向
+        // 新轨道该画帧的地方；不然帧会画去旧轨道已经隐藏起来的元素上。BuildCustomIconFrames 本来就是
+        // 纯粹"数据转位图"，借同一份 Palette 换一套 Frames 现造一个 CustomThemeIcon 传进去，
+        // 不用改这个方法一行。
         private void SetCustomIconActionIndex(int index)
         {
-            if (_customTheme?.Icon is not { } icon || _customIconFrameApply is not { } applyFrame) return;
+            if (_customTheme?.Icon is not { } icon) return;
             var actions = icon.Actions ?? new List<CustomThemeIconAction>();
             if (index < 0 || index > actions.Count) return; // 越界的话什么都不做，比如主题被换掉之后动作数量变少，旧索引不再有效
 
             _customIconActionIndex = index;
             CustomThemeIconAction? selectedAction = index == 0 ? null : actions[index - 1];
+
+            ApplyCustomIconMovement(selectedAction?.Animation);
+            if (_customIconFrameApply is not { } applyFrame) return; // 理论上上面跑完一定有值，这里只是防御
 
             BitmapSource[] frames;
             double frameDurationSeconds;
@@ -519,8 +460,6 @@ namespace PixelLyric8BitFix
             _customIconFrameIndex = 0;
             _customIconFrameTickCounter = 0;
             applyFrame(frames[0]); // 立刻生效，不用等下一个 tick
-
-            ApplyCustomIconActionAnimation(selectedAction?.Animation);
         }
 
         // 数据驱动的自动切换：当前歌曲"连续播放"（_customIconContinuousTrackSeconds，见 MainWindow.
@@ -552,33 +491,88 @@ namespace PixelLyric8BitFix
             }
         }
 
-        // 动作专属的移动方式：override 为 null（"动作 0"，或者这个动作没写自己的 animation）就落回
-        // icon 顶层那份，效果跟这个字段加进来之前完全一样。只有真的换了不一样的 animation（按引用比较
-        // _customIconActiveAnimationOverride）才会 Reset+重新 Start 一遍——不然每次点击（哪怕点到的
-        // 是一个没自定义 animation 的动作）都会让正在播的 sway/pulse 从头跳一下重新开始，观感很糟。
+        // 决定图标现在该待在哪条移动轨道上（普通装饰栏 / drift 三重影 / fall 三重影），把对应动画
+        // 启动好，并且把 _customIconFrameApply 指向这条轨道该画帧的地方。actionAnimation 为 null 就是
+        // "动作 0"，或者这个动作没写自己的 animation，落回 icon 顶层那份——效果跟每个动作只能换帧、
+        // 不能换动法的那个阶段完全一样。填了的话（包括 drift/fall）就用这份，图标真的会搬进/搬出
+        // 对应的专属轨道，这是"动作专属的移动方式"这轮唯一还没做的部分（之前只放开了 pulse/twinkle/
+        // bob/sway/spin/flicker 这 6 招，现在 drift/fall 也能按动作切了）。
         //
-        // 不用管 drift/fall 这两个分支：CustomThemeValidator 已经保证"icon 顶层选了 drift/fall 的话，
-        // 任何动作都不能再单独指定 animation"，所以这里能拿到的 effective animation（不管来自动作
-        // 覆盖还是顶层兜底）永远不会是 drift/fall——真出现（比如未来校验漏了什么）也只是安静地不做事，
-        // 不会崩，也不会误把 CustomIcon 这几个""普通"分支专属元素当成 drift/fall 分支来用。
-        private void ApplyCustomIconActionAnimation(CustomThemeAnimation? actionAnimation)
+        // 主题刚应用（ApplyCustomSkinVisuals 调 SetCustomIconActionIndex(0)）和之后每次切动作（点击/
+        // 数据驱动自动切换）都走这一个方法，不会有两份分支逻辑走岔的风险。只有真的换了不一样的
+        // animation（按引用比较 _customIconActiveAnimationOverride）才会重新摆一遍轨道——不然每次
+        // 点击（哪怕点到的是一个没自定义 animation 的动作）都会让正在播的动画从头跳一下重新开始，
+        // 观感很糟；同一份没变的话，_customIconFrameApply 也保持不动，帧照样画在原来那条轨道上。
+        //
+        // 旧轨道的动画不主动停：切走之后对应的容器被隐藏，动画效果看不见，纯粹是省不出来一点点
+        // CPU——跟这个 app 别的地方对这类"看不见的动画还在偷偷转"的容忍度一致（ApplySkin 里
+        // _musicReactiveStoryboards.Clear() 那段注释也承认过同一类"浪费但不出错"的取舍）。点击/
+        // 自动切换都是低频事件（人手速，或者最多几个播放阈值），不是每帧都会触发，攒下来的这点空转
+        // 开销可以忽略，换来的是不用给每一种招式的 Start*Animation 方法都补一段"怎么精确撤销自己"的
+        // 对称逻辑——那部分改动面更大，也是这个环境完全没法用眼睛验证效果的地方，犯不上为了省这点
+        // 开销冒险引入新 bug。
+        private void ApplyCustomIconMovement(CustomThemeAnimation? actionAnimation)
         {
             if (actionAnimation == _customIconActiveAnimationOverride) return; // 同一份（都是 null，或者同一个动作再点一次绕回来），什么都不用变
             _customIconActiveAnimationOverride = actionAnimation;
 
-            if (_customTheme is not { } theme) return;
+            if (_customTheme is not { Icon: { } icon } theme) return;
             var animation = actionAnimation ?? theme.Animation;
             if (string.IsNullOrWhiteSpace(animation?.Type)) return; // 顶层 animation.type 理论上校验早保证过必填，这里只是防御
 
             string[] animTypes = CustomThemeValidator.SplitAnimationTypes(animation.Type!);
-            if (animTypes.Length == 0 || animTypes[0] is "drift" or "fall") return;
+            if (animTypes.Length == 0) return;
 
+            bool hasActions = icon.Actions is { Count: > 0 };
             CustomThemeColorInterop.TryParseHexColor(theme.Colors?.Accent ?? "#FFFFFF", out var accent);
             bool musicReactive = animation.MusicReactive && _settings.SkinAudioReactiveEnabled;
             double sensitivity = CustomThemeValidator.SensitivityToMultiplier(animation.Sensitivity);
+            double? customDuration = animation.Duration;
 
-            ResetCustomIconAnimationState(accent);
-            foreach (var t in animTypes) StartCustomIconAnimation(t, animation.Duration, musicReactive, sensitivity);
+            // 逐帧动画的换帧节奏是不是跟音乐反应、反应多强——这份跟着"现在生效的是哪份 animation"走，
+            // 不是从第一次应用主题之后就再也不变（这是这轮顺手修的一个小疏漏：之前动作专属 animation
+            // 上线时漏了同步这三个字段，只有主题刚应用那一刻的顶层 musicReactive/sensitivity 会生效，
+            // 切到一个自己开了/关了音乐律动的动作，换帧节奏并不会跟着变）
+            _customIconFramesMusicReactive = musicReactive;
+            _customIconFrameSensitivity = sensitivity;
+            _customIconFrameSpeedRatio = 1.0;
+
+            // 先把三条轨道都摆成"没有被选中"的状态，再挑一条真正启用——不去比较"上一次是哪条"，
+            // 每次都是确定状态，逻辑更简单也不容易漏掉某个分支的清理
+            RowDecor.Height = new GridLength(0);
+            CustomIconDecorCanvas.Visibility = Visibility.Collapsed;
+            CustomDriftOverlay.Visibility = Visibility.Collapsed;
+            CustomFallOverlay.Visibility = Visibility.Collapsed;
+
+            if (animTypes[0] == "drift")
+            {
+                CustomDriftOverlay.Visibility = Visibility.Visible;
+                CustomDriftIcon1.Cursor = CustomDriftIcon2.Cursor = CustomDriftIcon3.Cursor = hasActions ? Cursors.Hand : Cursors.Arrow;
+                StartCustomDriftAnimation(CustomDrift1Transform, customDuration ?? 14, 0, musicReactive, sensitivity);
+                StartCustomDriftAnimation(CustomDrift2Transform, (customDuration ?? 14) * 1.35, 2, musicReactive, sensitivity);
+                StartCustomDriftAnimation(CustomDrift3Transform, (customDuration ?? 14) * 1.7, 5, musicReactive, sensitivity);
+                _customIconFrameApply = bmp => CustomDriftIcon1.Source = CustomDriftIcon2.Source = CustomDriftIcon3.Source = bmp;
+            }
+            else if (animTypes[0] == "fall")
+            {
+                CustomFallOverlay.Visibility = Visibility.Visible;
+                CustomFallIcon1.Cursor = CustomFallIcon2.Cursor = CustomFallIcon3.Cursor = hasActions ? Cursors.Hand : Cursors.Arrow;
+                StartCustomFallAnimation(CustomFall1Transform, customDuration ?? 6, 0, -6, 8, musicReactive, sensitivity);
+                StartCustomFallAnimation(CustomFall2Transform, (customDuration ?? 6) * 1.3, 1.5, 4, -10, musicReactive, sensitivity);
+                StartCustomFallAnimation(CustomFall3Transform, (customDuration ?? 6) * 1.6, 3, -8, 6, musicReactive, sensitivity);
+                _customIconFrameApply = bmp => CustomFallIcon1.Source = CustomFallIcon2.Source = CustomFallIcon3.Source = bmp;
+            }
+            else
+            {
+                RowDecor.Height = new GridLength(50);
+                CustomIconDecorCanvas.Visibility = Visibility.Visible;
+                CustomIcon.Cursor = hasActions ? Cursors.Hand : Cursors.Arrow;
+                // 重置放在循环外面，只做一次——挪进循环里的话，组合里后一招重置的时候会把前一招刚设好的
+                // 状态（比如 sway 已经在转的角度）擦掉，等于每加一招都在跟前面打架
+                ResetCustomIconAnimationState(accent);
+                foreach (var t in animTypes) StartCustomIconAnimation(t, customDuration, musicReactive, sensitivity);
+                _customIconFrameApply = bmp => CustomIcon.Source = bmp;
+            }
         }
 
         // theme.layers（可选，最多 2 个）：每层自己的图标 + 动画，贴在卡片四个角之一，叠加在主图标/主动画

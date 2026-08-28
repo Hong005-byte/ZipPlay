@@ -76,14 +76,17 @@ namespace PixelLyric8BitFix.Tests
     {
       ""name"": ""投入"",
       ""frames"": [[""#...."", "".###."", ""..#.."", "".#.#.""]],
-      ""autoSwitchAfterSeconds"": 120
+      ""autoSwitchAfterSeconds"": 120,
+      ""animation"": { ""type"": ""drift"", ""duration"": 10 }
     }
   ]
 }";
             Assert.Contains(iconSnippet, CustomThemeSpecDoc.Build());
 
-            // 示例叙述里顶层是 "sway"（""默认站姿是 sway 轻摆""）——action.animation 是 "spin"，
-            // 两个都不是 drift/fall，这个组合应该完全合法
+            // 示例叙述里顶层是 "sway"（""默认站姿是 sway 轻摆""，图标固定贴在装饰栏）——""挥手""的
+            // action.animation 是 "spin"（不是 drift/fall，不换轨道），""投入""的 action.animation
+            // 是 "drift"（换轨道，图标会搬进飘过整张卡片的专属轨道）；顶层跟两个动作各自选的招式
+            // 互相独立，这个组合应该完全合法
             string themeJson = $@"{{
               ""name"": ""test"",
               ""colors"": {{ ""title"": ""#FFFFFF"", ""artist"": ""#FFFFFF"", ""accent"": ""#FFFFFF"", ""lyric"": ""#FFFFFF"", ""lyricBoxBg"": ""#000000"", ""lyricBoxBorder"": ""#000000"" }},
@@ -97,6 +100,7 @@ namespace PixelLyric8BitFix.Tests
             Assert.NotNull(theme);
             Assert.Equal("spin", theme!.Icon!.Actions![0].Animation!.Type);
             Assert.Equal(120, theme.Icon.Actions[1].AutoSwitchAfterSeconds);
+            Assert.Equal("drift", theme.Icon.Actions[1].Animation!.Type);
         }
 
         [Fact]

@@ -118,9 +118,17 @@ namespace PixelLyric8BitFix
 
         // 当前正在播的"动作专属 animation"——null 表示正在用 icon 顶层那份（"动作 0"，或者这个动作
         // 没写自己的 animation，都落在这个 null 状态）。只在真的换了不一样的 animation 才重新
-        // Reset+Start 一遍（CycleCustomIconAction 里按引用比较这个字段），不然每次点击（哪怕点到的
-        // 是一个没自定义 animation 的动作）都会让正在播的 sway/pulse 从头炸一下重新开始，观感很跳。
-        private CustomThemeAnimation? _customIconActiveAnimationOverride;
+        // 决定轨道 + Reset+Start 一遍（ApplyCustomIconMovement 里按引用比较这个字段），不然每次点击
+        // （哪怕点到的是一个没自定义 animation 的动作）都会让正在播的 sway/pulse/drift 从头炸一下
+        // 重新开始，观感很跳。
+        //
+        // 初始值故意不是 null，是这个专门的""还没初始化过""哨兵——ApplyCustomSkinVisuals 应用一份新
+        // 主题时，"动作 0"对应的 actionAnimation 参数本来就是 null，如果这个字段的初始值/重置值也是
+        // null，"两个 null 一样，什么都不用做"这条判断会让主题刚应用的那一次设置被误判成""没变化，
+        // 跳过""，图标最终会维持在 ApplySkin 清空时设的全部 Collapsed，什么都不显示。哨兵保证这个
+        // 字段第一次/每次换主题时都跟任何真实值（包括 null）不相等，强制第一次一定会真的走一遍。
+        private static readonly CustomThemeAnimation UninitializedIconAnimation = new();
+        private CustomThemeAnimation? _customIconActiveAnimationOverride = UninitializedIconAnimation;
 
         // 数据驱动切动作用：当前这首歌"连续播放"了多久，跟 _pendingListenSeconds 同一个 tick
         // （MainWindow.ListeningStats.cs 的 UpdateListeningStats）同一套暂停不计时/大间隔不计入的
