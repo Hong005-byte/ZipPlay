@@ -113,10 +113,14 @@ namespace PixelLyric8BitFix
             new[] { "..#.....", "..##....", "..###...", "..####..", "..#####.", "..######", "..###...", "........" }, // 音符
         };
 
-        // 8 招式各自实际控制的是哪个属性——两招落在同一个属性上组合起来没意义（后一个直接盖掉前一个），
+        // 9 招式各自实际控制的是哪个属性——两招落在同一个属性上组合起来没意义（后一个直接盖掉前一个），
         // 抽组合的时候只从"不同属性"里选第二招，保证抽出来的组合真的是"两个效果叠加"而不是"抽了个寂寞"。
-        // 主图标那边 drift/fall 根本不进 ComboablePool（那两招不能组合，校验会拦），层里没有这个限制，
-        // 层的组合逻辑直接从全部 8 招（AnimationPropertyGroup 的全部 key）里挑，不单独维护一份 8 招池子。
+        // 主图标那边 drift/fall/walk 根本不进 ComboablePool（这三招各自要专属的渲染结构，不能组合，
+        // 校验会拦），层里没有这个限制（那三招在层里都退化成同一套单图标动画），层的组合逻辑直接从
+        // ComboablePool 这 6 招里挑，不含 drift/fall/walk——纯粹是"这三招在层里效果跟 sway/bob 分不
+        // 太出来"，见下面随机装饰层那段的注释，不是校验层面不让组合。walk 没有单独列进这个字典——
+        // 它在层里退化成跟 drift 完全一样的动画（StartLayerAnimation 里 "drift"/"walk" 共用同一个
+        // case），属性分组用 drift 那份即可，不需要重复一份。
         private static readonly Dictionary<string, string> AnimationPropertyGroup = new()
         {
             ["pulse"] = "glow", ["flicker"] = "glow",
@@ -148,11 +152,11 @@ namespace PixelLyric8BitFix
             var icon = IconShapes[rng.Next(IconShapes.Length)];
             string animType = CustomThemeValidator.ValidAnimationTypes[rng.Next(CustomThemeValidator.ValidAnimationTypes.Length)];
 
-            // 4 成概率给主图标也配一个组合招式——只在抽到的不是 drift/fall 时才有意义（那两招不能组合，
-            // 见 CustomThemeValidator.ValidateAnimation），而且只从"控制的是不同属性"的招式里挑第二个：
-            // 挑同属性的（比如 pulse 又挑 flicker，两个都是控制发光度）后一个会直接盖掉前一个，抽出来的
-            // 组合毫无意义，不如干脆别抽
-            if (animType != "drift" && animType != "fall" && rng.Next(10) < 4)
+            // 4 成概率给主图标也配一个组合招式——只在抽到的不是 drift/fall/walk 时才有意义（这三招各自
+            // 要用专属的渲染结构，不能组合，见 CustomThemeValidator.ValidateAnimation），而且只从
+            // "控制的是不同属性"的招式里挑第二个：挑同属性的（比如 pulse 又挑 flicker，两个都是控制
+            // 发光度）后一个会直接盖掉前一个，抽出来的组合毫无意义，不如干脆别抽
+            if (animType != "drift" && animType != "fall" && animType != "walk" && rng.Next(10) < 4)
             {
                 var candidates = ComboablePool.Where(t => t != animType && AnimationPropertyGroup[t] != AnimationPropertyGroup[animType]).ToArray();
                 if (candidates.Length > 0) animType = $"{animType}+{candidates[rng.Next(candidates.Length)]}";

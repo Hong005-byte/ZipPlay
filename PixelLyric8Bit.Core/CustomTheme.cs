@@ -94,16 +94,17 @@ namespace PixelLyric8BitFix
         public double? FrameDuration { get; set; } // 不填就落回 icon 顶层的 FrameDuration（再没有就是默认值）
 
         // 可选：这个动作自己的移动方式，形状跟顶层 animation 完全一样（type/duration/musicReactive/
-        // sensitivity，也包括 drift/fall——点一下切到这个动作，图标会真的搬进/搬出""飘过/飘落卡片""
-        // 的专属三重影轨道，不再只是原地换帧，见 MainWindow.Skins.cs 的 ApplyCustomIconMovement）。
-        // 不填就是这个字段加进来之前唯一的行为——所有动作共用 icon 顶层那一个 animation，切动作只
-        // 换画面不换动法。填了的话是一份完整独立的动画配置（跟 layers[i].animation 一样的""要么不填、
-        // 要么整份自己给全""的规则，不是往顶层动画上打补丁——Duration/MusicReactive/Sensitivity 各自
-        // 用自己的默认值，不会继承顶层那份的对应字段）。
+        // sensitivity，也包括 drift/fall/walk——点一下切到这个动作，图标会真的搬进/搬出对应的专属
+        // 渲染结构（drift/fall 是飘过/飘落卡片的三重影轨道，walk 是装饰栏里来回走的单独图标，像
+        // Minecraft 皮肤的 Steve 那样），不再只是原地换帧，见 MainWindow.Skins.cs 的
+        // ApplyCustomIconMovement）。不填就是这个字段加进来之前唯一的行为——所有动作共用 icon 顶层
+        // 那一个 animation，切动作只换画面不换动法。填了的话是一份完整独立的动画配置（跟
+        // layers[i].animation 一样的""要么不填、要么整份自己给全""的规则，不是往顶层动画上打补丁——
+        // Duration/MusicReactive/Sensitivity 各自用自己的默认值，不会继承顶层那份的对应字段）。
         //
-        // 唯一的限制：drift/fall 不能跟别的招式组合（也不能互相组合），跟顶层 animation 的组合规则
-        // 一模一样——那两招各自是整张卡片飘过/飘落的专属轨道，只能单独出现，见 CustomThemeValidator
-        // 的 ValidateAnimation。
+        // 唯一的限制：drift/fall/walk 不能跟别的招式组合（也不能互相组合），跟顶层 animation 的组合
+        // 规则一模一样——这三招各自要用专属的渲染结构，只能单独出现，见 CustomThemeValidator 的
+        // ValidateAnimation。
         public CustomThemeAnimation? Animation { get; set; }
 
         // 可选：数据驱动的自动切换阈值（秒）——当前正在播的这首歌"连续播放"（暂停不计时，切歌清零，
@@ -118,10 +119,10 @@ namespace PixelLyric8BitFix
 
     public sealed class CustomThemeAnimation
     {
-        public string? Type { get; set; }  // pulse / twinkle / drift / fall / bob / sway / spin / flicker
+        public string? Type { get; set; }  // pulse / twinkle / drift / fall / bob / sway / spin / flicker / walk
         public double? Duration { get; set; } // 秒，不填就用每种招式自己的默认值
 
-        // 可选，不填默认 false。true 的话，不管上面 Type 选的是 8 种招式里的哪一种，这个动画的播放速度
+        // 可选，不填默认 false。true 的话，不管上面 Type 选的是 9 种招式里的哪一种，这个动画的播放速度
         // 都会跟着系统正在播的音乐响度/鼓点实时变化——跟内置皮肤（黑胶转速、Minecraft 走路变速……）
         // 用的是同一套机制，见 MainWindow.SkinInteractions.cs 的 UpdateMusicReactiveSkin。
         // 受设置页"皮肤音乐律动"这个总开关控制，那个开关关了的话这里勾了也不会生效。
@@ -141,7 +142,7 @@ namespace PixelLyric8BitFix
     /// </summary>
     public static class CustomThemeValidator
     {
-        public static readonly string[] ValidAnimationTypes = { "pulse", "twinkle", "drift", "fall", "bob", "sway", "spin", "flicker" };
+        public static readonly string[] ValidAnimationTypes = { "pulse", "twinkle", "drift", "fall", "bob", "sway", "spin", "flicker", "walk" };
         public static readonly string[] ValidSensitivities = { "low", "medium", "high" };
 
         // 序列化一个 CustomTheme 对象回 JSON 文本时用这份设置——键名转成 camelCase（"name"/"colors"/
@@ -332,12 +333,14 @@ namespace PixelLyric8BitFix
                 .Select(t => t.ToLowerInvariant())
                 .ToArray();
 
-        // 主图标的 animation 和每个 layers[i].animation 是同一套校验规则（type 是 8 招组合、duration 是正数、
+        // 主图标的 animation 和每个 layers[i].animation 是同一套校验规则（type 是 9 招组合、duration 是正数、
         // sensitivity 三档之一），抽出来共用一份，不然多层加进来之后同一段逻辑要复制 MaxLayers+1 遍。
-        // allowDriftFallCombo=false（主图标）时 drift/fall 必须单独出现，不能跟别的招式（也不能跟彼此）
-        // 组合——这两招用的是整张卡片飘过/飘落的专属轨道（三份图标各自动画），主图标同时又要固定显示在
-        // 装饰栏里，两种视觉结构互斥，"drift+pulse"这种组合没法同时画出来。层没有这个专属轨道，
-        // 全部走同一套单图标渲染，allowDriftFallCombo=true 时组合不受限制。
+        // allowDriftFallCombo=false（主图标）时 drift/fall/walk 必须单独出现，不能跟别的招式（也不能
+        // 跟彼此）组合——这三招各自用的是专属的渲染结构（drift/fall 是整张卡片飘过/飘落的三重影轨道，
+        // walk 是装饰栏那条窄带里来回走的单独一张图标，见 MainWindow.Skins.cs 的 ApplyCustomIconMovement），
+        // 主图标同一时刻只能待在其中一种结构里，"drift+pulse"/"walk+sway"这种组合没法同时画出来。
+        // 层没有这几个专属结构，全部走同一套单图标渲染（drift/fall/walk 在层里都退化成小幅度原地摆动，
+        // 见 StartLayerAnimation），allowDriftFallCombo=true 时组合不受限制。
         private static void ValidateAnimation(CustomThemeAnimation? animation, string fieldPrefix, List<string> errors, bool allowDriftFallCombo)
         {
             if (animation == null || string.IsNullOrWhiteSpace(animation.Type))
@@ -358,9 +361,9 @@ namespace PixelLyric8BitFix
                         errors.Add($"\"{fieldPrefix}.type\" 里的 \"{t}\" 不认识，只能是：" + string.Join(" / ", ValidAnimationTypes));
                     }
                 }
-                if (!allowDriftFallCombo && types.Length > 1 && types.Any(t => t is "drift" or "fall"))
+                if (!allowDriftFallCombo && types.Length > 1 && types.Any(t => t is "drift" or "fall" or "walk"))
                 {
-                    errors.Add($"\"{fieldPrefix}.type\" 里的 drift/fall 不能跟别的招式组合（这两招是整张卡片的飘过/飘落轨道，跟主图标固定显示在装饰栏这件事结构上冲突），只能单独用，比如 \"drift\"；额外装饰层（layers）里没有这个限制。");
+                    errors.Add($"\"{fieldPrefix}.type\" 里的 drift/fall/walk 不能跟别的招式组合（这三招各自要用专属的渲染结构——drift/fall 是整张卡片飘过/飘落的三重影轨道，walk 是装饰栏里来回走的单独图标，都跟主图标固定显示在装饰栏这件事结构上冲突），只能单独用，比如 \"drift\" 或 \"walk\"；额外装饰层（layers）里没有这个限制。");
                 }
             }
 

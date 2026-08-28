@@ -491,12 +491,14 @@ namespace PixelLyric8BitFix
             }
         }
 
-        // 决定图标现在该待在哪条移动轨道上（普通装饰栏 / drift 三重影 / fall 三重影），把对应动画
-        // 启动好，并且把 _customIconFrameApply 指向这条轨道该画帧的地方。actionAnimation 为 null 就是
-        // "动作 0"，或者这个动作没写自己的 animation，落回 icon 顶层那份——效果跟每个动作只能换帧、
-        // 不能换动法的那个阶段完全一样。填了的话（包括 drift/fall）就用这份，图标真的会搬进/搬出
-        // 对应的专属轨道，这是"动作专属的移动方式"这轮唯一还没做的部分（之前只放开了 pulse/twinkle/
-        // bob/sway/spin/flicker 这 6 招，现在 drift/fall 也能按动作切了）。
+        // 决定图标现在该待在哪条移动轨道上（普通装饰栏 / drift 三重影 / fall 三重影 / walk 来回走），
+        // 把对应动画启动好，并且把 _customIconFrameApply 指向这条轨道该画帧的地方。actionAnimation
+        // 为 null 就是"动作 0"，或者这个动作没写自己的 animation，落回 icon 顶层那份——效果跟每个动作
+        // 只能换帧、不能换动法的那个阶段完全一样。填了的话（包括 drift/fall/walk）就用这份，图标真的
+        // 会搬进/搬出对应的专属轨道。walk 跟 Steve/火车走的是同一条装饰带（CustomIconDecorCanvas，
+        // Grid.Row="0" + ZIndex=10），单张图标在两个边界之间来回摆，不是 drift/fall 那种三重影飘过
+        // 整张卡片——这是应用户明确要求补的："跟 Steve/火车同理"的走路方式，drift/fall 的""飘""不是
+        // 同一回事。
         //
         // 主题刚应用（ApplyCustomSkinVisuals 调 SetCustomIconActionIndex(0)）和之后每次切动作（点击/
         // 数据驱动自动切换）都走这一个方法，不会有两份分支逻辑走岔的风险。只有真的换了不一样的
@@ -537,10 +539,14 @@ namespace PixelLyric8BitFix
             _customIconFrameSensitivity = sensitivity;
             _customIconFrameSpeedRatio = 1.0;
 
-            // 先把三条轨道都摆成"没有被选中"的状态，再挑一条真正启用——不去比较"上一次是哪条"，
-            // 每次都是确定状态，逻辑更简单也不容易漏掉某个分支的清理
+            // 先把四条轨道都摆成"没有被选中"的状态，再挑一条真正启用——不去比较"上一次是哪条"，
+            // 每次都是确定状态，逻辑更简单也不容易漏掉某个分支的清理。CustomIcon/CustomWalkIcon 都在
+            // 同一个 CustomIconDecorCanvas 里（普通招式 vs walk 二选一显示），所以这两个的 Visibility
+            // 单独摆，不跟着 CustomIconDecorCanvas 本身的显隐绑在一起
             RowDecor.Height = new GridLength(0);
             CustomIconDecorCanvas.Visibility = Visibility.Collapsed;
+            CustomIcon.Visibility = Visibility.Collapsed;
+            CustomWalkIcon.Visibility = Visibility.Collapsed;
             CustomDriftOverlay.Visibility = Visibility.Collapsed;
             CustomFallOverlay.Visibility = Visibility.Collapsed;
 
@@ -562,10 +568,22 @@ namespace PixelLyric8BitFix
                 StartCustomFallAnimation(CustomFall3Transform, (customDuration ?? 6) * 1.6, 3, -8, 6, musicReactive, sensitivity);
                 _customIconFrameApply = bmp => CustomFallIcon1.Source = CustomFallIcon2.Source = CustomFallIcon3.Source = bmp;
             }
+            else if (animTypes[0] == "walk")
+            {
+                // 跟 Steve/火车同一条装饰带（CustomIconDecorCanvas 本身就是 Grid.Row="0" + ZIndex=10，
+                // 跟 MinecraftDecorCanvas/CityDecorCanvas 同一层），不会被卡片下面的歌词内容挡住
+                RowDecor.Height = new GridLength(50);
+                CustomIconDecorCanvas.Visibility = Visibility.Visible;
+                CustomWalkIcon.Visibility = Visibility.Visible;
+                CustomWalkIcon.Cursor = hasActions ? Cursors.Hand : Cursors.Arrow;
+                StartCustomWalkAnimation(customDuration, musicReactive, sensitivity);
+                _customIconFrameApply = bmp => CustomWalkIcon.Source = bmp;
+            }
             else
             {
                 RowDecor.Height = new GridLength(50);
                 CustomIconDecorCanvas.Visibility = Visibility.Visible;
+                CustomIcon.Visibility = Visibility.Visible;
                 CustomIcon.Cursor = hasActions ? Cursors.Hand : Cursors.Arrow;
                 // 重置放在循环外面，只做一次——挪进循环里的话，组合里后一招重置的时候会把前一招刚设好的
                 // 状态（比如 sway 已经在转的角度）擦掉，等于每加一招都在跟前面打架
@@ -645,11 +663,12 @@ namespace PixelLyric8BitFix
             }
         }
 
-        // 额外层的 8 招式，跟主图标 StartCustomIconAnimation 是同一套参数（保证观感一致），只是作用目标
-        // 从固定的 XAML 命名元素换成运行时传进来的实例。drift/fall 在主图标那边各自有一条"飘过/飘落整张
-        // 卡片"的专属轨道（CustomDriftOverlay/CustomFallOverlay），额外层没有那一套坐标系统，
-        // 退化成原地小幅摆动——drift 落在水平位移，fall 复用 StartBobAnimation 但幅度更大一点，
-        // 至少保留"横着晃 vs 竖着晃"这点方向感上的区别，不是完全和 sway/bob 一样。
+        // 额外层的 9 招式，跟主图标 StartCustomIconAnimation 是同一套参数（保证观感一致），只是作用目标
+        // 从固定的 XAML 命名元素换成运行时传进来的实例。drift/fall/walk 在主图标那边各自有专属的渲染
+        // 结构（CustomDriftOverlay/CustomFallOverlay 三重影轨道，walk 是装饰带里来回走的单独图标），
+        // 额外层没有那一套坐标系统/装饰带，drift 和 walk 一起退化成同一种原地水平小幅摆动，fall 复用
+        // StartBobAnimation 但幅度更大一点，至少保留"横着晃 vs 竖着晃"这点方向感上的区别，不是完全
+        // 和 sway/bob 一样。
         private void StartLayerAnimation(string type, double? customDuration, Image icon, RotateTransform rotate, TranslateTransform translate, DropShadowEffect glow, bool musicReactive, double sensitivity)
         {
             switch (type)
@@ -703,7 +722,11 @@ namespace PixelLyric8BitFix
                         else glow.BeginAnimation(DropShadowEffect.OpacityProperty, frames);
                         break;
                     }
+                // walk 跟 drift 共用这同一个 case：层没有 Steve/火车那种独立装饰带可以横穿，也没有
+                // drift/fall 主图标才有的专属轨道，两者在层里都只能退化成同一种"原地水平小幅摆动"，
+                // 没有必要为 walk 单独再写一份几乎一样的动画
                 case "drift":
+                case "walk":
                     {
                         var anim = new DoubleAnimation(-10, 10, TimeSpan.FromSeconds(SafeDuration(customDuration, 4)))
                         {
@@ -796,6 +819,28 @@ namespace PixelLyric8BitFix
             }
         }
 
+        // 客制化图标"来回走"专属（animation.type = walk）：跟 Minecraft 皮肤 Steve 走路（见下面
+        // StartSteveWalking）同一套手法——TranslateTransform.X 在 [20, rightBound] 之间来回摆
+        // （AutoReverse），rightBound 按窗口实际宽度算，不写死，小窗口不会走出界、大窗口也走得满。
+        // 70 = CustomWalkIcon 自身宽度(30) + 两侧留白，跟 UFO 那条没有额外装饰物占位的横穿动画
+        // （StartUfoDrift）算法思路一样，不是照抄 Steve 的 110（那个 110 里包含了 Minecraft 皮肤专属的
+        // 小树占位，客制化图标这条装饰带没有树）。
+        //
+        // 故意没做 Steve 那套"翻转朝向"（SteveFlip，走左边翻转成朝左）：客制化图标形状千变万化，
+        // 贸然做水平镜像可能把不该翻的细节（比如带文字、明显方向性的图案）翻反，不是每个图标都适合
+        // 被镜像——想要"朝左朝右换个样子"的话，用 icon.frames 自己画两帧不同朝向的图更安全、更可控。
+        private void StartCustomWalkAnimation(double? customDuration, bool musicReactive, double sensitivity)
+        {
+            double rightBound = Math.Max(60, Width - 70);
+            var anim = new DoubleAnimation(20, rightBound, TimeSpan.FromSeconds(SafeDuration(customDuration, 7)))
+            {
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+            };
+            if (musicReactive) BeginMusicReactiveAnimation(CustomWalkTransform, TranslateTransform.XProperty, anim, sensitivity);
+            else CustomWalkTransform.BeginAnimation(TranslateTransform.XProperty, anim);
+        }
+
         // "浮动型"（bob）：纯粹的位置上下浮动，缓入缓出——跟 sway（绕轴心转角度摆动）是两个不同的动作。
         // 海边黄昏的帆船停在海面上、云朵漂浮的热气球飘在天上、极光雪夜的北极狐/雨夜的窗台猫，都用这同一个
         // 方法，只是幅度/时长不同；这个动作也加进了客制化主题的第 8 种可选招式，见 StartCustomIconAnimation
@@ -830,11 +875,13 @@ namespace PixelLyric8BitFix
             CustomIconGlow.Opacity = 0.6;
         }
 
-        // 单图标动画："招式"从 pulse / twinkle / drift / fall / bob / sway / spin / flicker 里选一个或者
-        // 用 + 组合几个（组合规则见 CustomThemeValidator.ValidateAnimation），全部用代码现场构造
-        // DoubleAnimation，不需要预先在 XAML 里声明 Storyboard 资源。musicReactive 为 true 时，
-        // 不管选的是哪一招，都统一走 BeginMusicReactiveAnimation 包成可调速的 Storyboard——
-        // 见 ApplyCustomSkinVisuals 里对 "跟着音乐律动" 开关的说明
+        // 单图标动画：只处理不需要专属渲染结构的 6 招——pulse / twinkle / bob / sway / spin / flicker，
+        // 可以用 + 任意组合（组合规则见 CustomThemeValidator.ValidateAnimation）。drift/fall/walk
+        // 不会走到这个 switch——那三招各自需要专属的容器/图标（三重影轨道或者装饰带里的 CustomWalkIcon），
+        // 在 ApplyCustomIconMovement 里就已经分流走了，见该方法。全部用代码现场构造 DoubleAnimation，
+        // 不需要预先在 XAML 里声明 Storyboard 资源。musicReactive 为 true 时，不管选的是哪一招，都统一
+        // 走 BeginMusicReactiveAnimation 包成可调速的 Storyboard——见 ApplyCustomIconMovement 里对
+        // "跟着音乐律动" 开关的说明
         private void StartCustomIconAnimation(string type, double? customDuration, bool musicReactive, double sensitivity = 1.0)
         {
             switch (type)

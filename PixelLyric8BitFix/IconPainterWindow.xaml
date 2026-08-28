@@ -81,7 +81,7 @@
                      动作 0 固定是 icon 自己的 rows/frames（Mini 小方块/分享卡片永远只认这一份），
                      不可改名/删除；额外动作可以任意加/命名/删，所有动作共用同一个画布尺寸。 -->
                 <TextBlock Text="动作（可选，点击装饰图标可循环切换）" Style="{StaticResource SectionHeader}"/>
-                <TextBlock Text="下面&quot;帧&quot;区块编辑的是当前选中这个动作的画面。动作 0 是默认外观（Mini 小方块/分享卡片只认它），额外动作会写进 icon.actions，点一下装饰图标能循环切到下一个，绕完一圈回到动作 0，或者填了下面的自动切换阈值就不用点。每个动作还能有自己的移动方式（animation，可以覆盖上面主题的 sway/drift/fall 等，切到这个动作图标真的会搬进/搬出对应的轨道），这个画板暂时还没有对应的选择器，想用的话在“插入到编辑框”之后手动往这个动作的 JSON 里加一个 animation 字段（形状跟顶层 animation 一样），详见“下载详细说明”。"
+                <TextBlock Text="下面&quot;帧&quot;区块编辑的是当前选中这个动作的画面。动作 0 是默认外观（Mini 小方块/分享卡片只认它），额外动作会写进 icon.actions，点一下装饰图标能循环切到下一个，绕完一圈回到动作 0，或者填了下面的自动切换阈值就不用点。每个动作还能有自己的移动方式（animation，可以覆盖上面主题的 sway/drift/fall/walk 等，切到这个动作图标真的会搬进/搬出对应的轨道——walk 是在装饰栏里来回走，跟 Steve 同理），这个画板暂时还没有对应的选择器，想用的话在“插入到编辑框”之后手动往这个动作的 JSON 里加一个 animation 字段（形状跟顶层 animation 一样），详见“下载详细说明”。"
                            Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,6"/>
                 <WrapPanel x:Name="ActionStripPanel" Margin="0,0,0,6"/>
                 <Button x:Name="BtnAddAction" Content="➕ 新增动作" Style="{StaticResource PillButtonStyle}"

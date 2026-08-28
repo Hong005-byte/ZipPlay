@@ -39,9 +39,11 @@ namespace PixelLyric8BitFix.Tests
         [InlineData("bob+sway")]
         [InlineData("drift")]
         [InlineData("fall")]
+        [InlineData("walk")]
         public void ParseAndValidate_ActionAnimation_AllowedTypes_NoError(string actionAnimType)
         {
-            // drift/fall 单独使用是允许的——点到这个动作会让图标搬进专属的飘过/飘落轨道
+            // drift/fall/walk 单独使用是允许的——点到这个动作会让图标搬进专属的渲染结构（飘过/飘落
+            // 轨道，或者装饰栏里来回走）
             string actions = $@", ""actions"": [ {{ ""frames"": [[""wwww"", ""wwww"", ""wwww"", ""wwww""]], ""animation"": {{ ""type"": ""{actionAnimType}"" }} }} ]";
             var (theme, errors) = CustomThemeValidator.ParseAndValidate(BuildJson("pulse", actions));
             Assert.NotNull(theme);
@@ -53,10 +55,12 @@ namespace PixelLyric8BitFix.Tests
         [InlineData("drift+pulse")]
         [InlineData("pulse+fall")]
         [InlineData("drift+fall")]
+        [InlineData("walk+pulse")]
+        [InlineData("walk+drift")]
         public void ParseAndValidate_ActionAnimation_DriftOrFallCombinedWithOthers_ReportsError(string actionAnimType)
         {
-            // drift/fall 不能跟别的招式组合（也不能互相组合）——跟顶层 animation 的组合规则一模一样，
-            // 这两招各自是整张卡片飘过/飘落的专属轨道，只能单独出现
+            // drift/fall/walk 不能跟别的招式组合（也不能互相组合）——跟顶层 animation 的组合规则一模
+            // 一样，这三招各自要用专属的渲染结构，只能单独出现
             string actions = $@", ""actions"": [ {{ ""frames"": [[""wwww"", ""wwww"", ""wwww"", ""wwww""]], ""animation"": {{ ""type"": ""{actionAnimType}"" }} }} ]";
             var (theme, errors) = CustomThemeValidator.ParseAndValidate(BuildJson("pulse", actions));
             Assert.Null(theme);

@@ -256,6 +256,43 @@ namespace PixelLyric8BitFix.Tests
             Assert.Empty(errors);
         }
 
+        [Fact]
+        public void ParseAndValidate_MainIconWalkSolo_NoError()
+        {
+            // walk（装饰栏里来回走，跟 Minecraft 皮肤 Steve 同一套手法）单独使用是合法的第 9 招
+            var (theme, errors) = CustomThemeValidator.ParseAndValidate(BuildJsonWithSensitivity("").Replace(@"""type"": ""pulse""", @"""type"": ""walk"""));
+            Assert.NotNull(theme);
+            Assert.Empty(errors);
+        }
+
+        [Theory]
+        [InlineData("walk+pulse")]
+        [InlineData("pulse+walk")]
+        [InlineData("walk+drift")]
+        [InlineData("walk+fall")]
+        public void ParseAndValidate_MainIconComboWithWalk_ReportsError(string type)
+        {
+            // walk 跟 drift/fall 是同一类"需要专属渲染结构、只能单独出现"的招式——不能跟别的组合，
+            // 也不能跟 drift/fall 互相组合
+            var (theme, errors) = CustomThemeValidator.ParseAndValidate(BuildJsonWithSensitivity("").Replace(@"""type"": ""pulse""", $@"""type"": ""{type}"""));
+            Assert.Null(theme);
+            Assert.Contains(errors, e => e.Contains("animation.type") && e.Contains("drift/fall/walk"));
+        }
+
+        [Fact]
+        public void ParseAndValidate_LayerAllowsWalkCombo_NoError()
+        {
+            // 层没有 Steve 那样的独立装饰带，walk 跟别的招式组合应该直接放行（退化成跟 drift 一样的
+            // 原地小幅摆动，见 MainWindow.Skins.cs 的 StartLayerAnimation）
+            string layer = @",
+          ""layers"": [
+            { ""anchor"": ""top-left"", ""icon"": { ""palette"": { ""#"": ""#FFFFFF"" }, ""rows"": [""####"", ""####"", ""####"", ""####""] }, ""animation"": { ""type"": ""walk+pulse"" } }
+          ]";
+            var (theme, errors) = CustomThemeValidator.ParseAndValidate(BuildJsonWithLayersField(layer));
+            Assert.NotNull(theme);
+            Assert.Empty(errors);
+        }
+
         [Theory]
         [InlineData("pulse", new[] { "pulse" })]
         [InlineData("pulse+sway", new[] { "pulse", "sway" })]

@@ -576,10 +576,11 @@
                  旋转和位移分开两个变换（TransformGroup 里各管各的），具体转多少度/摆多少/浮多高
                  由代码按 animation.type 现场写 -->
             <Canvas x:Name="CustomIconDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
-                <!-- MouseLeftButtonDown 六个装饰图标（这个 + 下面 drift/fall 各 3 份重影）共用同一个处理器
-                     CustomIcon_MouseLeftButtonDown——只有主题写了 icon.actions 才会真的切换/拦截点击，
-                     没写的话原样放行，双击照样能穿透进 Mini 模式，见 MainWindow.SkinInteractions.cs。
-                     Cursor 是否显示"可点击"的手型由代码按有没有 actions 动态设置，见 ApplyCustomSkinVisuals。 -->
+                <!-- MouseLeftButtonDown 装饰图标（这个 + CustomWalkIcon + 下面 drift/fall 各 3 份重影）
+                     共用同一个处理器 CustomIcon_MouseLeftButtonDown——只有主题写了 icon.actions 才会真的
+                     切换/拦截点击，没写的话原样放行，双击照样能穿透进 Mini 模式，见 MainWindow.
+                     SkinInteractions.cs。Cursor 是否显示"可点击"的手型由代码按有没有 actions 动态设置，
+                     见 ApplyCustomIconMovement。 -->
                 <Image x:Name="CustomIcon" Width="36" Height="36" Canvas.Right="14" Canvas.Bottom="2" Stretch="Uniform"
                        RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0.5,0.5"
                        MouseLeftButtonDown="CustomIcon_MouseLeftButtonDown">
@@ -592,6 +593,21 @@
                     <Image.Effect>
                         <DropShadowEffect x:Name="CustomIconGlow" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
                     </Image.Effect>
+                </Image>
+
+                <!-- 客制化"来回走"动画专属（animation.type = walk）：跟 Minecraft 皮肤 Steve 走路同一套
+                     手法——左对齐（不写 Canvas.Right，默认贴在 Canvas 左边界），TranslateTransform.X 在
+                     两个边界之间来回摆（AutoReverse），走的是这条跟 Steve/火车完全同一条装饰带
+                     （同一个 Grid.Row、同一个 Panel.ZIndex="10"），不会被卡片下面的歌词内容挡住。
+                     独立于 CustomIcon 是单独一张图标（不是共用同一个 Image 元素）——CustomIcon 固定
+                     锚在右下角不动，walk 需要横穿整条带，两种定位方式没法用同一个元素表达，
+                     ApplyCustomIconMovement 里这两个图标的 Visibility 互斥，同一时刻只显示一个。 -->
+                <Image x:Name="CustomWalkIcon" Width="30" Height="30" Canvas.Bottom="2" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor"
+                       MouseLeftButtonDown="CustomIcon_MouseLeftButtonDown" Visibility="Collapsed">
+                    <Image.RenderTransform>
+                        <TranslateTransform x:Name="CustomWalkTransform" X="20"/>
+                    </Image.RenderTransform>
                 </Image>
             </Canvas>
 

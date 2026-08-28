@@ -77,16 +77,16 @@ namespace PixelLyric8BitFix.Tests
       ""name"": ""投入"",
       ""frames"": [[""#...."", "".###."", ""..#.."", "".#.#.""]],
       ""autoSwitchAfterSeconds"": 120,
-      ""animation"": { ""type"": ""drift"", ""duration"": 10 }
+      ""animation"": { ""type"": ""walk"", ""duration"": 6 }
     }
   ]
 }";
             Assert.Contains(iconSnippet, CustomThemeSpecDoc.Build());
 
             // 示例叙述里顶层是 "sway"（""默认站姿是 sway 轻摆""，图标固定贴在装饰栏）——""挥手""的
-            // action.animation 是 "spin"（不是 drift/fall，不换轨道），""投入""的 action.animation
-            // 是 "drift"（换轨道，图标会搬进飘过整张卡片的专属轨道）；顶层跟两个动作各自选的招式
-            // 互相独立，这个组合应该完全合法
+            // action.animation 是 "spin"（不是 drift/fall/walk，不换渲染结构），""投入""的
+            // action.animation 是 "walk"（换渲染结构，图标会在装饰栏那条窄带里来回走）；顶层跟两个
+            // 动作各自选的招式互相独立，这个组合应该完全合法
             string themeJson = $@"{{
               ""name"": ""test"",
               ""colors"": {{ ""title"": ""#FFFFFF"", ""artist"": ""#FFFFFF"", ""accent"": ""#FFFFFF"", ""lyric"": ""#FFFFFF"", ""lyricBoxBg"": ""#000000"", ""lyricBoxBorder"": ""#000000"" }},
@@ -100,7 +100,7 @@ namespace PixelLyric8BitFix.Tests
             Assert.NotNull(theme);
             Assert.Equal("spin", theme!.Icon!.Actions![0].Animation!.Type);
             Assert.Equal(120, theme.Icon.Actions[1].AutoSwitchAfterSeconds);
-            Assert.Equal("drift", theme.Icon.Actions[1].Animation!.Type);
+            Assert.Equal("walk", theme.Icon.Actions[1].Animation!.Type);
         }
 
         [Fact]
@@ -124,6 +124,19 @@ namespace PixelLyric8BitFix.Tests
 
             Assert.Contains("autoSwitchAfterSeconds", doc);
             Assert.Contains("连续播放", doc);
+        }
+
+        [Fact]
+        public void Build_MentionsWalk()
+        {
+            // walk（第 9 种招式，装饰栏里来回走，跟 Minecraft 皮肤 Steve 同一套手法）是加进
+            // ValidAnimationTypes 之后最容易漏掉同步的地方——文档里列的还是老的 8 招表格的话，
+            // 用户/AI 根本不知道这个选项存在。粗粒度检查关键词，详细规则由 CustomThemeValidatorTests
+            // 的 walk 相关用例覆盖
+            string doc = CustomThemeSpecDoc.Build();
+
+            Assert.Contains("`walk`", doc);
+            Assert.Contains("Steve", doc);
         }
     }
 }
