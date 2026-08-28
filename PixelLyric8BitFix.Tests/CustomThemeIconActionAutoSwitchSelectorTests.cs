@@ -52,6 +52,27 @@ namespace PixelLyric8BitFix.Tests
         }
 
         [Fact]
+        public void ManualClickBackBelowHighWaterMark_IsNotFoughtByAutoSwitch()
+        {
+            // 回归测试：这里的 currentIndex 参数在 MainWindow.Skins.cs 里传的其实是"曾经到过的最远
+            // 动作"（_customIconAutoSwitchHighWaterMark），不是"当前正显示的动作"——这个区分是修复
+            // 一个真实 bug 用的：用户点击手动切回一个更早的动作之后，如果拿"当前正显示的动作"当基准，
+            // 下一次评估会立刻把用户刚点回去的选择弹回来（因为连续播放时长早就够格待在更靠后的动作），
+            // 50ms 一次的 tick 快到用户感觉不出点击生效过，就像点了没反应。用""曾经到过的最远""当基准
+            // 就不会有这个问题：只要这次算出来的阶段没有超过""曾经到过的最远""，这个方法就不该给出
+            // 一个比它还大的值——调用方看到"没有更大"就不会去动用户手动选的那个动作。
+            var actions = new List<CustomThemeIconAction> { Action(60), Action(120) };
+
+            // 时间已经到了 66.86 秒——单看这份连续播放时长，"应该"停在动作 2（跨过了两个阈值中较大的
+            // 那个，120 那个阈值实际没到，这里改用一个更简单的例子：跨过阈值 60 对应动作 1）
+            // 用户已经到过动作 1（highWaterMark=1），后来手动点回了动作 0——highWaterMark 不会因为
+            // 点击而降低，还是 1
+            int desired = CustomThemeIconActionAutoSwitch.GetDesiredActionIndex(actions, continuousSeconds: 90, currentIndex: /* highWaterMark */ 1);
+
+            Assert.Equal(1, desired); // 跟 highWaterMark 打平，不会给出更大的值去覆盖用户刚点的选择
+        }
+
+        [Fact]
         public void StagedProgression_AdvancesOneStageAtATime()
         {
             var actions = new List<CustomThemeIconAction> { Action(60), Action(120) };

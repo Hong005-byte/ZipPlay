@@ -116,6 +116,15 @@ namespace PixelLyric8BitFix
         private int _customIconActionIndex;
         private Action<BitmapSource>? _customIconFrameApply;
 
+        // 数据驱动自动切换用："曾经到过的最远动作"，只会被 SetCustomIconActionIndex 用 Math.Max
+        // 往前推，不会被手动点击拉低（点击可以把 _customIconActionIndex 改成任何值，包括更靠前的，
+        // 但不会拉低这个字段）。EvaluateAutoSwitchIconAction 拿这个（不是 _customIconActionIndex）
+        // 去跟"连续播放时长该到第几个动作"比较——这样用户点回一个更早的动作之后，不会被下一个
+        // 50ms tick 的自动切换立刻弹回去（那样会让点击看起来跟没点一样），但真的跨过一个从没到过的
+        // 新阈值时，还是会正常往前推进，不会因为点过一次就整个失效。见 MainWindow.Skins.cs 的
+        // EvaluateAutoSwitchIconAction/ResetCustomIconAutoSwitchTrackState。
+        private int _customIconAutoSwitchHighWaterMark;
+
         // 当前正在播的"动作专属 animation"——null 表示正在用 icon 顶层那份（"动作 0"，或者这个动作
         // 没写自己的 animation，都落在这个 null 状态）。只在真的换了不一样的 animation 才重新
         // 决定轨道 + Reset+Start 一遍（ApplyCustomIconMovement 里按引用比较这个字段），不然每次点击

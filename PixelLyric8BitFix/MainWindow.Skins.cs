@@ -404,6 +404,7 @@ namespace PixelLyric8BitFix
             _customIconFrames = null;
             _customIconFrameApply = null;
             _customIconActiveAnimationOverride = UninitializedIconAnimation;
+            _customIconAutoSwitchHighWaterMark = 0; // 换皮肤/重开窗口，"到过多远"这个进度也该归零，不是只有换歌才清
 
             // 图标该待在哪条轨道（普通装饰栏 / drift 三重影 / fall 三重影）、播什么帧/动画，全部交给
             // SetCustomIconActionIndex(0) 去做——跟点击装饰图标/数据驱动自动切换走的是同一条路径，
@@ -437,6 +438,11 @@ namespace PixelLyric8BitFix
             if (index < 0 || index > actions.Count) return; // 越界的话什么都不做，比如主题被换掉之后动作数量变少，旧索引不再有效
 
             _customIconActionIndex = index;
+            // 不管这次切换是点击触发的还是自动切换触发的，都顺手把"曾经到过的最远动作"往前推——
+            // 只推不退（Math.Max）。EvaluateAutoSwitchIconAction 靠这个字段（而不是
+            // _customIconActionIndex 本身）判断"要不要自动切"，见那边的注释——这是修复"手动点回去
+            // 之后马上被自动切换弹回来"那个 bug 的关键。
+            _customIconAutoSwitchHighWaterMark = Math.Max(_customIconAutoSwitchHighWaterMark, index);
             CustomThemeIconAction? selectedAction = index == 0 ? null : actions[index - 1];
 
             ApplyCustomIconMovement(selectedAction?.Animation);
@@ -464,19 +470,31 @@ namespace PixelLyric8BitFix
 
         // 数据驱动的自动切换：当前歌曲"连续播放"（_customIconContinuousTrackSeconds，见 MainWindow.
         // ListeningStats.cs——暂停不计时，切歌清零）满某个动作设定的 autoSwitchAfterSeconds 秒数，
-        // 就自动切过去，不用等用户点。每个播放 tick（UpdateListeningStats）都会调一次。挑选/"只往前推
-        // 不往回拉"这条规则本身是纯逻辑，抽到 Core 的 CustomThemeIconActionAutoSwitch 里单独测了，
-        // 这里只管接上真实的播放状态。
+        // 就自动切过去，不用等用户点。每个播放 tick（UpdateListeningStats）都会调一次。
+        //
+        // 关键点：拿去跟阈值比较、判断"要不要自动切"的是 _customIconAutoSwitchHighWaterMark（曾经
+        // 到过的最远动作），不是 _customIconActionIndex（当前正显示的动作）——这两个字段刻意分开。
+        // 用户点击可以把 _customIconActionIndex 改成任何值（包括比 HighWaterMark 更靠前的），但
+        // HighWaterMark 只会在 SetCustomIconActionIndex 里被 Math.Max 往前推，不会被点击拉低。
+        //
+        // 如果这里跟之前一样直接拿 _customIconActionIndex 当基准：用户手动点回一个更早的动作之后，
+        // 下一个 50ms tick（这个方法每 tick 都跑一次）会立刻重新算出"当前连续播放时长早就该在
+        // 更靠后的动作"，把用户刚点回去的选择弹回去——因为只有 50ms，用户根本看不出点击生效过，
+        // 感觉就是"点了跟没点一样，换不到"。改成跟 HighWaterMark 比较之后：只要这次算出来的阶段
+        // 没有超过""曾经到过的最远""，就什么都不做，用户点哪就停在哪，一直停到真的有一个新的、
+        // 从没到过的阈值被跨过为止——那时候才应该重新推进，这也是为什么不能干脆"点了以后永远不再
+        // 自动切"：后面几个阈值仍然应该按时触发，不能因为用户点过一次就整个失效。
         private void EvaluateAutoSwitchIconAction()
         {
             if (_customTheme?.Icon?.Actions is not { Count: > 0 } actions) return;
 
-            int desiredIndex = CustomThemeIconActionAutoSwitch.GetDesiredActionIndex(actions, _customIconContinuousTrackSeconds, _customIconActionIndex);
-            if (desiredIndex != _customIconActionIndex) SetCustomIconActionIndex(desiredIndex);
+            int desiredIndex = CustomThemeIconActionAutoSwitch.GetDesiredActionIndex(actions, _customIconContinuousTrackSeconds, _customIconAutoSwitchHighWaterMark);
+            if (desiredIndex > _customIconAutoSwitchHighWaterMark) SetCustomIconActionIndex(desiredIndex);
         }
 
-        // 换歌那一刻调用（MainWindow.Lyrics.cs 的 HandleTrackChangeAsync）：连续播放计时器清零——
-        // "连续听同一首歌多久"这件事本来就该随着换歌重新计起，不该带着上一首歌攒的时长。
+        // 换歌那一刻调用（MainWindow.Lyrics.cs 的 HandleTrackChangeAsync）：连续播放计时器 +
+        // HighWaterMark 一起清零——"连续听同一首歌多久""到过多远的阶段"这两件事本来就该随着换歌
+        // 重新计起，不该带着上一首歌攒的进度。
         //
         // 只有这份主题真的有任何一个动作配了 autoSwitchAfterSeconds，才会顺带把姿势拉回"动作 0"
         // 重新开始——没配这个字段的主题（绝大多数）完全不受影响，换歌不会打断用户手动点选的姿势，
@@ -487,6 +505,7 @@ namespace PixelLyric8BitFix
             _customIconContinuousTrackSeconds = 0;
             if (_customTheme?.Icon?.Actions is { Count: > 0 } actions && actions.Any(a => a.AutoSwitchAfterSeconds is > 0))
             {
+                _customIconAutoSwitchHighWaterMark = 0; // 显式清零——SetCustomIconActionIndex(0) 自己只会 Math.Max，不会把这个字段往回拉
                 SetCustomIconActionIndex(0);
             }
         }
