@@ -340,7 +340,22 @@ namespace PixelLyric8BitFix
                 case PlayerSkin.Custom:
                     if (_customTheme != null)
                     {
-                        ApplyCustomSkinVisuals(_customTheme);
+                        // CustomThemeStore.Load 存盘前已经过 CustomThemeValidator 校验，但用户/AI 写的
+                        // JSON 复杂度没有上限（真实出现过 570KB 的一份），校验覆盖不到所有渲染期间才
+                        // 会暴露的边角情况——字段组合本身没被校验拦住，具体渲染代码却对它有隐含假设
+                        // （比如某个数组理论上非空、实际因为组合方式凑巧是空的）。这一步万一炸了，代价
+                        // 应该是"这份主题加载失败、退回默认皮肤"，不该是整个 App 崩掉（这正是本来就有
+                        // 的 _customTheme == null 那个分支想达成的效果，只是那个分支只兜得住"文件本身
+                        // 读不出来/校验不过"，兜不住"读出来了、校验也过了，套的时候才炸"这种情况）。
+                        try
+                        {
+                            ApplyCustomSkinVisuals(_customTheme);
+                        }
+                        catch (Exception ex)
+                        {
+                            AppLog.Error("ApplyCustomSkinVisuals", ex);
+                            FallBackToSimpleSkinAfterCustomThemeFailure();
+                        }
                     }
                     else
                     {
@@ -405,6 +420,7 @@ namespace PixelLyric8BitFix
             _customIconFrameApply = null;
             _customIconActiveAnimationOverride = UninitializedIconAnimation;
             _customIconAutoSwitchHighWaterMark = 0; // 换皮肤/重开窗口，"到过多远"这个进度也该归零，不是只有换歌才清
+            _customIconHasAppliedFrameOnce = false; // 新主题的第一次显示没有"旧画面"，不该做过渡淡化
 
             // 图标该待在哪条轨道（普通装饰栏 / drift 三重影 / fall 三重影）、播什么帧/动画，全部交给
             // SetCustomIconActionIndex(0) 去做——跟点击装饰图标/数据驱动自动切换走的是同一条路径，
@@ -412,6 +428,30 @@ namespace PixelLyric8BitFix
             SetCustomIconActionIndex(0);
 
             ApplyCustomExtraLayers(theme, accent);
+        }
+
+        // ApplyCustomSkinVisuals 中途炸了之后的兜底：这一步可能已经把 CustomSkinBg/CustomIconDecorCanvas/
+        // 三重影轨道/额外层其中几个摆成了"visible 但只套了一半"的诡异状态，不能只补一句"把简约风背景
+        // 显示出来"就完事——那样会跟没收拾干净的客制化残留叠在一起。全部按 ApplySkin 开头"整体清空"
+        // 那一批的口径收回 Collapsed，_customTheme 也清掉：一是这份数据显然有问题，后面
+        // CycleCustomIconAction/EvaluateAutoSwitchIconAction 这些还会碰它的逻辑不该再拿它去炸第二次；
+        // 二是紧跟着这个 case 之后就会跑的 ApplySkinPalette(skin) 会调 GetActiveSkinTheme(Custom)，
+        // 那边也是靠 _customTheme == null 才退到 Simple 主题，不清掉的话这一步会拿着同一份坏数据再炸一次。
+        private void FallBackToSimpleSkinAfterCustomThemeFailure()
+        {
+            _customTheme = null;
+            _customIconFrames = null;
+            _customIconHasAppliedFrameOnce = false;
+            CustomExtraLayersHost.Children.Clear();
+            CustomSkinBg.Visibility = Visibility.Collapsed;
+            CustomIconDecorCanvas.Visibility = Visibility.Collapsed;
+            CustomIconClickHint.Visibility = Visibility.Collapsed; // 数据有问题时也别留着一圈"我能点"的呼吸提示
+            CustomIconClickHint.BeginAnimation(UIElement.OpacityProperty, null);
+            _customIconClickHintAnimating = false;
+            CustomDriftOverlay.Visibility = Visibility.Collapsed;
+            CustomFallOverlay.Visibility = Visibility.Collapsed;
+            RowDecor.Height = new GridLength(0); // 客制化那一行装饰栏没有别的皮肤在用，退回简约风不需要留着
+            SimpleSkinBg.Visibility = Visibility.Visible;
         }
 
         // 点击装饰图标（CustomIcon_MouseLeftButtonDown）触发：循环切到下一个 icon.actions，绕完一圈
@@ -422,6 +462,27 @@ namespace PixelLyric8BitFix
             if (_customTheme?.Icon is not { } icon) return;
             var actions = icon.Actions ?? new List<CustomThemeIconAction>();
             SetCustomIconActionIndex((_customIconActionIndex + 1) % (actions.Count + 1));
+        }
+
+        // Mini 模式桌宠反应（ShowPetReaction，MainWindow.PetMode.cs）联动这里用：CycleCustomIconAction
+        // 切完之后，装饰栏那份图标（CustomIcon/CustomWalkIcon 等）已经真的换了姿势，但 MiniBadgeImage
+        // 是另一张单独的 Image——它的图源来自 ApplyMiniBadgeAppearance 里 GetActiveSkinTheme(...).MiniIcon()，
+        // 那份固定读 custom.Icon 的基础帧（动作 0），不知道当前切到了第几个动作，不会跟着变。
+        // 这里复用 SetCustomIconActionIndex 同一套"selectedAction == null 用 icon 本身的 Frames/Rows，
+        // 否则用 selectedAction.Frames"的取帧逻辑，只取第一帧的静态位图——Mini 徽章本来就没有逐帧动画
+        // （同一条注释见 BuildSkinThemeFromCustom），够用来让桌宠"看起来换了个样子"就行。
+        private BitmapSource? BuildCurrentCustomIconMiniFrame()
+        {
+            if (_customTheme?.Icon is not { } icon) return null;
+            var actions = icon.Actions ?? new List<CustomThemeIconAction>();
+            CustomThemeIconAction? selectedAction = _customIconActionIndex <= 0 || _customIconActionIndex > actions.Count
+                ? null
+                : actions[_customIconActionIndex - 1];
+
+            BitmapSource[] frames = selectedAction == null
+                ? CustomThemeColorInterop.BuildCustomIconFrames(icon)
+                : CustomThemeColorInterop.BuildCustomIconFrames(new CustomThemeIcon { Palette = icon.Palette, Frames = selectedAction.Frames });
+            return frames.Length > 0 ? frames[0] : null;
         }
 
         // 把图标真正切到第 index 个动作（0 = 图标自己的 Rows/Frames，"动作 0"；>0 对应
@@ -445,6 +506,31 @@ namespace PixelLyric8BitFix
             _customIconAutoSwitchHighWaterMark = Math.Max(_customIconAutoSwitchHighWaterMark, index);
             CustomThemeIconAction? selectedAction = index == 0 ? null : actions[index - 1];
 
+            // 每次真正切换都先把上一次可能还没淡完的幽灵图标掐掉——不然会有两类看得见的遗留问题：
+            // 1) 连续快速点击，中间有的动作配了 transitionSeconds、有的没配：上一次没淡完的旧画面会
+            //    带着过时的内容继续叠在这次真正显示的新画面上，两次切换对不上；
+            // 2) 切换发生在不同轨道之间（比如 Normal 切到 walk）：ApplyCustomIconMovement 只会隐藏
+            //    "这条轨道自己的" Image（CustomIcon/CustomWalkIcon），完全不知道另一条轨道的幽灵图标
+            //    还留着——不主动收掉的话，旧轨道那张定格的幽灵会继续悬在画面上跟新轨道的图标叠在一起。
+            // 两个幽灵各自独立，不管这次切换最终要不要用到过渡，先各自停一遍最安全；如果这次确实要
+            // 触发新的过渡，下面会重新对需要的那一个调用 PlayCustomIconTransition，等于清空重来。
+            StopCustomIconTransition(CustomIconTransitionGhost);
+            StopCustomIconTransition(CustomWalkTransitionGhost);
+
+            // 过渡淡化要用的"旧画面"必须在轨道/帧内容被换掉之前先抓下来——抓的是当前轨道对应的
+            // Image 控件正在显示的那张位图，不用重新算一次帧序号，直接读 Source 最简单也最准确，
+            // 反正只是拿来做一次性的淡出用。只有 Normal/Walk 这两条单图标轨道支持过渡（见
+            // CustomThemeIconAction.TransitionSeconds 的注释），别的轨道这里就是 null，后面自然不会
+            // 触发过渡。
+            var previousTrackKind = _customIconTrackKind;
+            bool hadAppliedBefore = _customIconHasAppliedFrameOnce;
+            BitmapSource? outgoingBitmap = previousTrackKind switch
+            {
+                CustomIconTrackKind.Normal => CustomIcon.Source as BitmapSource,
+                CustomIconTrackKind.Walk => CustomWalkIcon.Source as BitmapSource,
+                _ => null,
+            };
+
             ApplyCustomIconMovement(selectedAction?.Animation);
             if (_customIconFrameApply is not { } applyFrame) return; // 理论上上面跑完一定有值，这里只是防御
 
@@ -466,6 +552,44 @@ namespace PixelLyric8BitFix
             _customIconFrameIndex = 0;
             _customIconFrameTickCounter = 0;
             applyFrame(frames[0]); // 立刻生效，不用等下一个 tick
+            _customIconHasAppliedFrameOnce = true;
+
+            // 过渡淡化：三个条件都成立才做——轨道没变（不同轨道是完全不同的渲染结构，没有"同一块画布"
+            // 可以交叉淡化）、之前已经显示过东西（没有旧画面可淡）、这个动作自己配了 transitionSeconds
+            // （没配就是这个字段加进来之前的行为，瞬间切换）。见 CustomThemeIconAction.TransitionSeconds
+            // 顶部的注释——这条判断是那份注释里"只在同一条轨道、只支持 Normal/Walk"两条限制的落地。
+            if (_customIconTrackKind == previousTrackKind && hadAppliedBefore && outgoingBitmap != null &&
+                selectedAction?.TransitionSeconds is double transitionSeconds && transitionSeconds > 0 &&
+                previousTrackKind is CustomIconTrackKind.Normal or CustomIconTrackKind.Walk)
+            {
+                var ghost = previousTrackKind == CustomIconTrackKind.Normal ? CustomIconTransitionGhost : CustomWalkTransitionGhost;
+                PlayCustomIconTransition(ghost, outgoingBitmap, transitionSeconds);
+            }
+        }
+
+        // icon.actions[i].transitionSeconds 落地的地方：新画面（applyFrame 已经在上面立刻画上去了，
+        // 该动的动画/该播的逐帧都已经在正常跑）上面叠一张"定格在旧画面"的幽灵图标，让它的透明度从
+        // 1 淡到 0——观感上就是旧画面慢慢透出新画面，而不是新画面凭空从透明淡入（那样会先看见一截
+        // 空白/背景，不是真正的"衔接"）。ghost 平时保持 Collapsed、IsHitTestVisible="False"（见 XAML
+        // 里 CustomIconTransitionGhost/CustomWalkTransitionGhost 的注释），淡完之后收回 Collapsed，
+        // 不留一个空耗合成开销的透明大图叠在装饰栏上。
+        private void PlayCustomIconTransition(Image ghost, BitmapSource outgoingBitmap, double transitionSeconds)
+        {
+            ghost.Source = outgoingBitmap;
+            ghost.Visibility = Visibility.Visible;
+
+            var fade = new DoubleAnimation(1.0, 0.0, TimeSpan.FromSeconds(transitionSeconds));
+            fade.Completed += (s, e) => ghost.Visibility = Visibility.Collapsed;
+            ghost.BeginAnimation(UIElement.OpacityProperty, fade);
+        }
+
+        // 撤销一张幽灵图标可能还在跑的淡化动画并立刻收起来——SetCustomIconActionIndex 每次真正切换
+        // 之前都会对两张幽灵各调一次，见那边的注释。BeginAnimation(prop, null) 是 WPF 撤销动画、把属性
+        // 交还的标准写法；没有动画在跑的时候调用是安全的空操作，不用先判断"是不是正在淡"。
+        private static void StopCustomIconTransition(Image ghost)
+        {
+            ghost.BeginAnimation(UIElement.OpacityProperty, null);
+            ghost.Visibility = Visibility.Collapsed;
         }
 
         // 数据驱动的自动切换：当前歌曲"连续播放"（_customIconContinuousTrackSeconds，见 MainWindow.
@@ -571,6 +695,7 @@ namespace PixelLyric8BitFix
 
             if (animTypes[0] == "drift")
             {
+                _customIconTrackKind = CustomIconTrackKind.Drift;
                 CustomDriftOverlay.Visibility = Visibility.Visible;
                 CustomDriftIcon1.Cursor = CustomDriftIcon2.Cursor = CustomDriftIcon3.Cursor = hasActions ? Cursors.Hand : Cursors.Arrow;
                 StartCustomDriftAnimation(CustomDrift1Transform, customDuration ?? 14, 0, musicReactive, sensitivity);
@@ -580,6 +705,7 @@ namespace PixelLyric8BitFix
             }
             else if (animTypes[0] == "fall")
             {
+                _customIconTrackKind = CustomIconTrackKind.Fall;
                 CustomFallOverlay.Visibility = Visibility.Visible;
                 CustomFallIcon1.Cursor = CustomFallIcon2.Cursor = CustomFallIcon3.Cursor = hasActions ? Cursors.Hand : Cursors.Arrow;
                 StartCustomFallAnimation(CustomFall1Transform, customDuration ?? 6, 0, -6, 8, musicReactive, sensitivity);
@@ -589,6 +715,7 @@ namespace PixelLyric8BitFix
             }
             else if (animTypes[0] == "walk")
             {
+                _customIconTrackKind = CustomIconTrackKind.Walk;
                 // 跟 Steve/火车同一条装饰带（CustomIconDecorCanvas 本身就是 Grid.Row="0" + ZIndex=10，
                 // 跟 MinecraftDecorCanvas/CityDecorCanvas 同一层），不会被卡片下面的歌词内容挡住
                 RowDecor.Height = new GridLength(50);
@@ -597,9 +724,11 @@ namespace PixelLyric8BitFix
                 CustomWalkIcon.Cursor = hasActions ? Cursors.Hand : Cursors.Arrow;
                 StartCustomWalkAnimation(customDuration, musicReactive, sensitivity);
                 _customIconFrameApply = bmp => CustomWalkIcon.Source = bmp;
+                UpdateCustomIconClickHint(hasActions, accent);
             }
             else
             {
+                _customIconTrackKind = CustomIconTrackKind.Normal;
                 RowDecor.Height = new GridLength(50);
                 CustomIconDecorCanvas.Visibility = Visibility.Visible;
                 CustomIcon.Visibility = Visibility.Visible;
@@ -609,7 +738,39 @@ namespace PixelLyric8BitFix
                 ResetCustomIconAnimationState(accent);
                 foreach (var t in animTypes) StartCustomIconAnimation(t, customDuration, musicReactive, sensitivity);
                 _customIconFrameApply = bmp => CustomIcon.Source = bmp;
+                UpdateCustomIconClickHint(hasActions, accent);
             }
+        }
+
+        // 点击可发现性：CustomIconClickHint 那圈呼吸描边，只在 Normal/Walk 这两条轨道里维护（drift/fall
+        // 没有一个单一的锚点能放这圈描边，见 XAML 里 CustomIconClickHint 的注释）。hasActions 为 false
+        // 就直接收起来并撤销动画——没有 actions 可点，不该留着一圈"我能点"的提示误导用户。
+        // _customIconClickHintAnimating 只是防止每次切轨道/切动作都重启一遍呼吸相位（视觉上会跳一下）：
+        // 已经在播的话只更新颜色，不重新 BeginAnimation。
+        private bool _customIconClickHintAnimating;
+
+        private void UpdateCustomIconClickHint(bool hasActions, Color accent)
+        {
+            if (!hasActions)
+            {
+                CustomIconClickHint.Visibility = Visibility.Collapsed;
+                CustomIconClickHint.BeginAnimation(UIElement.OpacityProperty, null);
+                _customIconClickHintAnimating = false;
+                return;
+            }
+
+            CustomIconClickHint.Visibility = Visibility.Visible;
+            CustomIconClickHint.BorderBrush = new SolidColorBrush(accent);
+            if (_customIconClickHintAnimating) return;
+            _customIconClickHintAnimating = true;
+
+            var breathe = new DoubleAnimation(0.12, 0.55, TimeSpan.FromSeconds(1.8))
+            {
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+            };
+            CustomIconClickHint.BeginAnimation(UIElement.OpacityProperty, breathe);
         }
 
         // theme.layers（可选，最多 2 个）：每层自己的图标 + 动画，贴在卡片四个角之一，叠加在主图标/主动画

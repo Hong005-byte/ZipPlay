@@ -576,6 +576,20 @@
                  旋转和位移分开两个变换（TransformGroup 里各管各的），具体转多少度/摆多少/浮多高
                  由代码按 animation.type 现场写 -->
             <Canvas x:Name="CustomIconDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
+                <!-- 点击可发现性：主题写了 icon.actions 时，光靠"鼠标移上去变手型光标"太被动，很容易被
+                     忽略。这圈呼吸描边是主动提示——比 CustomIcon 本身大一圈，同一个锚点（Canvas.Right="14"
+                     Canvas.Bottom="2"），XAML 顺序排在 CustomIcon/CustomWalkIcon 之前所以 Z 序在它们下面，
+                     看起来像图标背后透出的一圈光晕，不会挡住图标本体或吃掉点击（IsHitTestVisible="False"，
+                     真正响应点击的还是上面那几张 Image 自己）。刻意做成一个独立元素、动自己的 Opacity，
+                     不复用 CustomIcon 已有的 CustomIconGlow（DropShadowEffect）——那个已经被 pulse/flicker
+                     两招占着在动同一个 Opacity，两边同时 BeginAnimation 只会后来者覆盖前者，不是叠加生效，
+                     见 MainWindow.Skins.cs 的 UpdateCustomIconClickHint。显隐/呼吸动画由代码按当前主题
+                     有没有 actions 动态控制，目前只覆盖 Normal/Walk 这两条共用这个锚点的轨道——drift/fall
+                     三重影没有一个单一的"图标所在位置"能套这一圈，继续只靠光标提示，是有意的取舍。 -->
+                <Border x:Name="CustomIconClickHint" Width="46" Height="46" Canvas.Right="9" Canvas.Bottom="-3"
+                        CornerRadius="23" BorderThickness="2" Background="Transparent"
+                        IsHitTestVisible="False" Visibility="Collapsed"/>
+
                 <!-- MouseLeftButtonDown 装饰图标（这个 + CustomWalkIcon + 下面 drift/fall 各 3 份重影）
                      共用同一个处理器 CustomIcon_MouseLeftButtonDown——只有主题写了 icon.actions 才会真的
                      切换/拦截点击，没写的话原样放行，双击照样能穿透进 Mini 模式，见 MainWindow.
@@ -595,6 +609,17 @@
                     </Image.Effect>
                 </Image>
 
+                <!-- 过渡淡化专用的"幽灵"图标（icon.actions[i].transitionSeconds）：切动作那一刻定格成
+                     切换前的旧画面，叠在 CustomIcon 上方（XAML 顺序在后面 = Z 序在上面），透明度从 1
+                     淡到 0，露出下面已经在正常播放的新画面，见 MainWindow.Skins.cs 的
+                     PlayCustomIconTransition。平时保持 Collapsed；IsHitTestVisible="False" 恒定——
+                     淡化这几秒里继续点击应该命中的是已经在显示新内容的 CustomIcon，不能被这张纯粹用来
+                     "好看"的幽灵图标挡住。没有跟 CustomIcon 一样的 RotateTransform/TranslateTransform——
+                     幽灵只是定格的静态旧画面，不用跟着 pulse/sway 这些还在播的招式一起动，这几秒内
+                     "旧画面纹丝不动地淡出、新画面正常摆动着淡入视野"是刻意的取舍，不是遗漏。 -->
+                <Image x:Name="CustomIconTransitionGhost" Width="36" Height="36" Canvas.Right="14" Canvas.Bottom="2" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor" IsHitTestVisible="False" Visibility="Collapsed"/>
+
                 <!-- 客制化"来回走"动画专属（animation.type = walk）：跟 CustomIcon 用同一个锚点
                      （Canvas.Right="14" Canvas.Bottom="2"，同样 36x36）——静止时（TranslateTransform.X=0）
                      跟图标平时待的位置完全重合，看起来就是"这个图标自己走起来了"，不是凭空在别的地方
@@ -613,6 +638,12 @@
                         <TranslateTransform x:Name="CustomWalkTransform"/>
                     </Image.RenderTransform>
                 </Image>
+
+                <!-- 跟 CustomIconTransitionGhost 同一套用途，给 CustomWalkIcon 这条轨道单独一份——两条
+                     轨道互斥显示，但过渡有可能发生在"待在 walk 轨道里从这个动作切到另一个动作"这种
+                     场景（都是 walk，轨道没变），需要各自一张幽灵图标，不能共用一张。 -->
+                <Image x:Name="CustomWalkTransitionGhost" Width="36" Height="36" Canvas.Right="14" Canvas.Bottom="2" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor" IsHitTestVisible="False" Visibility="Collapsed"/>
             </Canvas>
 
             <Grid Grid.Row="1">

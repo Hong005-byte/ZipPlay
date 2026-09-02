@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -365,14 +367,75 @@ namespace PixelLyric8BitFix
             PlaySteveJump();
         }
 
-        // 客制化主题装饰图标（主图标 + drift/fall 那三份重影图标，6 个 Image 元素都挂这一个处理器）：
-        // 点一下循环切到下一个 icon.actions，没有 actions 的主题（绝大多数）直接原样放行——不设
-        // e.Handled，让点击照旧穿透去 Window 的双击进 Mini 模式，不会因为加了这个功能就意外拦截。
+        // 客制化主题装饰图标（主图标 + walk 图标 + drift/fall 各 3 份重影，8 个 Image 元素都挂这一个
+        // 处理器）：点一下循环切到下一个 icon.actions，没有 actions 的主题（绝大多数）直接原样放行——
+        // 不设 e.Handled，让点击照旧穿透去 Window 的双击进 Mini 模式，不会因为加了这个功能就意外拦截。
         private void CustomIcon_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             if (_customTheme?.Icon?.Actions is not { Count: > 0 }) return;
             e.Handled = true;
+            // 点中之后除了画面/动作本身会变，再补一下"确认点到了"的小反馈——跟 ImgCampfire_MouseLeftButtonDown
+            // 的"戳一下旺一下"同一套手法，不然切动作除了内容变了以外没有任何一次性的视觉回应，
+            // 手感上比 Steve/篝火那种"戳一下有反应"的装饰物要生硬
+            if (sender is Image clickedImage) PlayCustomIconClickBounce(clickedImage);
             CycleCustomIconAction();
+        }
+
+        // 8 张图标共用这一个点击处理器，反馈应该长在"真正被点到的这一张"身上，不是全部一起抖——
+        // 那样反而分不清点中的是哪个。这几张图标已有的 RenderTransform 结构互不相同（CustomIcon 是
+        // TransformGroup，其余 7 张是裸的 TranslateTransform），不在 XAML 里逐个手动插入缩放变换、
+        // 多出 8 个命名元素维护，而是运行时按需把 ScaleTransform 插进去，插过一次之后缓存复用
+        // （_customIconPokeScales 按 Image 实例记）。原来的 RenderTransform（不管是 TransformGroup 还是
+        // 裸的 TranslateTransform）整个原样搬进新 TransformGroup 当第一个孩子——drift/fall/walk 那几个
+        // 变换是被 XAML x:Name 直接引用的同一个对象实例，搬到新的父容器下不影响代码里已有的
+        // BeginAnimation 调用继续找得到它、继续正常播放。
+        private readonly Dictionary<Image, ScaleTransform> _customIconPokeScales = new();
+
+        private ScaleTransform GetOrAttachPokeScale(Image image)
+        {
+            if (_customIconPokeScales.TryGetValue(image, out var existing)) return existing;
+
+            image.RenderTransformOrigin = new Point(0.5, 0.5); // 缩放要从中心长大/缩小，不然会看着往右下角挪
+            var scale = new ScaleTransform(1.0, 1.0);
+            if (image.RenderTransform is TransformGroup group)
+            {
+                group.Children.Add(scale);
+            }
+            else
+            {
+                var newGroup = new TransformGroup();
+                if (image.RenderTransform is Transform existingTransform) newGroup.Children.Add(existingTransform);
+                newGroup.Children.Add(scale);
+                image.RenderTransform = newGroup;
+            }
+
+            _customIconPokeScales[image] = scale;
+            return scale;
+        }
+
+        // 跟 ImgCampfire_MouseLeftButtonDown 的"旺一下"同一套参数（120ms、AutoReverse、EaseOut），
+        // 只是幅度稍微收一点（1.22 而不是 1.35）——装饰图标平时就比篝火小一圈，缩放太夸张容易看着抖动，
+        // 不是"确认"感。FillBehavior=Stop 是这里的关键，理由跟篝火那边一样：播完必须主动放手交还
+        // ScaleX/ScaleY 这两个属性，不然默认的 HoldEnd 会让这个变换从此定在动画的最后一帧上，之后再也
+        // 摸不动（这里虽然目前没有别的逻辑会去改这两个属性，但跟全局"动画播完要放手"的约定保持一致，
+        // 不留一个"看起来没事、其实已经埋了坑"的例外）。
+        private void PlayCustomIconClickBounce(Image image)
+        {
+            var scale = GetOrAttachPokeScale(image);
+            var scaleXAnim = new DoubleAnimation(1.0, 1.22, TimeSpan.FromMilliseconds(120))
+            {
+                AutoReverse = true,
+                FillBehavior = FillBehavior.Stop,
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
+            };
+            var scaleYAnim = new DoubleAnimation(1.0, 1.22, TimeSpan.FromMilliseconds(120))
+            {
+                AutoReverse = true,
+                FillBehavior = FillBehavior.Stop,
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
+            };
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, scaleXAnim);
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty, scaleYAnim);
         }
 
         // 戳一下篝火：图标"旺"一下（缩放脉冲），特意不碰 CampfireGlow.Opacity——那个属性已经被

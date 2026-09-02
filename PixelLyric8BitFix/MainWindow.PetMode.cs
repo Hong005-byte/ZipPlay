@@ -6,7 +6,9 @@ using System.Windows.Threading;
 namespace PixelLyric8BitFix
 {
     // Mini 模式小方块单击的"桌宠"反应——弹一句话（听歌统计/时间段问候，复用 HomeGreetingBuilder
-    // 那套文案池）+ 弹一下动画。双击展开这个已有行为保留在 MainWindow.MiniMode.cs 里。
+    // 那套文案池）+ 弹一下动画；客制化主题带了 icon.actions 的话还会顺手切一次姿势（跟装饰栏图标
+    // 点击共用 CycleCustomIconAction，见 ShowPetReaction）。双击展开这个已有行为保留在
+    // MainWindow.MiniMode.cs 里。
     //
     // 这个文件原来还带一套"小方块自己在屏幕上走来走去"的逻辑，用户体验过一轮之后觉得一直跑来跑去
     // 太吵了，撤掉了——单击反应这部分体验是好的，保留。如果以后想做"走动"，方向是"皮肤/客制化主题
@@ -28,6 +30,18 @@ namespace PixelLyric8BitFix
 
             var theme = GetActiveSkinTheme(_settings.Skin);
             PetBubbleBorder.BorderBrush = new SolidColorBrush(theme.MiniBorder);
+
+            // 客制化主题带了 icon.actions 的话，Mini 模式点一下除了弹气泡，顺手也让桌宠切一次姿势——
+            // 复用装饰栏图标点击走的同一个 CycleCustomIconAction（跟真实播放器里点装饰图标是同一条逻辑，
+            // 不会走岔；展开回完整播放器时装饰栏图标也已经停在这次切到的姿势，两边观感是连续的），
+            // 再把 MiniBadgeImage 换成新姿势的第一帧——不然桌宠只是"弹一下"，没有真的"换个样子"，
+            // 跟这个功能想做成"desktop pet"的方向不贴。没有 actions 的主题（绝大多数）这里什么都不做，
+            // 跟这个联动加进来之前一模一样。
+            if (_settings.Skin == PlayerSkin.Custom && _customTheme?.Icon?.Actions is { Count: > 0 })
+            {
+                CycleCustomIconAction();
+                if (BuildCurrentCustomIconMiniFrame() is { } miniFrame) MiniBadgeImage.Source = miniFrame;
+            }
 
             PetBubblePopup.IsOpen = true;
 

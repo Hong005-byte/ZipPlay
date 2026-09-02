@@ -139,6 +139,18 @@ namespace PixelLyric8BitFix
         private static readonly CustomThemeAnimation UninitializedIconAnimation = new();
         private CustomThemeAnimation? _customIconActiveAnimationOverride = UninitializedIconAnimation;
 
+        // 装饰图标当前待在哪条移动轨道上——只在 MainWindow.Skins.cs 的 ApplyCustomIconMovement 里、
+        // 真的换了轨道的那几个分支才会被赋新值（早退分支/没变化的时候原样保留），SetCustomIconActionIndex
+        // 靠"调用前后这个字段有没有变"判断这次切动作要不要做过渡淡化（icon.actions[i].transitionSeconds），
+        // 见 PlayCustomIconTransition 顶部的注释。
+        private enum CustomIconTrackKind { Normal, Drift, Fall, Walk }
+        private CustomIconTrackKind _customIconTrackKind = CustomIconTrackKind.Normal;
+
+        // 过渡淡化只有"已经真正显示过一帧"之后再切换才有意义——主题刚应用、这是第一次显示画面
+        // 的那一次，没有"旧画面"可淡，也不该凭空淡入。ApplyCustomSkinVisuals/
+        // FallBackToSimpleSkinAfterCustomThemeFailure 里跟着别的 _customIcon* 状态一起清零。
+        private bool _customIconHasAppliedFrameOnce;
+
         // 数据驱动切动作用：当前这首歌"连续播放"了多久，跟 _pendingListenSeconds 同一个 tick
         // （MainWindow.ListeningStats.cs 的 UpdateListeningStats）同一套暂停不计时/大间隔不计入的
         // 门槛一起累加，但用途不一样——这个不进历史统计，只喂给 MainWindow.Skins.cs 的
