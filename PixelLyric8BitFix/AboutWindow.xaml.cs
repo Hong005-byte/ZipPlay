@@ -4,14 +4,61 @@ using System.Net.Http;
 using System.Reflection;
 using System.Threading;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 
 namespace PixelLyric8BitFix
 {
-    /// <summary>版本号 + 检查更新（含一键下载装） + 几条使用小贴士——从 HomeWindow 的"ℹ️ 关于与更新"格子进来。</summary>
+    /// <summary>版本号 + 检查更新（含一键下载装） + 更新日志 + 几条使用小贴士——从 HomeWindow 的
+    /// "ℹ️ 关于与更新"格子进来。</summary>
     public partial class AboutWindow : Window
     {
+        // 更新日志：每个版本改了什么，列出来存个档。内容是随安装包一起打包的静态数据，不是从网络拉的——
+        // 离线也看得到，也不用为了一份变更记录单独起一个后端。数组按"最新在前"排列（ChangelogPanel
+        // 直接按数组顺序往下画），下次发新版本时把新的一条插到最前面（Program.cs/csproj 里的 Version
+        // 也要记得同步改，这里不会自动读那个版本号）——旧版本的条目留着不用删，这就是完整的更新历史。
+        // 每条只写"用户能感知到的变化"，不用照抄 commit message 或者解释实现细节。
+        private static readonly (string Version, string Date, string[] Highlights)[] ChangelogEntries =
+        {
+            ("2.5.0", "2026-09", new[]
+            {
+                "Mini 模式桌宠的单击反应联动客制化主题的 icon.actions：弹气泡的同时也会真的切一次姿势，不再只是弹一下",
+                "图标画板新增「点击测试」：实际大小预览图现在能直接点，模拟真实播放器点装饰图标的效果，不用再插入编辑框、套进真实播放器才能验证",
+                "图标画板的动作条支持拖拽调整循环顺序，不用再手动数第几个、手改 JSON 数组元素",
+                "写了 icon.actions 的客制化主题，装饰图标会多一圈轻微的呼吸描边，提示这里能点——以前只能靠鼠标移上去变手型光标才知道",
+            }),
+        };
+
+        private void BuildChangelogUi()
+        {
+            ChangelogPanel.Children.Clear();
+            var mutedBrush = (Brush)FindResource("MutedTextBrush");
+            var hintBrush = (Brush)FindResource("HintTextBrush");
+            foreach (var entry in ChangelogEntries)
+            {
+                ChangelogPanel.Children.Add(new TextBlock
+                {
+                    Text = $"v{entry.Version} · {entry.Date}",
+                    Foreground = mutedBrush,
+                    FontSize = 12,
+                    FontWeight = FontWeights.SemiBold,
+                    Margin = new Thickness(0, 6, 0, 2),
+                });
+                foreach (var line in entry.Highlights)
+                {
+                    ChangelogPanel.Children.Add(new TextBlock
+                    {
+                        Text = $"· {line}",
+                        Foreground = hintBrush,
+                        FontSize = 10,
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(4, 1, 0, 1),
+                    });
+                }
+            }
+        }
+
         // 两个都走 NetworkHelpers 建，自带强制 IPv4，详见 NetworkHelpers 类注释和 MainWindow.xaml.cs
         // 里同样的两个 HttpClient 的注释。
         private readonly HttpClient _httpClient = NetworkHelpers.CreateHttpClient(TimeSpan.FromSeconds(6));
@@ -35,6 +82,8 @@ namespace PixelLyric8BitFix
 
             var currentVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(1, 0, 0);
             TxtCurrentVersion.Text = $"当前版本 v{currentVersion.ToString(3)}";
+
+            BuildChangelogUi();
         }
 
         // 手动检查更新：不用等下次启动主窗口的后台检查，点一下马上就知道结果

@@ -35,6 +35,13 @@
                 <TextBlock Text="启动时也会在后台静默检查一次，发现新版本会在主播放器窗口右上角提示。"
                            Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,6,0,0"/>
 
+                <!-- 更新日志：每个版本更新了什么，列出来存个档，不用翻 git log 才知道上次到底改了什么。
+                     内容是代码里的静态列表（AboutWindow.xaml.cs 的 ChangelogEntries），不是从网络拉取——
+                     跟版本号一样直接随这次发布打进安装包，离线也看得到。这个 StackPanel 只是个空容器，
+                     具体每个版本的条目在构造函数里用代码生成，见 BuildChangelogUi。 -->
+                <TextBlock Text="更新日志" Style="{StaticResource SectionHeader}"/>
+                <StackPanel x:Name="ChangelogPanel" Margin="0,0,0,0"/>
+
                 <TextBlock Text="使用小贴士" Style="{StaticResource SectionHeader}"/>
                 <TextBlock Text="想改皮肤/设置随时能从主播放器窗口右键菜单或者齿轮图标回到首页。"
                            Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,0"/>
