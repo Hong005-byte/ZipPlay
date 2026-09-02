@@ -111,6 +111,43 @@ namespace PixelLyric8BitFix.Tests
             Assert.Contains("旋转吧", theme.Name);
         }
 
+        // Remix 从来没有单独抽 icon.actions 的逻辑，也不需要——iconSource.Icon 是整个对象一起搬过去的
+        // （见 Remix 方法里的 Icon = iconSource.Icon），Actions 只是这个对象上的一个属性，只要来源主题
+        // 本身带了 actions（比如用户自己手写/画板画出来的一份），混搭出来的结果自然跟着带走，包括每个
+        // 动作自己的 animation/autoSwitchAfterSeconds。这条测试只是把这个"已经对了"的行为钉住，
+        // 防止以后有人改成按字段一个个摘、反而漏摘了 Actions。
+        [Fact]
+        public void Remix_CarriesIconActionsFromIconSource()
+        {
+            var colorSource = BuildTheme("配色主题", "#F9C784", '#', "pulse", includeLayer: false);
+            string actionIconRows = BuildIconRowsJson('o');
+            string iconSourceJson = $@"{{
+              ""name"": ""带动作的图标主题"",
+              ""font"": ""Consolas"",
+              ""colors"": {{ ""title"": ""#FFFFFF"", ""artist"": ""#FFFFFF"", ""accent"": ""#29B6F6"", ""lyric"": ""#FFFFFF"", ""lyricBoxBg"": ""#000000"", ""lyricBoxBorder"": ""#000000"" }},
+              ""background"": {{ ""type"": ""solid"", ""stops"": [""#29B6F6""] }},
+              ""icon"": {{
+                ""palette"": {{ ""o"": ""#29B6F6"" }},
+                ""rows"": {actionIconRows},
+                ""actions"": [
+                  {{ ""name"": ""开心"", ""frames"": [{actionIconRows}], ""animation"": {{ ""type"": ""walk"" }}, ""autoSwitchAfterSeconds"": 60 }}
+                ]
+              }},
+              ""animation"": {{ ""type"": ""spin"" }}
+            }}";
+            var iconSource = ParseValidTheme(iconSourceJson);
+            var animationSource = BuildTheme("动画主题", "#8BC34A", 'w', "flicker", includeLayer: false);
+
+            var (theme, errors) = CustomThemeValidator.ParseAndValidate(CustomThemeRemixer.Remix(colorSource, iconSource, animationSource));
+
+            Assert.True(errors.Count == 0, string.Join(" | ", errors));
+            Assert.NotNull(theme!.Icon!.Actions);
+            var action = Assert.Single(theme.Icon.Actions!);
+            Assert.Equal("开心", action.Name);
+            Assert.Equal("walk", action.Animation?.Type);
+            Assert.Equal(60, action.AutoSwitchAfterSeconds);
+        }
+
         [Fact]
         public void Remix_AllThreeSourcesAreSameTheme_StillPassesValidation()
         {

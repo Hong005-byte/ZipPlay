@@ -115,6 +115,24 @@ namespace PixelLyric8BitFix
         // 被拉回来——只会把索引往前推，不会跟用户已经做出的选择打架。不填就是这个字段加进来之前
         // 唯一的行为：完全靠点击手动切换，不会有任何数据驱动的自动切换发生。
         public double? AutoSwitchAfterSeconds { get; set; }
+
+        // 可选：切到这个动作时的过渡时长（秒）——不填就是这个字段加进来之前唯一的行为：瞬间切换，
+        // 上一个动作的画面直接被这个动作的第一帧替换掉，没有任何过渡。填了的话，从"切换前正显示的
+        // 那张画面"到"这个动作的第一帧"之间做一次透明度交叉淡化，淡化这些秒数——淡化期间新画面已经
+        // 在正常播放（包括它自己的逐帧动画，如果有的话），旧画面只是叠在上面慢慢透明，不是"暂停等淡化
+        // 完再动起来"。淡完之后旧画面彻底消失，直到下一次切换（不管是点击还是数据驱动的自动切换）之前
+        // 都不会再用到它，跟这个字段没加进来之前一样，一直显示/播放这个动作，见 MainWindow.Skins.cs 的
+        // PlayCustomIconTransition。
+        //
+        // 只在"切换前后待在同一条移动轨道"时才会生效（普通装饰栏 pulse/twinkle/bob/sway/spin/flicker/
+        // 无 animation 算一条轨道，walk 算另一条），见 MainWindow.Skins.cs 的 CustomIconTrackKind——
+        // 不同轨道之间（比如从装饰栏切到 walk 来回走）本身就是不同的渲染结构（单张 Image vs 装饰带
+        // 里来回摆的另一张 Image），没有"同一块画布"可以交叉淡化，那种情况仍然是瞬间切换，这个字段
+        // 填了也不会报错，只是不生效。drift/fall（三重影轨道）暂时也不支持，理由一样。
+        // "动作 0"（icon 自己的 Rows/Frames）没有对应的 CustomThemeIconAction 对象放这个字段，切回
+        // 动作 0（绕完一圈）永远是瞬间切换，这跟 Name/AutoSwitchAfterSeconds 这些字段"动作 0 不适用"
+        // 是同一个既有限制，不是这个字段专属的新缺口。
+        public double? TransitionSeconds { get; set; }
     }
 
     public sealed class CustomThemeAnimation
@@ -493,6 +511,13 @@ namespace PixelLyric8BitFix
                     if (action.AutoSwitchAfterSeconds is double asas && asas <= 0)
                     {
                         errors.Add($"\"{actionsField}[{i}].autoSwitchAfterSeconds\" 填的是 {asas}，必须是大于 0 的数字（不填就是纯手动点击切换，不会自动触发）。");
+                    }
+
+                    // 过渡时长：道理跟上面几个"秒数"字段一样，必须是正数——0 或负数的"淡化时长"没有
+                    // 意义，直接不填（瞬间切换）就好，不需要这个字段硬凑一个 0
+                    if (action.TransitionSeconds is double ts && ts <= 0)
+                    {
+                        errors.Add($"\"{actionsField}[{i}].transitionSeconds\" 填的是 {ts}，必须是大于 0 的数字（不填就是瞬间切换，不做过渡淡化）。");
                     }
                 }
             }

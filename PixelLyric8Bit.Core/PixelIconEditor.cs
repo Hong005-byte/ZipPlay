@@ -166,18 +166,19 @@ namespace PixelLyric8BitFix
 
         /// <summary>LoadActions 产出、BuildIconWithActions 接收的中间形态——一个动作的字段基本对应
         /// CustomThemeIconAction，只是 Frames 已经摊开成画板能直接用的网格列表（不是字符串行）。
-        /// 两个方法对称往返，用同一个类型而不是各自的 tuple 形状，是为了不丢东西：Animation 画板目前
-        /// 没有对应的 UI 选择器（见 IconPainterWindow.xaml 里"动作"区块的说明），但如果续画的是一个
-        /// 已经手写了 animation 字段的动作，这个字段必须原样带着走过 Load→（画板里改帧/改名/改
-        /// 帧间隔/改自动切换阈值）→Build 这一整趟，不然用户明明只是想加一帧、结果"插入到编辑框"
-        /// 之后手写的 animation 却被悄悄冲掉了——这是比"这个功能画板还不支持"更糟的"直接丢用户数据"。</summary>
+        /// 两个方法对称往返，用同一个类型而不是各自的 tuple 形状，是为了不丢东西：Animation 现在有
+        /// 了对应的 UI（见 IconPainterWindow.xaml 里"动作"区块的移动方式勾选框），续画一个已经手写了
+        /// animation 字段的动作时，这个字段会原样带着走过 Load→（画板里可以直接改，也可以只改帧/
+        /// 改名/改帧间隔/改自动切换阈值而不碰它）→Build 这一整趟，不会因为用户没去动这块 UI 就把
+        /// 手写的内容悄悄冲掉。</summary>
         public sealed class LoadedIconAction
         {
             public string? Name { get; set; }
             public List<char[,]> Grids { get; set; } = new();
             public double? FrameDurationOverride { get; set; }
             public double? AutoSwitchAfterSeconds { get; set; }
-            public CustomThemeAnimation? Animation { get; set; } // 画板不编辑这个，只负责原样保留
+            public double? TransitionSeconds { get; set; }
+            public CustomThemeAnimation? Animation { get; set; }
         }
 
         /// <summary>BuildFrames 的"带额外动作"版——action 0（未命名，永远对应 icon 自己的 rows/frames）
@@ -226,6 +227,7 @@ namespace PixelLyric8BitFix
                     Frames = RowsForGrids(a.Grids),
                     FrameDuration = a.FrameDurationOverride,
                     AutoSwitchAfterSeconds = a.AutoSwitchAfterSeconds,
+                    TransitionSeconds = a.TransitionSeconds,
                     Animation = a.Animation,
                 })
                 .ToList();
@@ -284,6 +286,7 @@ namespace PixelLyric8BitFix
                     Grids = grids,
                     FrameDurationOverride = action.FrameDuration,
                     AutoSwitchAfterSeconds = action.AutoSwitchAfterSeconds,
+                    TransitionSeconds = action.TransitionSeconds,
                     Animation = action.Animation,
                 });
             }

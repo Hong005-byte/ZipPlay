@@ -127,6 +127,17 @@ namespace PixelLyric8BitFix.Tests
         }
 
         [Fact]
+        public void Build_MentionsTransitionSeconds()
+        {
+            // icon.actions[i].transitionSeconds（切动作时的过渡淡化）同理——粗粒度检查关键词，
+            // 详细规则由 CustomThemeIconActionTransitionTests 覆盖
+            string doc = CustomThemeSpecDoc.Build();
+
+            Assert.Contains("transitionSeconds", doc);
+            Assert.Contains("淡化", doc);
+        }
+
+        [Fact]
         public void Build_MentionsWalk()
         {
             // walk（第 9 种招式，装饰栏里来回走，跟 Minecraft 皮肤 Steve 同一套手法）是加进

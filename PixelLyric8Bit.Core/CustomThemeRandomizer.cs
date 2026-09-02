@@ -10,7 +10,9 @@ namespace PixelLyric8BitFix
     /// 直接能过校验的自定义主题 JSON，塞进输入框给用户当草稿改，而不是让用户从空白 JSON 或者那份
     /// 海边黄昏示例开始一行行抠颜色。抽的是"选项"不是"数值"——每个 Palette 内部的几个颜色本来就是配好的，
     /// 不会出现文字色跟背景撞在一起看不清这种问题；唯一真随机拼接的是"这次抽到哪个调色板 + 哪个图标形状 +
-    /// 哪种动画招式 + 渐变还是纯色"，组合数量足够多但每一种搭配出来都是能看的。
+    /// 哪种动画招式 + 渐变还是纯色 + 要不要带 icon.actions/额外装饰层"，组合数量足够多但每一种搭配出来都是能看的。
+    /// icon.actions（点击切换的额外姿势，含它自己的 animation/autoSwitchAfterSeconds）也接进了这套概率池，
+    /// 不然这一整套系统只能靠手写 JSON 或者找 AI 生成才能体验到，普通用户点一下按钮就该有机会撞见。
     /// </summary>
     /// <summary>调色板稀有度——纯粹是"🎲 随机生成"抽到的时候要不要多弹一句"出货"反馈，跟主题本身
     /// 能不能保存/校验通不通过完全无关，Common 跟 Limited 生成出来的 JSON 结构是一模一样的。
@@ -213,6 +215,78 @@ namespace PixelLyric8BitFix
   ]";
             }
 
+            // icon.actions（可选，约 4 成概率）：点一下装饰图标能循环切换的额外姿势。以前这套系统
+            // （包括 walk 这种需要专属渲染轨道的招式）只能靠手写 JSON 或者找 AI 生成才能体验到，
+            // 随机生成器从来不带——现在接进同一个概率池子，普通用户点一下"🎲 随机生成"就有机会直接
+            // 看到效果，不用先弄懂 icon.actions 长什么样。形状特意换一个跟主图标不一样的（IconShapes
+            // 挑不同下标），点击切换时画面才看得出真的变了，不是切了个几乎一样的姿势。
+            string actionsJson = "";
+            if (rng.Next(10) < 4)
+            {
+                int actionCount = rng.Next(10) < 3 ? 2 : 1; // 大部分时候 1 个，小概率给 2 个，绕一圈能看到两种额外姿势
+                var actionBlocks = new List<string>(actionCount);
+                for (int i = 0; i < actionCount; i++)
+                {
+                    // 形状不够用的极端情况（IconShapes 只有 6 种、已经抽走了主图标 + 上一个动作）就允许
+                    // 重复——这不是关键功能，不值得为了"绝不重样"专门维护一份已用形状的排除列表
+                    var actionIconCandidates = IconShapes.Where(s => s != icon).ToArray();
+                    var actionIcon = actionIconCandidates.Length > 0 ? actionIconCandidates[rng.Next(actionIconCandidates.Length)] : IconShapes[rng.Next(IconShapes.Length)];
+                    string actionIconRowsJson = string.Join(",\n          ", actionIcon.Select(row => $"\"{row}\""));
+
+                    string actionExtra = "";
+
+                    // 3 成概率给这个动作单独配一套移动方式——跟主图标同一套抽招式的逻辑（含 4 成概率
+                    // 组合、drift/fall/walk 独占），是这三招（尤其是 walk，装饰栏里来回走）目前唯一
+                    // 会被随机抽到的地方，不然 walk 这招永远只能靠手写 JSON 才用得上
+                    if (rng.Next(10) < 3)
+                    {
+                        string actionAnimType = CustomThemeValidator.ValidAnimationTypes[rng.Next(CustomThemeValidator.ValidAnimationTypes.Length)];
+                        if (actionAnimType != "drift" && actionAnimType != "fall" && actionAnimType != "walk" && rng.Next(10) < 4)
+                        {
+                            var comboCandidates = ComboablePool.Where(t => t != actionAnimType && AnimationPropertyGroup[t] != AnimationPropertyGroup[actionAnimType]).ToArray();
+                            if (comboCandidates.Length > 0) actionAnimType = $"{actionAnimType}+{comboCandidates[rng.Next(comboCandidates.Length)]}";
+                        }
+                        string actionAnimDurationText = Math.Round(1.2 + rng.NextDouble() * 2.5, 1).ToString("0.0", CultureInfo.InvariantCulture);
+                        actionExtra += $@",
+      ""animation"": {{ ""type"": ""{actionAnimType}"", ""duration"": {actionAnimDurationText} }}";
+                    }
+
+                    // 4 成概率带自动切换阈值——不用点击，连续听满这么多秒自动切过去。30~180 秒之间给个
+                    // 随手挂着播放器就能等到、体验到效果的范围，太长的话这个字段等于白抽了
+                    if (rng.Next(10) < 4)
+                    {
+                        string autoSwitchSecondsText = Math.Round(30 + rng.NextDouble() * 150, 0).ToString("0", CultureInfo.InvariantCulture);
+                        actionExtra += $@",
+      ""autoSwitchAfterSeconds"": {autoSwitchSecondsText}";
+                    }
+
+                    // 4 成概率带过渡淡化——只在切换前后待在同一条轨道时才真的生效（见
+                    // CustomThemeIconAction.TransitionSeconds 的注释），但随机器这里不知道点击时上一个
+                    // 动作是谁，独立抽这个字段就好：抽到不生效的组合也不算错，只是这一次点击刚好碰不上
+                    // 交叉淡化的条件，跟这个字段本身填了正数、能过校验没关系。0.5~2.5 秒之间，太短感觉
+                    // 不出过渡、太长又会让人怀疑"是不是卡住了"
+                    if (rng.Next(10) < 4)
+                    {
+                        string transitionSecondsText = Math.Round(0.5 + rng.NextDouble() * 2.0, 1).ToString("0.0", CultureInfo.InvariantCulture);
+                        actionExtra += $@",
+      ""transitionSeconds"": {transitionSecondsText}";
+                    }
+
+                    actionBlocks.Add($@"    {{
+      ""name"": ""动作 {i + 1}"",
+      ""frames"": [
+        [
+          {actionIconRowsJson}
+        ]
+      ]{actionExtra}
+    }}");
+                }
+                actionsJson = $@",
+    ""actions"": [
+{string.Join(",\n", actionBlocks)}
+    ]";
+            }
+
             string json =
 $@"{{
   ""name"": ""{p.Mood}"",
@@ -236,7 +310,7 @@ $@"{{
     ""palette"": {{ ""#"": ""{p.Accent}"", ""w"": ""{p.Title}"" }},
     ""rows"": [
       {iconRowsJson}
-    ]
+    ]{actionsJson}
   }},
   ""animation"": {{ ""type"": ""{animType}"", ""duration"": {durationText}, ""musicReactive"": {(musicReactive ? "true" : "false")}, ""sensitivity"": ""{sensitivity}"" }}{layersJson}
 }}";
