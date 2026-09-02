@@ -42,7 +42,7 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0" Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" VerticalAlignment="Center"
-                               Text="每个字段的取值范围、8 种动画的组合规则、完整示例——都在下面这份文档里，也可以直接丢给 AI 帮你按你想要的风格生成一份。"/>
+                               Text="每个字段的取值范围、9 种动画的组合规则、完整示例——都在下面这份文档里，也可以直接丢给 AI 帮你按你想要的风格生成一份。"/>
                     <Button Grid.Column="1" x:Name="BtnDownloadSpec" Content="📄 下载详细说明" Style="{StaticResource PillButtonStyle}"
                             Padding="10,4" FontSize="11" Margin="8,0,0,0" Click="BtnDownloadSpec_Click"/>
                 </Grid>

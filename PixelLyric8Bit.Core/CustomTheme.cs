@@ -74,14 +74,73 @@ namespace PixelLyric8BitFix
         // 每帧播放多久（秒），只有 Frames 有值时才有意义。不填默认见 CustomThemeValidator.DefaultFrameDurationSeconds
         // （0.25，对齐 Steve 换腿大约 250ms 一帧的节奏，不是瞎猜的数字）。
         public double? FrameDuration { get; set; }
+
+        // 可选：额外的可点击切换的"动作"。图标自己的 Rows/Frames 永远是"动作 0"（不用取名字，
+        // Mini 小方块/分享卡片/初次显示这些地方都还是只认这一套，不用改），Actions[0]/[1]/……依次排
+        // 在后面；点一下装饰图标（见 MainWindow.SkinInteractions.cs 的 CustomIcon_MouseLeftButtonDown）
+        // 永久切到下一个，绕完一圈回到动作 0。只换帧，不连带切换 animation.type 那套移动方式——
+        // sway/drift 这些是主题选定的单一移动方式，不会因为切了动作就跟着变。不给这个字段（或者给
+        // 空数组）就是这个字段加进来之前的样子：图标不会响应点击，双击照样能穿透进 Mini 模式。
+        public List<CustomThemeIconAction>? Actions { get; set; }
+    }
+
+    /// <summary>一个可点击切换到的额外动作——形状规则跟 CustomThemeIcon.Frames 完全一样（复用同一套
+    /// ValidateFrames），只是换了个字段名方便挂在 Actions 列表里。Name 纯粹给人看，报错定位/以后如果
+    /// 做画板 UI 选择器会用到，不参与渲染逻辑。</summary>
+    public sealed class CustomThemeIconAction
+    {
+        public string? Name { get; set; }
+        public List<List<string>>? Frames { get; set; }
+        public double? FrameDuration { get; set; } // 不填就落回 icon 顶层的 FrameDuration（再没有就是默认值）
+
+        // 可选：这个动作自己的移动方式，形状跟顶层 animation 完全一样（type/duration/musicReactive/
+        // sensitivity，也包括 drift/fall/walk——点一下切到这个动作，图标会真的搬进/搬出对应的专属
+        // 渲染结构（drift/fall 是飘过/飘落卡片的三重影轨道，walk 是装饰栏里来回走的单独图标，像
+        // Minecraft 皮肤的 Steve 那样），不再只是原地换帧，见 MainWindow.Skins.cs 的
+        // ApplyCustomIconMovement）。不填就是这个字段加进来之前唯一的行为——所有动作共用 icon 顶层
+        // 那一个 animation，切动作只换画面不换动法。填了的话是一份完整独立的动画配置（跟
+        // layers[i].animation 一样的""要么不填、要么整份自己给全""的规则，不是往顶层动画上打补丁——
+        // Duration/MusicReactive/Sensitivity 各自用自己的默认值，不会继承顶层那份的对应字段）。
+        //
+        // 唯一的限制：drift/fall/walk 不能跟别的招式组合（也不能互相组合），跟顶层 animation 的组合
+        // 规则一模一样——这三招各自要用专属的渲染结构，只能单独出现，见 CustomThemeValidator 的
+        // ValidateAnimation。
+        public CustomThemeAnimation? Animation { get; set; }
+
+        // 可选：数据驱动的自动切换阈值（秒）——当前正在播的这首歌"连续播放"（暂停不计时，切歌清零，
+        // 见 MainWindow.ListeningStats.cs 的 _customIconContinuousTrackSeconds）满这个秒数之后，
+        // 自动切到这个动作，不用等用户点。多个动作都设了这个字段的话，取"阈值已经被跨过的里面数值
+        // 最大"的那个（数值越大代表越靠后才该出现的阶段，见 MainWindow.Skins.cs 的
+        // EvaluateAutoSwitchIconAction）；已经手动点到（或者被更高阶段自动切到）更靠后的动作时不会
+        // 被拉回来——只会把索引往前推，不会跟用户已经做出的选择打架。不填就是这个字段加进来之前
+        // 唯一的行为：完全靠点击手动切换，不会有任何数据驱动的自动切换发生。
+        public double? AutoSwitchAfterSeconds { get; set; }
+
+        // 可选：切到这个动作时的过渡时长（秒）——不填就是这个字段加进来之前唯一的行为：瞬间切换，
+        // 上一个动作的画面直接被这个动作的第一帧替换掉，没有任何过渡。填了的话，从"切换前正显示的
+        // 那张画面"到"这个动作的第一帧"之间做一次透明度交叉淡化，淡化这些秒数——淡化期间新画面已经
+        // 在正常播放（包括它自己的逐帧动画，如果有的话），旧画面只是叠在上面慢慢透明，不是"暂停等淡化
+        // 完再动起来"。淡完之后旧画面彻底消失，直到下一次切换（不管是点击还是数据驱动的自动切换）之前
+        // 都不会再用到它，跟这个字段没加进来之前一样，一直显示/播放这个动作，见 MainWindow.Skins.cs 的
+        // PlayCustomIconTransition。
+        //
+        // 只在"切换前后待在同一条移动轨道"时才会生效（普通装饰栏 pulse/twinkle/bob/sway/spin/flicker/
+        // 无 animation 算一条轨道，walk 算另一条），见 MainWindow.Skins.cs 的 CustomIconTrackKind——
+        // 不同轨道之间（比如从装饰栏切到 walk 来回走）本身就是不同的渲染结构（单张 Image vs 装饰带
+        // 里来回摆的另一张 Image），没有"同一块画布"可以交叉淡化，那种情况仍然是瞬间切换，这个字段
+        // 填了也不会报错，只是不生效。drift/fall（三重影轨道）暂时也不支持，理由一样。
+        // "动作 0"（icon 自己的 Rows/Frames）没有对应的 CustomThemeIconAction 对象放这个字段，切回
+        // 动作 0（绕完一圈）永远是瞬间切换，这跟 Name/AutoSwitchAfterSeconds 这些字段"动作 0 不适用"
+        // 是同一个既有限制，不是这个字段专属的新缺口。
+        public double? TransitionSeconds { get; set; }
     }
 
     public sealed class CustomThemeAnimation
     {
-        public string? Type { get; set; }  // pulse / twinkle / drift / fall / bob / sway / spin / flicker
+        public string? Type { get; set; }  // pulse / twinkle / drift / fall / bob / sway / spin / flicker / walk
         public double? Duration { get; set; } // 秒，不填就用每种招式自己的默认值
 
-        // 可选，不填默认 false。true 的话，不管上面 Type 选的是 8 种招式里的哪一种，这个动画的播放速度
+        // 可选，不填默认 false。true 的话，不管上面 Type 选的是 9 种招式里的哪一种，这个动画的播放速度
         // 都会跟着系统正在播的音乐响度/鼓点实时变化——跟内置皮肤（黑胶转速、Minecraft 走路变速……）
         // 用的是同一套机制，见 MainWindow.SkinInteractions.cs 的 UpdateMusicReactiveSkin。
         // 受设置页"皮肤音乐律动"这个总开关控制，那个开关关了的话这里勾了也不会生效。
@@ -101,7 +160,7 @@ namespace PixelLyric8BitFix
     /// </summary>
     public static class CustomThemeValidator
     {
-        public static readonly string[] ValidAnimationTypes = { "pulse", "twinkle", "drift", "fall", "bob", "sway", "spin", "flicker" };
+        public static readonly string[] ValidAnimationTypes = { "pulse", "twinkle", "drift", "fall", "bob", "sway", "spin", "flicker", "walk" };
         public static readonly string[] ValidSensitivities = { "low", "medium", "high" };
 
         // 序列化一个 CustomTheme 对象回 JSON 文本时用这份设置——键名转成 camelCase（"name"/"colors"/
@@ -150,6 +209,11 @@ namespace PixelLyric8BitFix
         // 真需要更复杂的场景，本来就更适合做成新的内置皮肤，不是客制化主题这条轻量路径该扛的
         public const int MaxLayers = 2;
         public static readonly string[] ValidAnchors = { "top-left", "top-right", "bottom-left", "bottom-right" };
+
+        // icon.actions 数量上限——纯粹是校验层面给个保守的圆整数字（跟 CustomThemeStore.MaxThemes
+        // 那种做法一致），不是系统层面的技术瓶颈。切换动作是点一下循环到下一个，10 个已经够表达
+        // "好几套姿势轮流切换"这种场景，真需要更多更适合考虑别的表达方式（比如干脆做成新皮肤）。
+        public const int MaxIconActions = 10;
 
         public static (CustomTheme? Theme, List<string> Errors) ParseAndValidate(string json)
         {
@@ -232,6 +296,12 @@ namespace PixelLyric8BitFix
             // 固定在装饰栏这件事本身互斥），层不受这个限制——见 ValidateAnimation 的 allowDriftFallCombo 参数
             ValidateAnimation(theme.Animation, "animation", errors, allowDriftFallCombo: false);
 
+            // 注：以前这里还有一条"顶层是 drift/fall 的话任何动作都不能单独指定 animation"的交叉检查——
+            // 那是在动作还没法自己选 drift/fall 的阶段留下的限制，图标只有唯一一条固定轨道，点击切动作
+            // 没法把图标搬进搬出。现在动作自己的 animation 也能选 drift/fall 了（MainWindow.Skins.cs
+            // 的 ApplyCustomIconMovement 每次切动作都会重新决定图标该待在哪条轨道），这条限制已经没有
+            // 存在的理由，删掉了——顶层随便选、每个动作也各自随便选，互不冲突。
+
             if (theme.Layers != null)
             {
                 if (theme.Layers.Count > MaxLayers)
@@ -281,12 +351,14 @@ namespace PixelLyric8BitFix
                 .Select(t => t.ToLowerInvariant())
                 .ToArray();
 
-        // 主图标的 animation 和每个 layers[i].animation 是同一套校验规则（type 是 8 招组合、duration 是正数、
+        // 主图标的 animation 和每个 layers[i].animation 是同一套校验规则（type 是 9 招组合、duration 是正数、
         // sensitivity 三档之一），抽出来共用一份，不然多层加进来之后同一段逻辑要复制 MaxLayers+1 遍。
-        // allowDriftFallCombo=false（主图标）时 drift/fall 必须单独出现，不能跟别的招式（也不能跟彼此）
-        // 组合——这两招用的是整张卡片飘过/飘落的专属轨道（三份图标各自动画），主图标同时又要固定显示在
-        // 装饰栏里，两种视觉结构互斥，"drift+pulse"这种组合没法同时画出来。层没有这个专属轨道，
-        // 全部走同一套单图标渲染，allowDriftFallCombo=true 时组合不受限制。
+        // allowDriftFallCombo=false（主图标）时 drift/fall/walk 必须单独出现，不能跟别的招式（也不能
+        // 跟彼此）组合——这三招各自用的是专属的渲染结构（drift/fall 是整张卡片飘过/飘落的三重影轨道，
+        // walk 是装饰栏那条窄带里来回走的单独一张图标，见 MainWindow.Skins.cs 的 ApplyCustomIconMovement），
+        // 主图标同一时刻只能待在其中一种结构里，"drift+pulse"/"walk+sway"这种组合没法同时画出来。
+        // 层没有这几个专属结构，全部走同一套单图标渲染（drift/fall/walk 在层里都退化成小幅度原地摆动，
+        // 见 StartLayerAnimation），allowDriftFallCombo=true 时组合不受限制。
         private static void ValidateAnimation(CustomThemeAnimation? animation, string fieldPrefix, List<string> errors, bool allowDriftFallCombo)
         {
             if (animation == null || string.IsNullOrWhiteSpace(animation.Type))
@@ -307,9 +379,9 @@ namespace PixelLyric8BitFix
                         errors.Add($"\"{fieldPrefix}.type\" 里的 \"{t}\" 不认识，只能是：" + string.Join(" / ", ValidAnimationTypes));
                     }
                 }
-                if (!allowDriftFallCombo && types.Length > 1 && types.Any(t => t is "drift" or "fall"))
+                if (!allowDriftFallCombo && types.Length > 1 && types.Any(t => t is "drift" or "fall" or "walk"))
                 {
-                    errors.Add($"\"{fieldPrefix}.type\" 里的 drift/fall 不能跟别的招式组合（这两招是整张卡片的飘过/飘落轨道，跟主图标固定显示在装饰栏这件事结构上冲突），只能单独用，比如 \"drift\"；额外装饰层（layers）里没有这个限制。");
+                    errors.Add($"\"{fieldPrefix}.type\" 里的 drift/fall/walk 不能跟别的招式组合（这三招各自要用专属的渲染结构——drift/fall 是整张卡片飘过/飘落的三重影轨道，walk 是装饰栏里来回走的单独图标，都跟主图标固定显示在装饰栏这件事结构上冲突），只能单独用，比如 \"drift\" 或 \"walk\"；额外装饰层（layers）里没有这个限制。");
                 }
             }
 
@@ -390,6 +462,64 @@ namespace PixelLyric8BitFix
             if (icon.FrameDuration is double fd && fd <= 0)
             {
                 errors.Add($"\"{frameDurationField}\" 填的是 {fd}，必须是大于 0 的数字（不填就用默认的 {DefaultFrameDurationSeconds} 秒）。");
+            }
+
+            // Actions：可选的额外可点击切换动作，跟 icon.frames 是同一套形状校验（ValidateFrames），
+            // 用到的字符统一并进 framesErrorSourceForPalette 一起核对调色板——不用每个动作单独配一份调色板，
+            // 图标只有一份 Palette，所有动作共用
+            if (icon.Actions is { Count: > 0 } actions)
+            {
+                string actionsField = fieldPrefix == "icon" ? "icon.actions" : $"{fieldPrefix}.icon.actions";
+                if (actions.Count > MaxIconActions)
+                {
+                    errors.Add($"\"{actionsField}\" 最多只能有 {MaxIconActions} 个，现在是 {actions.Count} 个。");
+                }
+
+                for (int i = 0; i < actions.Count; i++)
+                {
+                    var action = actions[i];
+                    string actionFramesField = $"{actionsField}[{i}].frames";
+                    string actionDurationField = $"{actionsField}[{i}].frameDuration";
+
+                    if (action.Frames is not { Count: > 0 })
+                    {
+                        errors.Add($"\"{actionFramesField}\" 没填——每个动作至少要有 1 帧。");
+                        continue;
+                    }
+
+                    ValidateFrames(action.Frames, actionFramesField, errors, out var actionFlattenedRows);
+                    framesErrorSourceForPalette = framesErrorSourceForPalette.Concat(actionFlattenedRows).ToList();
+
+                    if (action.FrameDuration is double afd && afd <= 0)
+                    {
+                        errors.Add($"\"{actionDurationField}\" 填的是 {afd}，必须是大于 0 的数字（不填就落回 \"{frameDurationField}\"，再没有就是默认的 {DefaultFrameDurationSeconds} 秒）。");
+                    }
+
+                    // 动作自己的 animation：不填就是这个字段加进来之前的行为（沿用 icon 顶层的
+                    // animation）。填了的话跟 layers[i].animation 一样是一份完整独立的配置——
+                    // type 必填，形状规则复用 ValidateAnimation，drift/fall 可以选（会让图标点到这个
+                    // 动作时真的搬进专属的飘过/飘落轨道），但跟顶层 animation 一样不能跟别的招式组合
+                    // （allowDriftFallCombo: false，跟顶层用的是同一条组合规则）。
+                    if (action.Animation != null)
+                    {
+                        ValidateAnimation(action.Animation, $"{actionsField}[{i}].animation", errors, allowDriftFallCombo: false);
+                    }
+
+                    // 自动切换阈值：不填就是纯手动点击，填了必须是正数——道理跟 frameDuration/animation.duration
+                    // 一样，0 或负数没有意义（"连续播放 0 秒就自动切"等于一开始就该是这个动作，那应该直接
+                    // 把它内容画成动作 0，不需要这个字段）
+                    if (action.AutoSwitchAfterSeconds is double asas && asas <= 0)
+                    {
+                        errors.Add($"\"{actionsField}[{i}].autoSwitchAfterSeconds\" 填的是 {asas}，必须是大于 0 的数字（不填就是纯手动点击切换，不会自动触发）。");
+                    }
+
+                    // 过渡时长：道理跟上面几个"秒数"字段一样，必须是正数——0 或负数的"淡化时长"没有
+                    // 意义，直接不填（瞬间切换）就好，不需要这个字段硬凑一个 0
+                    if (action.TransitionSeconds is double ts && ts <= 0)
+                    {
+                        errors.Add($"\"{actionsField}[{i}].transitionSeconds\" 填的是 {ts}，必须是大于 0 的数字（不填就是瞬间切换，不做过渡淡化）。");
+                    }
+                }
             }
 
             // "icon.palette" 必须存在——就算图标全是 "." 空白格用不上任何颜色，也留一个空对象 {}。

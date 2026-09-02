@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using PixelLyric8BitFix;
 using Xunit;
 
@@ -106,6 +107,67 @@ namespace PixelLyric8BitFix.Tests
                 Assert.DoesNotContain("drift", type);
                 Assert.DoesNotContain("fall", type);
             }
+        }
+
+        [Fact]
+        public void GenerateJson_SometimesIncludesActions_AndTheyAlwaysValidate()
+        {
+            // 4 成概率带 icon.actions——200 次里断言"至少出现过一次带 actions 的"，顺带在每次出现时
+            // 确认那份 actions 本身也过校验（防的是"主图标没问题，actions 那段格式拼错了/漏填了必填的
+            // frames"这种只挑对分支才暴露的错）
+            bool sawActions = false;
+            for (int i = 0; i < 200; i++)
+            {
+                string json = CustomThemeRandomizer.GenerateJson();
+                var (theme, errors) = CustomThemeValidator.ParseAndValidate(json);
+                Assert.True(errors.Count == 0, $"第 {i} 次没能过校验：{string.Join(" | ", errors)}\nJSON:\n{json}");
+                if (theme!.Icon!.Actions is { Count: > 0 }) sawActions = true;
+            }
+            Assert.True(sawActions, "跑了 200 次，一次都没抽到带 icon.actions 的结果，概率上不太正常，查一下是不是没真的接上");
+        }
+
+        [Fact]
+        public void GenerateJson_ActionsSometimesCarryAnimationAndAutoSwitch_AndTheyAlwaysValidate()
+        {
+            // 动作自己的 animation（含 walk 这种以前随机生成器完全碰不到的招式）和 autoSwitchAfterSeconds
+            // 都是独立概率——200 次里断言两者各自都至少出现过一次，同时每次出现都过校验
+            bool sawActionAnimation = false;
+            bool sawAutoSwitch = false;
+            bool sawWalk = false;
+            for (int i = 0; i < 200; i++)
+            {
+                string json = CustomThemeRandomizer.GenerateJson();
+                var (theme, errors) = CustomThemeValidator.ParseAndValidate(json);
+                Assert.True(errors.Count == 0, $"第 {i} 次没能过校验：{string.Join(" | ", errors)}\nJSON:\n{json}");
+                foreach (var action in theme!.Icon!.Actions ?? new List<CustomThemeIconAction>())
+                {
+                    if (action.Animation != null) sawActionAnimation = true;
+                    if (action.Animation?.Type == "walk") sawWalk = true;
+                    if (action.AutoSwitchAfterSeconds != null) sawAutoSwitch = true;
+                }
+            }
+            Assert.True(sawActionAnimation, "跑了 200 次，动作自己的 animation 一次都没抽到，概率上不太正常");
+            Assert.True(sawAutoSwitch, "跑了 200 次，autoSwitchAfterSeconds 一次都没抽到，概率上不太正常");
+            Assert.True(sawWalk, "跑了 200 次，动作 animation 里一次 walk 都没抽到，概率上不太正常（9 招之一，理论上迟早会撞到）");
+        }
+
+        [Fact]
+        public void GenerateJson_ActionsSometimesCarryTransitionSeconds_AndTheyAlwaysValidate()
+        {
+            // 4 成概率给动作带上 transitionSeconds（切动作的过渡淡化）——200 次里断言至少出现过一次，
+            // 顺带确认每次抽到的值都过校验
+            bool sawTransition = false;
+            for (int i = 0; i < 200; i++)
+            {
+                string json = CustomThemeRandomizer.GenerateJson();
+                var (theme, errors) = CustomThemeValidator.ParseAndValidate(json);
+                Assert.True(errors.Count == 0, $"第 {i} 次没能过校验：{string.Join(" | ", errors)}\nJSON:\n{json}");
+                foreach (var action in theme!.Icon!.Actions ?? new List<CustomThemeIconAction>())
+                {
+                    if (action.TransitionSeconds != null) sawTransition = true;
+                }
+            }
+            Assert.True(sawTransition, "跑了 200 次，transitionSeconds 一次都没抽到，概率上不太正常");
         }
 
         [Fact]

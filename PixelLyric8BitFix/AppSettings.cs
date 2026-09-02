@@ -143,6 +143,14 @@ namespace PixelLyric8BitFix
         /// </summary>
         public bool MiniVisualizerEnabled { get; set; } = true;
 
+        /// <summary>
+        /// Mini 模式小方块单击会不会有反应（气泡弹一句听歌统计/随机台词 + 弹一下）。默认开启。
+        /// 关掉之后单击直接退回展开，跟这个功能出现之前一样。见 MainWindow.PetMode.cs。
+        /// 这个字段原来叫 MiniPetWanderEnabled、还管着"小方块自己在屏幕上走来走去"——用户体验过
+        /// 一轮之后觉得走来走去太吵，那部分整个撤掉了，只留单击反应，字段跟着改名对上现在的实际行为。
+        /// </summary>
+        public bool MiniPetReactionEnabled { get; set; } = true;
+
         /// <summary>律动灵敏度档位，默认中。见 AudioVisualizer.ApplySensitivity 具体每档改了哪几个参数。
         /// Mini 模式的像素粒子、下面这个"皮肤音乐律动"共用同一档灵敏度——都是同一份音频分析出来的数据，
         /// 没必要让用户分两个地方各调一次。</summary>

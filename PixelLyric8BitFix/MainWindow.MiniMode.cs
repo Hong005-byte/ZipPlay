@@ -75,8 +75,21 @@ namespace PixelLyric8BitFix
             if (!_isMiniMode) return;
             _isMiniMode = false;
 
+            // 双击展开这个动作现在有两条独立路径都可能触发它：MiniBadge 自己的
+            // MiniBadge_MouseLeftButtonUp，以及 Window 级别的 MouseDoubleClick（MainWindow.xaml.cs 里
+            // 的 ToggleMiniMode，那个识别发生在隧道阶段，可能在 MiniBadge 自己的 MouseLeftButtonDown/Up
+            // 跑完之前就先触发）——真遇到这种时序，MiniBadge 手上可能还"捏着"一次没结束的拖拽手势
+            // （_miniBadgeDragCaptured 还是 true），这里先干净地放手，不留一个指向即将隐藏的元素的
+            // 鼠标捕获，也不留一个再也等不到 Up 事件去复位的旧标记
+            if (_miniBadgeDragCaptured)
+            {
+                _miniBadgeDragCaptured = false;
+                MiniBadge.ReleaseMouseCapture();
+            }
+
             MiniBadge.Visibility = Visibility.Collapsed;
             MiniVisualizerCanvas.Visibility = Visibility.Collapsed;
+            HidePetBubble(); // 展开的时候气泡还开着就很奇怪——桌宠那部分场景已经不存在了
             MainContentGrid.Visibility = Visibility.Visible;
             TopLeftIconsPanel.Visibility = Visibility.Visible;
             UpdateBadge.Visibility = _updateInfo != null ? Visibility.Visible : Visibility.Collapsed;
@@ -255,16 +268,78 @@ namespace PixelLyric8BitFix
             MiniBadgeImage.Source = t.MiniIcon();
         }
 
-        // 小方块本身也能拖着走：借用 DragMove() 的原生拖拽循环（跟窗口其它地方拖拽同一套机制，
-        // 不用自己手撸鼠标坐标换算，天然兼容多显示器/缩放）。DragMove() 会一直阻塞到用户松开左键，
-        // 返回后比较一下位置有没有变化——没变就是单纯点了一下，没有拖动，那就当成"点击展开"。
+        // 小方块本身也能拖着走。之前这里借用 Window.DragMove()（原生非客户区拖拽循环），
+        // 靠"松手后比一下位置有没有变"判断是不是纯点击，双击靠 e.ClickCount 判断——这两者都栽了：
+        // DragMove() 内部是 SendMessage(WM_SYSCOMMAND, SC_MOUSEMOVE) 发起的系统级拖动，第一下点击
+        // 的按下→抬起整个被这个非客户区循环吞掉，不走 WPF 正常的鼠标消息管线，于是 WPF 自己算
+        // ClickCount 用的"上一次点击时间/位置"状态是错的——实测真双击经常两次都量成 ClickCount==1，
+        // 永远走不到 ExitMiniMode()，双击卡在只有反应气泡、回不去主界面。中途换成自己按时间戳判定
+        // 双击，但 DragMove() 本身还留着，没有排除"这套系统级拖动循环还有别的方式在吞第二次点击"
+        // 的可能——用户反馈换了时间戳判定之后问题依然存在，说明病根真的是 DragMove()/SC_MOUSEMOVE
+        // 这条路径本身，不是"怎么判定双击"这个细节。
+        //
+        // 现在整个换成手写拖拽（MouseMove + CaptureMouse，不调用 DragMove()/SC_MOUSEMOVE）——按下
+        // 只记起点、抬手才真正判断这是点击还是拖拽，中途完全不触碰任何系统级拖动 API，WPF 的鼠标
+        // 消息管线（包括 ClickCount 这套内部状态）全程正常运作，不会被打断。
+        //
+        // 位移全程只用 e.GetPosition(this)（窗口自己的本地坐标系），不经过 PointToScreen/屏幕坐标——
+        // WPF 的 PointToScreen 在多显示器 + 每显示器独立 DPI 缩放的场景下是有名的换算不准的坑
+        // （这也是当初选 DragMove() 的原因之一，见上面的旧注释）。留在窗口本地坐标系里完全绕开这个
+        // 坑：_miniBadgeDragStartPoint 记的是"按下时鼠标相对窗口的位置"，之后每次 MouseMove 再量一次
+        // 鼠标相对窗口的位置，两次的差值就是窗口该挪动的量（因为窗口边框相对客户区的偏移是常数，
+        // 做差会自动抵消，不用关心具体偏移量是多少）；'this'（窗口）挪动之后，下一次 GetPosition 会
+        // 用新的窗口位置重新计算，这个式子每次都重新成立，不会累积误差。跟 IconPainterWindow 帧缩略图
+        // 拖拽重排（FrameStripPanel_MouseMove 的阈值判定）是同一个思路，这个代码库里已经验证过好用。
+        private bool _miniBadgeDragCaptured;
+        private System.Windows.Point _miniBadgeDragStartPoint; // "抓取点"相对窗口的位置，按下时定住，中途不再更新
+        private bool _miniBadgeDragMoved;
+        private int _miniBadgeClickCountOnDown; // ClickCount 只有在按下的那一刻可靠，先记下来，抬手时再用
+        private const double MiniBadgeDragThreshold = 4; // 像素，比 IconPainterWindow 帧缩略图拖拽判定的 6 略紧一点——方块本身不大，不需要留太多容错
+
         private void MiniBadge_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
-            double beforeLeft = Left, beforeTop = Top;
-            this.DragMove();
-            bool wasDragged = Math.Abs(Left - beforeLeft) > 1 || Math.Abs(Top - beforeTop) > 1;
-            if (!wasDragged) ExitMiniMode();
+            _miniBadgeClickCountOnDown = e.ClickCount;
+            _miniBadgeDragStartPoint = e.GetPosition(this);
+            _miniBadgeDragMoved = false;
+            _miniBadgeDragCaptured = true;
+            MiniBadge.CaptureMouse();
+        }
+
+        private void MiniBadge_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_miniBadgeDragCaptured || e.LeftButton != MouseButtonState.Pressed) return;
+
+            var current = e.GetPosition(this);
+            double dx = current.X - _miniBadgeDragStartPoint.X;
+            double dy = current.Y - _miniBadgeDragStartPoint.Y;
+
+            if (!_miniBadgeDragMoved && (Math.Abs(dx) > MiniBadgeDragThreshold || Math.Abs(dy) > MiniBadgeDragThreshold))
+                _miniBadgeDragMoved = true; // 挪够距离才算真的在拖，不然手一抖的小幅度移动会让单击/双击变成一次没意义的"拖了 0px"
+
+            if (_miniBadgeDragMoved)
+            {
+                Left += dx;
+                Top += dy;
+            }
+        }
+
+        // 拖了 → 什么都不做（跟以前一样，位置已经在 MouseMove 里实时更新过了）。没拖 + 单击 → 桌宠
+        // 反应（气泡+弹一下），不再直接展开；没拖 + 双击 → 展开，这是以前"单击展开"那个行为搬过来的。
+        // 双击判定直接用按下时记的 e.ClickCount——没有 DragMove() 搅局，WPF 自己这套计数现在是准的，
+        // 不需要再手动按时间戳重新发明一遍。
+        private void MiniBadge_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (!_miniBadgeDragCaptured) return;
+            _miniBadgeDragCaptured = false;
+            MiniBadge.ReleaseMouseCapture();
+
+            if (_miniBadgeDragMoved) return;
+
+            bool isDoubleClick = _miniBadgeClickCountOnDown >= 2;
+            // 关掉这个开关的话，单击也跟着退回最初的"点一下直接展开"
+            if (!_settings.MiniPetReactionEnabled || isDoubleClick) ExitMiniMode();
+            else ShowPetReaction();
         }
     }
 }

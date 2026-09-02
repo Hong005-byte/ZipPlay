@@ -36,5 +36,118 @@ namespace PixelLyric8BitFix.Tests
             Assert.NotNull(theme);
             Assert.Empty(errors);
         }
+
+        [Fact]
+        public void Build_MentionsActions()
+        {
+            // icon.actions（画板"动作"选择器对应的那个字段）在这份文档加进来之前完全没被提到过——
+            // 一个只看这份文档（或者把它丢给 AI）的人/AI 根本不知道这个字段存在。这里只做粗粒度检查
+            // （标题+关键字段名都出现），详细的形状规则由 CustomThemeIconActionsTests 覆盖。
+            string doc = CustomThemeSpecDoc.Build();
+
+            Assert.Contains("actions", doc);
+            Assert.Contains("frameDuration", doc);
+        }
+
+        [Fact]
+        public void Build_ActionsExampleSnippet_IsValidAndPassesValidation()
+        {
+            // "actions" 小节里手写的那份示例 icon 片段——独立摘出来塞进一份完整主题 JSON，
+            // 确认它真的是合法 JSON、而且真的能过校验，不是一份看着像但其实抄错了逗号/尺寸的示例
+            // （文档专门声明是要给 AI 读的，示例本身要是坏的，AI 照着抄出来的东西也会跟着坏）
+            const string iconSnippet = @"{
+  ""palette"": { ""#"": ""#F9C784"" },
+  ""rows"": [
+    ""....."",
+    "".###."",
+    ""..#.."",
+    "".#.#.""
+  ],
+  ""actions"": [
+    {
+      ""name"": ""挥手"",
+      ""frames"": [
+        [""#...."", "".###."", ""..#.."", "".#.#.""],
+        [""....#"", "".###."", ""..#.."", "".#.#.""]
+      ],
+      ""frameDuration"": 0.2,
+      ""animation"": { ""type"": ""spin"", ""duration"": 1.5 }
+    },
+    {
+      ""name"": ""投入"",
+      ""frames"": [[""#...."", "".###."", ""..#.."", "".#.#.""]],
+      ""autoSwitchAfterSeconds"": 120,
+      ""animation"": { ""type"": ""walk"", ""duration"": 6 }
+    }
+  ]
+}";
+            Assert.Contains(iconSnippet, CustomThemeSpecDoc.Build());
+
+            // 示例叙述里顶层是 "sway"（""默认站姿是 sway 轻摆""，图标固定贴在装饰栏）——""挥手""的
+            // action.animation 是 "spin"（不是 drift/fall/walk，不换渲染结构），""投入""的
+            // action.animation 是 "walk"（换渲染结构，图标会在装饰栏那条窄带里来回走）；顶层跟两个
+            // 动作各自选的招式互相独立，这个组合应该完全合法
+            string themeJson = $@"{{
+              ""name"": ""test"",
+              ""colors"": {{ ""title"": ""#FFFFFF"", ""artist"": ""#FFFFFF"", ""accent"": ""#FFFFFF"", ""lyric"": ""#FFFFFF"", ""lyricBoxBg"": ""#000000"", ""lyricBoxBorder"": ""#000000"" }},
+              ""background"": {{ ""type"": ""solid"", ""stops"": [""#000000""] }},
+              ""icon"": {iconSnippet},
+              ""animation"": {{ ""type"": ""sway"" }}
+            }}";
+
+            var (theme, errors) = CustomThemeValidator.ParseAndValidate(themeJson);
+            Assert.True(errors.Count == 0, string.Join(" | ", errors));
+            Assert.NotNull(theme);
+            Assert.Equal("spin", theme!.Icon!.Actions![0].Animation!.Type);
+            Assert.Equal(120, theme.Icon.Actions[1].AutoSwitchAfterSeconds);
+            Assert.Equal("walk", theme.Icon.Actions[1].Animation!.Type);
+        }
+
+        [Fact]
+        public void Build_MentionsActionAnimation()
+        {
+            // icon.actions[i].animation（动作专属的移动方式）也是一个只看这份文档/丢给 AI 读的人
+            // 完全没法知道存在的字段，除非写进去——粗粒度检查关键词，详细规则由
+            // CustomThemeIconActionAnimationTests 覆盖
+            string doc = CustomThemeSpecDoc.Build();
+
+            Assert.Contains("drift", doc);
+            Assert.Contains("musicReactive", doc);
+        }
+
+        [Fact]
+        public void Build_MentionsAutoSwitchAfterSeconds()
+        {
+            // icon.actions[i].autoSwitchAfterSeconds（数据驱动的自动切换）同理——粗粒度检查关键词，
+            // 详细规则由 CustomThemeIconActionAutoSwitchTests / …SelectorTests 覆盖
+            string doc = CustomThemeSpecDoc.Build();
+
+            Assert.Contains("autoSwitchAfterSeconds", doc);
+            Assert.Contains("连续播放", doc);
+        }
+
+        [Fact]
+        public void Build_MentionsTransitionSeconds()
+        {
+            // icon.actions[i].transitionSeconds（切动作时的过渡淡化）同理——粗粒度检查关键词，
+            // 详细规则由 CustomThemeIconActionTransitionTests 覆盖
+            string doc = CustomThemeSpecDoc.Build();
+
+            Assert.Contains("transitionSeconds", doc);
+            Assert.Contains("淡化", doc);
+        }
+
+        [Fact]
+        public void Build_MentionsWalk()
+        {
+            // walk（第 9 种招式，装饰栏里来回走，跟 Minecraft 皮肤 Steve 同一套手法）是加进
+            // ValidAnimationTypes 之后最容易漏掉同步的地方——文档里列的还是老的 8 招表格的话，
+            // 用户/AI 根本不知道这个选项存在。粗粒度检查关键词，详细规则由 CustomThemeValidatorTests
+            // 的 walk 相关用例覆盖
+            string doc = CustomThemeSpecDoc.Build();
+
+            Assert.Contains("`walk`", doc);
+            Assert.Contains("Steve", doc);
+        }
     }
 }

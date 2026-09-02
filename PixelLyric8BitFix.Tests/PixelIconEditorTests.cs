@@ -332,6 +332,171 @@ namespace PixelLyric8BitFix.Tests
             Assert.Null(PixelIconEditor.TryLoadFrames(icon));
         }
 
+        // ── 动作（icon.actions，画板"动作"选择器用）──BuildIconWithActions / LoadActions ──────
+
+        [Fact]
+        public void BuildIconWithActions_NoExtraActions_MatchesBuildFrames()
+        {
+            var grid = MakeGrid(4, 4, '.');
+            grid[0, 0] = '#';
+            var palette = new Dictionary<char, RgbaColor> { ['#'] = TestRed };
+
+            var icon = PixelIconEditor.BuildIconWithActions(new[] { grid }, 4, 4, palette,
+                new List<PixelIconEditor.LoadedIconAction>());
+
+            Assert.Null(icon.Actions); // 没有额外动作就不该多出一个空数组字段
+            Assert.NotNull(icon.Rows);
+            Assert.Equal("#...", icon.Rows![0]);
+        }
+
+        [Fact]
+        public void BuildIconWithActions_OneExtraAction_ProducesActionWithWrappedFrames()
+        {
+            var action0 = MakeGrid(4, 4, '.');
+            action0[0, 0] = '#';
+            var action1Frame = MakeGrid(4, 4, '.');
+            action1Frame[0, 1] = '#';
+
+            var icon = PixelIconEditor.BuildIconWithActions(new[] { action0 }, 4, 4,
+                new Dictionary<char, RgbaColor> { ['#'] = TestRed },
+                new List<PixelIconEditor.LoadedIconAction> { new() { Name = "挥手", Grids = new List<char[,]> { action1Frame }, FrameDurationOverride = 0.5 } });
+
+            Assert.NotNull(icon.Actions);
+            Assert.Single(icon.Actions!);
+            Assert.Equal("挥手", icon.Actions![0].Name);
+            Assert.Equal(0.5, icon.Actions[0].FrameDuration);
+            // 哪怕只有 1 帧，action.Frames 也要包成 [rows]（不像顶层 icon 有 Rows 简写）
+            Assert.Single(icon.Actions[0].Frames!);
+            Assert.Equal(".#..", icon.Actions[0].Frames![0][0]);
+        }
+
+        [Fact]
+        public void BuildIconWithActions_CollectsUsedCharsFromActionsToo()
+        {
+            // 'w' 只出现在额外动作里，不在动作 0——最终 palette 也该带上它
+            var action0 = MakeGrid(4, 4, '.');
+            action0[0, 0] = '#';
+            var action1Frame = MakeGrid(4, 4, '.');
+            action1Frame[0, 0] = 'w';
+
+            var palette = new Dictionary<char, RgbaColor> { ['#'] = TestRed, ['w'] = TestBlue };
+            var icon = PixelIconEditor.BuildIconWithActions(new[] { action0 }, 4, 4, palette,
+                new List<PixelIconEditor.LoadedIconAction> { new() { Grids = new List<char[,]> { action1Frame } } });
+
+            Assert.Equal(2, icon.Palette!.Count);
+            Assert.Contains("w", icon.Palette.Keys);
+        }
+
+        [Fact]
+        public void BuildIconWithActions_ThenParseAndValidate_PassesValidation()
+        {
+            var action0 = MakeGrid(4, 4, '.');
+            action0[0, 0] = '#';
+            var action1Frame = MakeGrid(4, 4, '.');
+            action1Frame[0, 1] = '#';
+
+            var icon = PixelIconEditor.BuildIconWithActions(new[] { action0 }, 4, 4,
+                new Dictionary<char, RgbaColor> { ['#'] = TestRed },
+                new List<PixelIconEditor.LoadedIconAction> { new() { Name = "动作 1", Grids = new List<char[,]> { action1Frame } } });
+            string iconJson = PixelIconEditor.SerializeIconFragment(icon);
+
+            string themeJson = $@"{{
+              ""name"": ""test"",
+              ""colors"": {{ ""title"": ""#FFFFFF"", ""artist"": ""#FFFFFF"", ""accent"": ""#FFFFFF"", ""lyric"": ""#FFFFFF"", ""lyricBoxBg"": ""#000000"", ""lyricBoxBorder"": ""#000000"" }},
+              ""background"": {{ ""type"": ""solid"", ""stops"": [""#000000""] }},
+              ""icon"": {iconJson},
+              ""animation"": {{ ""type"": ""pulse"" }}
+            }}";
+            var (theme, errors) = CustomThemeValidator.ParseAndValidate(themeJson);
+            Assert.True(errors.Count == 0, string.Join(" | ", errors));
+            Assert.NotNull(theme);
+        }
+
+        [Fact]
+        public void LoadActions_RoundTripsWithBuildIconWithActions()
+        {
+            var action0 = MakeGrid(4, 4, '.');
+            action0[0, 0] = '#';
+            var action1Frame = MakeGrid(4, 4, '.');
+            action1Frame[0, 1] = '#';
+
+            var icon = PixelIconEditor.BuildIconWithActions(new[] { action0 }, 4, 4,
+                new Dictionary<char, RgbaColor> { ['#'] = TestRed },
+                new List<PixelIconEditor.LoadedIconAction> { new() { Name = "挥手", Grids = new List<char[,]> { action1Frame }, FrameDurationOverride = 0.3 } });
+
+            var loaded = PixelIconEditor.LoadActions(icon, 4, 4);
+
+            Assert.Single(loaded);
+            Assert.Equal("挥手", loaded[0].Name);
+            Assert.Equal(0.3, loaded[0].FrameDurationOverride);
+            Assert.Single(loaded[0].Grids);
+            Assert.Equal('#', loaded[0].Grids[0][0, 1]);
+        }
+
+        [Fact]
+        public void LoadActions_RoundTripsAutoSwitchAndAnimation()
+        {
+            // 画板没有 UI 编 Animation，但必须原样带着走，不然"续画一个已经手写了 animation 的动作"
+            // 会在插入回编辑框的时候把这份 animation 悄悄冲掉——这是 IconPainterWindow.xaml.cs 里
+            // PaintedAction.Animation 那段注释说的"比功能不支持更糟的丢数据"场景，这里在 Core 层验证
+            // BuildIconWithActions/LoadActions 这一对方法本身确实做到了完整往返
+            var action0 = MakeGrid(4, 4, '.');
+            var action1Frame = MakeGrid(4, 4, '.');
+            var animation = new CustomThemeAnimation { Type = "spin", Duration = 1.5 };
+
+            var icon = PixelIconEditor.BuildIconWithActions(new[] { action0 }, 4, 4,
+                new Dictionary<char, RgbaColor>(),
+                new List<PixelIconEditor.LoadedIconAction> { new() { Grids = new List<char[,]> { action1Frame }, AutoSwitchAfterSeconds = 90, Animation = animation } });
+
+            Assert.Equal(90, icon.Actions![0].AutoSwitchAfterSeconds);
+            Assert.Same(animation, icon.Actions[0].Animation);
+
+            var loaded = PixelIconEditor.LoadActions(icon, 4, 4);
+            Assert.Equal(90, loaded[0].AutoSwitchAfterSeconds);
+            Assert.Same(animation, loaded[0].Animation);
+        }
+
+        [Fact]
+        public void LoadActions_NoActionsField_ReturnsEmptyList()
+        {
+            var icon = new CustomThemeIcon { Rows = new List<string> { "....", "....", "....", "...." }, Palette = new() };
+            Assert.Empty(PixelIconEditor.LoadActions(icon, 4, 4));
+        }
+
+        [Fact]
+        public void LoadActions_SizeMismatchWithAction0_SkipsThatActionButKeepsOthers()
+        {
+            // 第一个动作尺寸跟传入的 width/height（画板里 action 0 摊开出来的尺寸）对不上——
+            // 画板要求跨动作同尺寸，这种续画不了，但不该连累第二个尺寸对的动作也没法续画
+            var icon = new CustomThemeIcon
+            {
+                Rows = new List<string> { "....", "....", "....", "...." },
+                Palette = new Dictionary<string, string> { ["#"] = "#FF0000" },
+                Actions = new List<CustomThemeIconAction>
+                {
+                    new() { Frames = new List<List<string>> { new() { "#####", "#####", "#####", "#####", "#####" } } }, // 5x5，跟 4x4 对不上
+                    new() { Name = "好的", Frames = new List<List<string>> { new() { "#...", "....", "....", "...." } } },
+                },
+            };
+
+            var loaded = PixelIconEditor.LoadActions(icon, 4, 4);
+
+            Assert.Single(loaded);
+            Assert.Equal("好的", loaded[0].Name);
+        }
+
+        [Fact]
+        public void LoadActions_ActionWithEmptyFrames_IsSkipped()
+        {
+            var icon = new CustomThemeIcon
+            {
+                Rows = new List<string> { "....", "....", "....", "...." },
+                Palette = new(),
+                Actions = new List<CustomThemeIconAction> { new() { Name = "空的", Frames = new List<List<string>>() } },
+            };
+            Assert.Empty(PixelIconEditor.LoadActions(icon, 4, 4));
+        }
+
         // ── 桶装填充：FloodFill ────────────────────────────────────────────────
 
         [Fact]

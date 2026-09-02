@@ -86,6 +86,12 @@
                 <RadioButton x:Name="RbFontSmall" Content="小" GroupName="FontSize"/>
                 <RadioButton x:Name="RbFontMedium" Content="中（默认）" GroupName="FontSize" IsChecked="True"/>
                 <RadioButton x:Name="RbFontLarge" Content="大" GroupName="FontSize"/>
+
+                <TextBlock Text="Mini 模式互动" Style="{StaticResource SectionHeader}"/>
+                <CheckBox x:Name="ChkMiniPetReactionEnabled" Content="开启（单击小方块会弹一句话 + 弹一下，而不是直接展开）"
+                          FontSize="11" IsChecked="True"/>
+                <TextBlock Text="关掉之后单击直接展开，跟这个功能出现之前一样。双击展开这件事不受这个开关影响，一直都能用。"
+                           Foreground="{StaticResource HintTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0"/>
             </StackPanel>
         </ScrollViewer>
 

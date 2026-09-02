@@ -109,6 +109,55 @@ namespace PixelLyric8BitFix
         private double _customIconFrameSensitivity = 1.0;
         private double _customIconFrameSpeedRatio = 1.0; // 音乐律动开着时，当前这一刻换帧应该多快——UpdateMusicReactiveSkin 里算
 
+        // 点击装饰图标切换 icon.actions：0 = 图标自己的 Rows/Frames（"动作 0"，不用取名字），
+        // >0 对应 theme.Icon.Actions[index-1]。_customIconFrameApply 是"当前该把新的一帧画到哪个/
+        // 哪几个 Image 上"——drift/fall 分支要同时写 3 份重影图标，主图标分支只写 CustomIcon 一个，
+        // 抽成委托而不是散落的 if/else，见 MainWindow.Skins.cs 的 ApplyCustomSkinVisuals/CycleCustomIconAction。
+        private int _customIconActionIndex;
+        private Action<BitmapSource>? _customIconFrameApply;
+
+        // 数据驱动自动切换用："曾经到过的最远动作"，只会被 SetCustomIconActionIndex 用 Math.Max
+        // 往前推，不会被手动点击拉低（点击可以把 _customIconActionIndex 改成任何值，包括更靠前的，
+        // 但不会拉低这个字段）。EvaluateAutoSwitchIconAction 拿这个（不是 _customIconActionIndex）
+        // 去跟"连续播放时长该到第几个动作"比较——这样用户点回一个更早的动作之后，不会被下一个
+        // 50ms tick 的自动切换立刻弹回去（那样会让点击看起来跟没点一样），但真的跨过一个从没到过的
+        // 新阈值时，还是会正常往前推进，不会因为点过一次就整个失效。见 MainWindow.Skins.cs 的
+        // EvaluateAutoSwitchIconAction/ResetCustomIconAutoSwitchTrackState。
+        private int _customIconAutoSwitchHighWaterMark;
+
+        // 当前正在播的"动作专属 animation"——null 表示正在用 icon 顶层那份（"动作 0"，或者这个动作
+        // 没写自己的 animation，都落在这个 null 状态）。只在真的换了不一样的 animation 才重新
+        // 决定轨道 + Reset+Start 一遍（ApplyCustomIconMovement 里按引用比较这个字段），不然每次点击
+        // （哪怕点到的是一个没自定义 animation 的动作）都会让正在播的 sway/pulse/drift 从头炸一下
+        // 重新开始，观感很跳。
+        //
+        // 初始值故意不是 null，是这个专门的""还没初始化过""哨兵——ApplyCustomSkinVisuals 应用一份新
+        // 主题时，"动作 0"对应的 actionAnimation 参数本来就是 null，如果这个字段的初始值/重置值也是
+        // null，"两个 null 一样，什么都不用做"这条判断会让主题刚应用的那一次设置被误判成""没变化，
+        // 跳过""，图标最终会维持在 ApplySkin 清空时设的全部 Collapsed，什么都不显示。哨兵保证这个
+        // 字段第一次/每次换主题时都跟任何真实值（包括 null）不相等，强制第一次一定会真的走一遍。
+        private static readonly CustomThemeAnimation UninitializedIconAnimation = new();
+        private CustomThemeAnimation? _customIconActiveAnimationOverride = UninitializedIconAnimation;
+
+        // 装饰图标当前待在哪条移动轨道上——只在 MainWindow.Skins.cs 的 ApplyCustomIconMovement 里、
+        // 真的换了轨道的那几个分支才会被赋新值（早退分支/没变化的时候原样保留），SetCustomIconActionIndex
+        // 靠"调用前后这个字段有没有变"判断这次切动作要不要做过渡淡化（icon.actions[i].transitionSeconds），
+        // 见 PlayCustomIconTransition 顶部的注释。
+        private enum CustomIconTrackKind { Normal, Drift, Fall, Walk }
+        private CustomIconTrackKind _customIconTrackKind = CustomIconTrackKind.Normal;
+
+        // 过渡淡化只有"已经真正显示过一帧"之后再切换才有意义——主题刚应用、这是第一次显示画面
+        // 的那一次，没有"旧画面"可淡，也不该凭空淡入。ApplyCustomSkinVisuals/
+        // FallBackToSimpleSkinAfterCustomThemeFailure 里跟着别的 _customIcon* 状态一起清零。
+        private bool _customIconHasAppliedFrameOnce;
+
+        // 数据驱动切动作用：当前这首歌"连续播放"了多久，跟 _pendingListenSeconds 同一个 tick
+        // （MainWindow.ListeningStats.cs 的 UpdateListeningStats）同一套暂停不计时/大间隔不计入的
+        // 门槛一起累加，但用途不一样——这个不进历史统计，只喂给 MainWindow.Skins.cs 的
+        // EvaluateAutoSwitchIconAction 去判断有没有跨过某个动作的 icon.actions[i].
+        // autoSwitchAfterSeconds 阈值。切歌那一刻清零，见 MainWindow.Lyrics.cs 的 HandleTrackChangeAsync。
+        private double _customIconContinuousTrackSeconds;
+
         private string _lastTrackId = "";
         private CancellationTokenSource? _lyricFetchCts;
 

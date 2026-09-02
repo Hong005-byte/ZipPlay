@@ -576,8 +576,28 @@
                  旋转和位移分开两个变换（TransformGroup 里各管各的），具体转多少度/摆多少/浮多高
                  由代码按 animation.type 现场写 -->
             <Canvas x:Name="CustomIconDecorCanvas" Grid.Row="0" Margin="10,0,10,-2" Panel.ZIndex="10" Visibility="Collapsed">
+                <!-- 点击可发现性：主题写了 icon.actions 时，光靠"鼠标移上去变手型光标"太被动，很容易被
+                     忽略。这圈呼吸描边是主动提示——比 CustomIcon 本身大一圈，同一个锚点（Canvas.Right="14"
+                     Canvas.Bottom="2"），XAML 顺序排在 CustomIcon/CustomWalkIcon 之前所以 Z 序在它们下面，
+                     看起来像图标背后透出的一圈光晕，不会挡住图标本体或吃掉点击（IsHitTestVisible="False"，
+                     真正响应点击的还是上面那几张 Image 自己）。刻意做成一个独立元素、动自己的 Opacity，
+                     不复用 CustomIcon 已有的 CustomIconGlow（DropShadowEffect）——那个已经被 pulse/flicker
+                     两招占着在动同一个 Opacity，两边同时 BeginAnimation 只会后来者覆盖前者，不是叠加生效，
+                     见 MainWindow.Skins.cs 的 UpdateCustomIconClickHint。显隐/呼吸动画由代码按当前主题
+                     有没有 actions 动态控制，目前只覆盖 Normal/Walk 这两条共用这个锚点的轨道——drift/fall
+                     三重影没有一个单一的"图标所在位置"能套这一圈，继续只靠光标提示，是有意的取舍。 -->
+                <Border x:Name="CustomIconClickHint" Width="46" Height="46" Canvas.Right="9" Canvas.Bottom="-3"
+                        CornerRadius="23" BorderThickness="2" Background="Transparent"
+                        IsHitTestVisible="False" Visibility="Collapsed"/>
+
+                <!-- MouseLeftButtonDown 装饰图标（这个 + CustomWalkIcon + 下面 drift/fall 各 3 份重影）
+                     共用同一个处理器 CustomIcon_MouseLeftButtonDown——只有主题写了 icon.actions 才会真的
+                     切换/拦截点击，没写的话原样放行，双击照样能穿透进 Mini 模式，见 MainWindow.
+                     SkinInteractions.cs。Cursor 是否显示"可点击"的手型由代码按有没有 actions 动态设置，
+                     见 ApplyCustomIconMovement。 -->
                 <Image x:Name="CustomIcon" Width="36" Height="36" Canvas.Right="14" Canvas.Bottom="2" Stretch="Uniform"
-                       RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0.5,0.5">
+                       RenderOptions.BitmapScalingMode="NearestNeighbor" RenderTransformOrigin="0.5,0.5"
+                       MouseLeftButtonDown="CustomIcon_MouseLeftButtonDown">
                     <Image.RenderTransform>
                         <TransformGroup>
                             <RotateTransform x:Name="CustomIconRotate" Angle="0"/>
@@ -588,6 +608,42 @@
                         <DropShadowEffect x:Name="CustomIconGlow" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
                     </Image.Effect>
                 </Image>
+
+                <!-- 过渡淡化专用的"幽灵"图标（icon.actions[i].transitionSeconds）：切动作那一刻定格成
+                     切换前的旧画面，叠在 CustomIcon 上方（XAML 顺序在后面 = Z 序在上面），透明度从 1
+                     淡到 0，露出下面已经在正常播放的新画面，见 MainWindow.Skins.cs 的
+                     PlayCustomIconTransition。平时保持 Collapsed；IsHitTestVisible="False" 恒定——
+                     淡化这几秒里继续点击应该命中的是已经在显示新内容的 CustomIcon，不能被这张纯粹用来
+                     "好看"的幽灵图标挡住。没有跟 CustomIcon 一样的 RotateTransform/TranslateTransform——
+                     幽灵只是定格的静态旧画面，不用跟着 pulse/sway 这些还在播的招式一起动，这几秒内
+                     "旧画面纹丝不动地淡出、新画面正常摆动着淡入视野"是刻意的取舍，不是遗漏。 -->
+                <Image x:Name="CustomIconTransitionGhost" Width="36" Height="36" Canvas.Right="14" Canvas.Bottom="2" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor" IsHitTestVisible="False" Visibility="Collapsed"/>
+
+                <!-- 客制化"来回走"动画专属（animation.type = walk）：跟 CustomIcon 用同一个锚点
+                     （Canvas.Right="14" Canvas.Bottom="2"，同样 36x36）——静止时（TranslateTransform.X=0）
+                     跟图标平时待的位置完全重合，看起来就是"这个图标自己走起来了"，不是凭空在别的地方
+                     冒出一个新图标。X 在 [-leftDistance, 0] 之间来回摆（AutoReverse）：从原位出发向左走，
+                     走到头再走回原位，不是 Steve 那种在两个固定端点之间摆——原位对 walk 来说更自然，
+                     跟"图标本来就该待在这里，只是偶尔走出去逛一圈再回来"这个直觉一致。
+                     走的是这条跟 Steve/火车完全同一条装饰带（同一个 Grid.Row、同一个
+                     Panel.ZIndex="10"），不会被卡片下面的歌词内容挡住。
+                     独立于 CustomIcon 是单独一张图标（不是共用同一个 Image 元素）——两个图标叠在
+                     同一个位置，ApplyCustomIconMovement 里靠 Visibility 互斥，同一时刻只显示一个,
+                     不会真的重叠可见。 -->
+                <Image x:Name="CustomWalkIcon" Width="36" Height="36" Canvas.Right="14" Canvas.Bottom="2" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor"
+                       MouseLeftButtonDown="CustomIcon_MouseLeftButtonDown" Visibility="Collapsed">
+                    <Image.RenderTransform>
+                        <TranslateTransform x:Name="CustomWalkTransform"/>
+                    </Image.RenderTransform>
+                </Image>
+
+                <!-- 跟 CustomIconTransitionGhost 同一套用途，给 CustomWalkIcon 这条轨道单独一份——两条
+                     轨道互斥显示，但过渡有可能发生在"待在 walk 轨道里从这个动作切到另一个动作"这种
+                     场景（都是 walk，轨道没变），需要各自一张幽灵图标，不能共用一张。 -->
+                <Image x:Name="CustomWalkTransitionGhost" Width="36" Height="36" Canvas.Right="14" Canvas.Bottom="2" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor" IsHitTestVisible="False" Visibility="Collapsed"/>
             </Canvas>
 
             <Grid Grid.Row="1">
@@ -1017,15 +1073,21 @@
                 </Border>
 
                 <!-- 客制化"飘过型"动画专属（animation.type = drift）：同一张用户图标画三份，各自不同速度飘过 -->
-                <Viewbox x:Name="CustomDriftOverlay" Stretch="Fill" IsHitTestVisible="False" Visibility="Collapsed">
+                <!-- IsHitTestVisible 从 False 改成不写（默认 True）——三份重影图标现在也能点了
+                     （CustomIcon_MouseLeftButtonDown，只有 icon.actions 有内容才会真的切换/拦截点击），
+                     False 的话点击事件根本传不到下面的 Image 元素上。 -->
+                <Viewbox x:Name="CustomDriftOverlay" Stretch="Fill" Visibility="Collapsed">
                     <Canvas Width="300" Height="150" ClipToBounds="True">
-                        <Image x:Name="CustomDriftIcon1" Width="34" Height="34" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Top="15">
+                        <Image x:Name="CustomDriftIcon1" Width="34" Height="34" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Top="15"
+                               MouseLeftButtonDown="CustomIcon_MouseLeftButtonDown">
                             <Image.RenderTransform><TranslateTransform x:Name="CustomDrift1Transform"/></Image.RenderTransform>
                         </Image>
-                        <Image x:Name="CustomDriftIcon2" Width="28" Height="28" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Top="60">
+                        <Image x:Name="CustomDriftIcon2" Width="28" Height="28" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Top="60"
+                               MouseLeftButtonDown="CustomIcon_MouseLeftButtonDown">
                             <Image.RenderTransform><TranslateTransform x:Name="CustomDrift2Transform"/></Image.RenderTransform>
                         </Image>
-                        <Image x:Name="CustomDriftIcon3" Width="30" Height="30" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Top="100">
+                        <Image x:Name="CustomDriftIcon3" Width="30" Height="30" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Top="100"
+                               MouseLeftButtonDown="CustomIcon_MouseLeftButtonDown">
                             <Image.RenderTransform><TranslateTransform x:Name="CustomDrift3Transform"/></Image.RenderTransform>
                         </Image>
                     </Canvas>
@@ -1034,15 +1096,19 @@
                 <!-- 客制化"飘落型"动画专属（animation.type = fall）：同一张用户图标画三份，各自从卡片顶部
                      往下飘落，飘到底瞬间重置回最上面，下落过程中叠加一点左右轻摆——跟内置的樱花/极光雪花
                      那几个皮肤是同一套手法，只是这里图标是用户自己给的，不是写死的花瓣/雪花形状 -->
-                <Viewbox x:Name="CustomFallOverlay" Stretch="Fill" IsHitTestVisible="False" Visibility="Collapsed">
+                <!-- 同上——IsHitTestVisible 不写（默认 True），三份重影图标才能收到点击 -->
+                <Viewbox x:Name="CustomFallOverlay" Stretch="Fill" Visibility="Collapsed">
                     <Canvas Width="300" Height="150" ClipToBounds="True">
-                        <Image x:Name="CustomFallIcon1" Width="30" Height="30" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Left="40">
+                        <Image x:Name="CustomFallIcon1" Width="30" Height="30" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Left="40"
+                               MouseLeftButtonDown="CustomIcon_MouseLeftButtonDown">
                             <Image.RenderTransform><TranslateTransform x:Name="CustomFall1Transform"/></Image.RenderTransform>
                         </Image>
-                        <Image x:Name="CustomFallIcon2" Width="24" Height="24" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Left="150">
+                        <Image x:Name="CustomFallIcon2" Width="24" Height="24" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Left="150"
+                               MouseLeftButtonDown="CustomIcon_MouseLeftButtonDown">
                             <Image.RenderTransform><TranslateTransform x:Name="CustomFall2Transform"/></Image.RenderTransform>
                         </Image>
-                        <Image x:Name="CustomFallIcon3" Width="28" Height="28" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Left="250">
+                        <Image x:Name="CustomFallIcon3" Width="28" Height="28" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" Canvas.Left="250"
+                               MouseLeftButtonDown="CustomIcon_MouseLeftButtonDown">
                             <Image.RenderTransform><TranslateTransform x:Name="CustomFall3Transform"/></Image.RenderTransform>
                         </Image>
                     </Canvas>
@@ -1257,13 +1323,35 @@
         <Canvas x:Name="MiniVisualizerCanvas" Visibility="Collapsed" IsHitTestVisible="False"/>
 
         <!-- Mini 模式：双击窗口后不整个退出/隐藏，而是缩成一个贴着皮肤主题的小方块（还能拖着走），
-             再点一下（没有拖动的单纯点击）就变回原来的大小、原来的位置。图标/配色在代码里按当前皮肤动态设置。 -->
+             再双击就变回原来的大小、原来的位置；单击（没有拖动）是"桌宠"反应——弹一句话 + 弹一下，
+             不再直接展开，见 MainWindow.PetMode.cs 和 MainWindow.MiniMode.cs 的 MiniBadge_MouseLeftButtonDown。
+             图标/配色在代码里按当前皮肤动态设置。MiniBadgeBounceTransform 是单击反应那下"弹一下"用的，
+             跟 Steve/UFO 那些皮肤专属装饰的跳跃是同一个 PlayBeatBounce，只是作用对象换成了这个方块本身。 -->
         <Border x:Name="MiniBadge" Visibility="Collapsed" CornerRadius="14" BorderThickness="3"
                 Width="64" Height="64" HorizontalAlignment="Center" VerticalAlignment="Center"
-                Cursor="Hand" ToolTip="拖动可以移动；点一下（不拖动）展开"
-                MouseLeftButtonDown="MiniBadge_MouseLeftButtonDown">
+                Cursor="Hand" ToolTip="拖动可以移动；点一下有反应；双击展开"
+                MouseLeftButtonDown="MiniBadge_MouseLeftButtonDown"
+                MouseMove="MiniBadge_MouseMove"
+                MouseLeftButtonUp="MiniBadge_MouseLeftButtonUp"
+                RenderTransformOrigin="0.5,0.5">
+            <Border.RenderTransform>
+                <TranslateTransform x:Name="MiniBadgeBounceTransform" Y="0"/>
+            </Border.RenderTransform>
             <Image x:Name="MiniBadgeImage" Stretch="Uniform" Margin="6"
                    RenderOptions.BitmapScalingMode="NearestNeighbor"/>
         </Border>
+
+        <!-- 桌宠单击反应气泡——故意不是 ToastBadge 那个窗口内部的 Border（Mini 模式窗口只有 140×140px，
+             一整句话放不下会被窗口边缘裁掉），用 Popup 画在宿主窗口范围外，PlacementTarget 绑
+             MiniBadge，桌宠自己走动的时候气泡会跟着 MiniBadge 一起重新定位。样式照抄 ToastBadge 的
+             配色，边框颜色在代码里按当前皮肤的 MiniBorder 动态设置（ShowPetReaction）。 -->
+        <Popup x:Name="PetBubblePopup" PlacementTarget="{Binding ElementName=MiniBadge}" Placement="Top"
+               AllowsTransparency="True" StaysOpen="True" IsHitTestVisible="False">
+            <Border x:Name="PetBubbleBorder" CornerRadius="9" Background="#CC000000" BorderThickness="1"
+                    Padding="10,6" MaxWidth="220" Margin="0,0,0,8">
+                <TextBlock x:Name="TxtPetBubble" Text="" FontSize="11" Foreground="White" FontWeight="Bold"
+                           TextWrapping="Wrap" TextAlignment="Center"/>
+            </Border>
+        </Popup>
     </Grid>
 </Window>

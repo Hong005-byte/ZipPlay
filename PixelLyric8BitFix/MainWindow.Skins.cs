@@ -340,7 +340,22 @@ namespace PixelLyric8BitFix
                 case PlayerSkin.Custom:
                     if (_customTheme != null)
                     {
-                        ApplyCustomSkinVisuals(_customTheme);
+                        // CustomThemeStore.Load 存盘前已经过 CustomThemeValidator 校验，但用户/AI 写的
+                        // JSON 复杂度没有上限（真实出现过 570KB 的一份），校验覆盖不到所有渲染期间才
+                        // 会暴露的边角情况——字段组合本身没被校验拦住，具体渲染代码却对它有隐含假设
+                        // （比如某个数组理论上非空、实际因为组合方式凑巧是空的）。这一步万一炸了，代价
+                        // 应该是"这份主题加载失败、退回默认皮肤"，不该是整个 App 崩掉（这正是本来就有
+                        // 的 _customTheme == null 那个分支想达成的效果，只是那个分支只兜得住"文件本身
+                        // 读不出来/校验不过"，兜不住"读出来了、校验也过了，套的时候才炸"这种情况）。
+                        try
+                        {
+                            ApplyCustomSkinVisuals(_customTheme);
+                        }
+                        catch (Exception ex)
+                        {
+                            AppLog.Error("ApplyCustomSkinVisuals", ex);
+                            FallBackToSimpleSkinAfterCustomThemeFailure();
+                        }
                     }
                     else
                     {
@@ -393,75 +408,369 @@ namespace PixelLyric8BitFix
             CustomSkinGlow.Color = accent;
             CustomSkinBg.Visibility = Visibility.Visible;
 
-            // frames 数组：没有 icon.frames 就是长度 1（跟这个字段加进来之前完全一样的行为）。
-            // iconBitmap 取第一帧——drift/fall 那两条轨道和这个方法末尾的 ApplyCustomExtraLayers
-            // 暂时都还只认第一帧（静态），只有下面 else 分支（主图标固定贴装饰栏）真的会逐帧切换，
-            // 见开头讨论时定的范围。
-            var iconFrames = CustomThemeColorInterop.BuildCustomIconFrames(theme.Icon!);
-            var iconBitmap = iconFrames[0];
+            // 每次真正应用一个客制化主题都重新走一遍——点击切换过动作的话，换皮肤/重开窗口要从
+            // "动作 0"（图标自己的 Rows/Frames）重新开始，不该记着上次切到了第几个。
+            // _customIconActiveAnimationOverride 重置成专门的""还没初始化过""哨兵（不是 null）——
+            // 见 UninitializedIconAnimation 字段的注释：如果这里也直接置 null，下面
+            // SetCustomIconActionIndex(0) 里""动作 0 的 animation 本来就是 null""这次调用会被误判成
+            // ""跟上次一样，什么都不用做""，图标会维持在 ApplySkin 清空时设的全部 Collapsed，什么都
+            // 不显示。
+            _customIconActionIndex = 0;
+            _customIconFrames = null;
+            _customIconFrameApply = null;
+            _customIconActiveAnimationOverride = UninitializedIconAnimation;
+            _customIconAutoSwitchHighWaterMark = 0; // 换皮肤/重开窗口，"到过多远"这个进度也该归零，不是只有换歌才清
+            _customIconHasAppliedFrameOnce = false; // 新主题的第一次显示没有"旧画面"，不该做过渡淡化
 
-            // animation.type 可以是 "pulse" 这种单招，也可以是 "pulse+sway" 这种用 + 连起来的组合——
-            // 校验已经保证：要么整个数组只有 drift 或 fall 一个（走三图标飘过/飘落轨道），要么完全不含
-            // drift/fall（走下面 else 分支，可以是 1~6 招的任意组合）。两种情况不会混在一起，这里不用
-            // 再重新判一遍"含不含 drift/fall"，直接看 animTypes[0] 是不是那两个之一就够了。
-            string[] animTypes = CustomThemeValidator.SplitAnimationTypes(theme.Animation!.Type!);
-            double? customDuration = theme.Animation.Duration;
-            // "跟着音乐律动"是通用开关，不挑招式组合里的哪一个——不管选了几种，都统一用 SpeedRatio
-            // 让这些动画的播放速度跟着音乐响度/鼓点变，见 BeginMusicReactiveAnimation
-            bool musicReactive = theme.Animation.MusicReactive && _settings.SkinAudioReactiveEnabled;
-            // "反应多强"跟"要不要反应"是两回事——sensitivity 只在 musicReactive 为 true 时才有意义，
-            // 这里提前算好传下去，各个 Start*Animation 不用各自再判一遍 MusicReactive 开关
-            double sensitivity = CustomThemeValidator.SensitivityToMultiplier(theme.Animation.Sensitivity);
+            // 图标该待在哪条轨道（普通装饰栏 / drift 三重影 / fall 三重影）、播什么帧/动画，全部交给
+            // SetCustomIconActionIndex(0) 去做——跟点击装饰图标/数据驱动自动切换走的是同一条路径，
+            // 不用在这里再维护一份重复的分支逻辑，两份逻辑也不会有慢慢走岔的风险
+            SetCustomIconActionIndex(0);
 
-            if (animTypes[0] == "drift")
+            ApplyCustomExtraLayers(theme, accent);
+        }
+
+        // ApplyCustomSkinVisuals 中途炸了之后的兜底：这一步可能已经把 CustomSkinBg/CustomIconDecorCanvas/
+        // 三重影轨道/额外层其中几个摆成了"visible 但只套了一半"的诡异状态，不能只补一句"把简约风背景
+        // 显示出来"就完事——那样会跟没收拾干净的客制化残留叠在一起。全部按 ApplySkin 开头"整体清空"
+        // 那一批的口径收回 Collapsed，_customTheme 也清掉：一是这份数据显然有问题，后面
+        // CycleCustomIconAction/EvaluateAutoSwitchIconAction 这些还会碰它的逻辑不该再拿它去炸第二次；
+        // 二是紧跟着这个 case 之后就会跑的 ApplySkinPalette(skin) 会调 GetActiveSkinTheme(Custom)，
+        // 那边也是靠 _customTheme == null 才退到 Simple 主题，不清掉的话这一步会拿着同一份坏数据再炸一次。
+        private void FallBackToSimpleSkinAfterCustomThemeFailure()
+        {
+            _customTheme = null;
+            _customIconFrames = null;
+            _customIconHasAppliedFrameOnce = false;
+            CustomExtraLayersHost.Children.Clear();
+            CustomSkinBg.Visibility = Visibility.Collapsed;
+            CustomIconDecorCanvas.Visibility = Visibility.Collapsed;
+            CustomIconClickHint.Visibility = Visibility.Collapsed; // 数据有问题时也别留着一圈"我能点"的呼吸提示
+            CustomIconClickHint.BeginAnimation(UIElement.OpacityProperty, null);
+            _customIconClickHintAnimating = false;
+            CustomDriftOverlay.Visibility = Visibility.Collapsed;
+            CustomFallOverlay.Visibility = Visibility.Collapsed;
+            RowDecor.Height = new GridLength(0); // 客制化那一行装饰栏没有别的皮肤在用，退回简约风不需要留着
+            SimpleSkinBg.Visibility = Visibility.Visible;
+        }
+
+        // 点击装饰图标（CustomIcon_MouseLeftButtonDown）触发：循环切到下一个 icon.actions，绕完一圈
+        // 回到"动作 0"。数据驱动的自动切换（EvaluateAutoSwitchIconAction）用的是同一套"切到第 index
+        // 个动作"逻辑，两条触发路径共用 SetCustomIconActionIndex，不会各自维护一份走岔。
+        private void CycleCustomIconAction()
+        {
+            if (_customTheme?.Icon is not { } icon) return;
+            var actions = icon.Actions ?? new List<CustomThemeIconAction>();
+            SetCustomIconActionIndex((_customIconActionIndex + 1) % (actions.Count + 1));
+        }
+
+        // Mini 模式桌宠反应（ShowPetReaction，MainWindow.PetMode.cs）联动这里用：CycleCustomIconAction
+        // 切完之后，装饰栏那份图标（CustomIcon/CustomWalkIcon 等）已经真的换了姿势，但 MiniBadgeImage
+        // 是另一张单独的 Image——它的图源来自 ApplyMiniBadgeAppearance 里 GetActiveSkinTheme(...).MiniIcon()，
+        // 那份固定读 custom.Icon 的基础帧（动作 0），不知道当前切到了第几个动作，不会跟着变。
+        // 这里复用 SetCustomIconActionIndex 同一套"selectedAction == null 用 icon 本身的 Frames/Rows，
+        // 否则用 selectedAction.Frames"的取帧逻辑，只取第一帧的静态位图——Mini 徽章本来就没有逐帧动画
+        // （同一条注释见 BuildSkinThemeFromCustom），够用来让桌宠"看起来换了个样子"就行。
+        private BitmapSource? BuildCurrentCustomIconMiniFrame()
+        {
+            if (_customTheme?.Icon is not { } icon) return null;
+            var actions = icon.Actions ?? new List<CustomThemeIconAction>();
+            CustomThemeIconAction? selectedAction = _customIconActionIndex <= 0 || _customIconActionIndex > actions.Count
+                ? null
+                : actions[_customIconActionIndex - 1];
+
+            BitmapSource[] frames = selectedAction == null
+                ? CustomThemeColorInterop.BuildCustomIconFrames(icon)
+                : CustomThemeColorInterop.BuildCustomIconFrames(new CustomThemeIcon { Palette = icon.Palette, Frames = selectedAction.Frames });
+            return frames.Length > 0 ? frames[0] : null;
+        }
+
+        // 把图标真正切到第 index 个动作（0 = 图标自己的 Rows/Frames，"动作 0"；>0 对应
+        // theme.Icon.Actions[index-1]）：先让 ApplyCustomIconMovement 决定这个动作该用哪条移动轨道
+        // （普通装饰栏 / drift 三重影 / fall 三重影——如果这个动作自己带了 animation 就可能真的换轨道，
+        // 见该方法注释），这一步必须在算帧/应用帧之前做，因为它会顺带把 _customIconFrameApply 指向
+        // 新轨道该画帧的地方；不然帧会画去旧轨道已经隐藏起来的元素上。BuildCustomIconFrames 本来就是
+        // 纯粹"数据转位图"，借同一份 Palette 换一套 Frames 现造一个 CustomThemeIcon 传进去，
+        // 不用改这个方法一行。
+        private void SetCustomIconActionIndex(int index)
+        {
+            if (_customTheme?.Icon is not { } icon) return;
+            var actions = icon.Actions ?? new List<CustomThemeIconAction>();
+            if (index < 0 || index > actions.Count) return; // 越界的话什么都不做，比如主题被换掉之后动作数量变少，旧索引不再有效
+
+            _customIconActionIndex = index;
+            // 不管这次切换是点击触发的还是自动切换触发的，都顺手把"曾经到过的最远动作"往前推——
+            // 只推不退（Math.Max）。EvaluateAutoSwitchIconAction 靠这个字段（而不是
+            // _customIconActionIndex 本身）判断"要不要自动切"，见那边的注释——这是修复"手动点回去
+            // 之后马上被自动切换弹回来"那个 bug 的关键。
+            _customIconAutoSwitchHighWaterMark = Math.Max(_customIconAutoSwitchHighWaterMark, index);
+            CustomThemeIconAction? selectedAction = index == 0 ? null : actions[index - 1];
+
+            // 每次真正切换都先把上一次可能还没淡完的幽灵图标掐掉——不然会有两类看得见的遗留问题：
+            // 1) 连续快速点击，中间有的动作配了 transitionSeconds、有的没配：上一次没淡完的旧画面会
+            //    带着过时的内容继续叠在这次真正显示的新画面上，两次切换对不上；
+            // 2) 切换发生在不同轨道之间（比如 Normal 切到 walk）：ApplyCustomIconMovement 只会隐藏
+            //    "这条轨道自己的" Image（CustomIcon/CustomWalkIcon），完全不知道另一条轨道的幽灵图标
+            //    还留着——不主动收掉的话，旧轨道那张定格的幽灵会继续悬在画面上跟新轨道的图标叠在一起。
+            // 两个幽灵各自独立，不管这次切换最终要不要用到过渡，先各自停一遍最安全；如果这次确实要
+            // 触发新的过渡，下面会重新对需要的那一个调用 PlayCustomIconTransition，等于清空重来。
+            StopCustomIconTransition(CustomIconTransitionGhost);
+            StopCustomIconTransition(CustomWalkTransitionGhost);
+
+            // 过渡淡化要用的"旧画面"必须在轨道/帧内容被换掉之前先抓下来——抓的是当前轨道对应的
+            // Image 控件正在显示的那张位图，不用重新算一次帧序号，直接读 Source 最简单也最准确，
+            // 反正只是拿来做一次性的淡出用。只有 Normal/Walk 这两条单图标轨道支持过渡（见
+            // CustomThemeIconAction.TransitionSeconds 的注释），别的轨道这里就是 null，后面自然不会
+            // 触发过渡。
+            var previousTrackKind = _customIconTrackKind;
+            bool hadAppliedBefore = _customIconHasAppliedFrameOnce;
+            BitmapSource? outgoingBitmap = previousTrackKind switch
             {
-                RowDecor.Height = new GridLength(0);
-                CustomDriftOverlay.Visibility = Visibility.Visible;
-                CustomDriftIcon1.Source = iconBitmap;
-                CustomDriftIcon2.Source = iconBitmap;
-                CustomDriftIcon3.Source = iconBitmap;
-                StartCustomDriftAnimation(CustomDrift1Transform, customDuration ?? 14, 0, musicReactive, sensitivity);
-                StartCustomDriftAnimation(CustomDrift2Transform, (customDuration ?? 14) * 1.35, 2, musicReactive, sensitivity);
-                StartCustomDriftAnimation(CustomDrift3Transform, (customDuration ?? 14) * 1.7, 5, musicReactive, sensitivity);
-            }
-            else if (animTypes[0] == "fall")
+                CustomIconTrackKind.Normal => CustomIcon.Source as BitmapSource,
+                CustomIconTrackKind.Walk => CustomWalkIcon.Source as BitmapSource,
+                _ => null,
+            };
+
+            ApplyCustomIconMovement(selectedAction?.Animation);
+            if (_customIconFrameApply is not { } applyFrame) return; // 理论上上面跑完一定有值，这里只是防御
+
+            BitmapSource[] frames;
+            double frameDurationSeconds;
+            if (selectedAction == null)
             {
-                RowDecor.Height = new GridLength(0);
-                CustomFallOverlay.Visibility = Visibility.Visible;
-                CustomFallIcon1.Source = iconBitmap;
-                CustomFallIcon2.Source = iconBitmap;
-                CustomFallIcon3.Source = iconBitmap;
-                StartCustomFallAnimation(CustomFall1Transform, customDuration ?? 6, 0, -6, 8, musicReactive, sensitivity);
-                StartCustomFallAnimation(CustomFall2Transform, (customDuration ?? 6) * 1.3, 1.5, 4, -10, musicReactive, sensitivity);
-                StartCustomFallAnimation(CustomFall3Transform, (customDuration ?? 6) * 1.6, 3, -8, 6, musicReactive, sensitivity);
+                frames = CustomThemeColorInterop.BuildCustomIconFrames(icon);
+                frameDurationSeconds = CustomThemeValidator.GetFrameDurationSeconds(icon);
             }
             else
             {
+                frames = CustomThemeColorInterop.BuildCustomIconFrames(new CustomThemeIcon { Palette = icon.Palette, Frames = selectedAction.Frames });
+                frameDurationSeconds = selectedAction.FrameDuration is double d && d > 0 ? d : CustomThemeValidator.GetFrameDurationSeconds(icon);
+            }
+
+            _customIconFrames = frames.Length > 1 ? frames : null; // 只有 1 帧就没什么好"切换"的，跟别处的判断一致
+            _customIconFrameDurationSeconds = frameDurationSeconds;
+            _customIconFrameIndex = 0;
+            _customIconFrameTickCounter = 0;
+            applyFrame(frames[0]); // 立刻生效，不用等下一个 tick
+            _customIconHasAppliedFrameOnce = true;
+
+            // 过渡淡化：三个条件都成立才做——轨道没变（不同轨道是完全不同的渲染结构，没有"同一块画布"
+            // 可以交叉淡化）、之前已经显示过东西（没有旧画面可淡）、这个动作自己配了 transitionSeconds
+            // （没配就是这个字段加进来之前的行为，瞬间切换）。见 CustomThemeIconAction.TransitionSeconds
+            // 顶部的注释——这条判断是那份注释里"只在同一条轨道、只支持 Normal/Walk"两条限制的落地。
+            if (_customIconTrackKind == previousTrackKind && hadAppliedBefore && outgoingBitmap != null &&
+                selectedAction?.TransitionSeconds is double transitionSeconds && transitionSeconds > 0 &&
+                previousTrackKind is CustomIconTrackKind.Normal or CustomIconTrackKind.Walk)
+            {
+                var ghost = previousTrackKind == CustomIconTrackKind.Normal ? CustomIconTransitionGhost : CustomWalkTransitionGhost;
+                PlayCustomIconTransition(ghost, outgoingBitmap, transitionSeconds);
+            }
+        }
+
+        // icon.actions[i].transitionSeconds 落地的地方：新画面（applyFrame 已经在上面立刻画上去了，
+        // 该动的动画/该播的逐帧都已经在正常跑）上面叠一张"定格在旧画面"的幽灵图标，让它的透明度从
+        // 1 淡到 0——观感上就是旧画面慢慢透出新画面，而不是新画面凭空从透明淡入（那样会先看见一截
+        // 空白/背景，不是真正的"衔接"）。ghost 平时保持 Collapsed、IsHitTestVisible="False"（见 XAML
+        // 里 CustomIconTransitionGhost/CustomWalkTransitionGhost 的注释），淡完之后收回 Collapsed，
+        // 不留一个空耗合成开销的透明大图叠在装饰栏上。
+        private void PlayCustomIconTransition(Image ghost, BitmapSource outgoingBitmap, double transitionSeconds)
+        {
+            ghost.Source = outgoingBitmap;
+            ghost.Visibility = Visibility.Visible;
+
+            var fade = new DoubleAnimation(1.0, 0.0, TimeSpan.FromSeconds(transitionSeconds));
+            fade.Completed += (s, e) => ghost.Visibility = Visibility.Collapsed;
+            ghost.BeginAnimation(UIElement.OpacityProperty, fade);
+        }
+
+        // 撤销一张幽灵图标可能还在跑的淡化动画并立刻收起来——SetCustomIconActionIndex 每次真正切换
+        // 之前都会对两张幽灵各调一次，见那边的注释。BeginAnimation(prop, null) 是 WPF 撤销动画、把属性
+        // 交还的标准写法；没有动画在跑的时候调用是安全的空操作，不用先判断"是不是正在淡"。
+        private static void StopCustomIconTransition(Image ghost)
+        {
+            ghost.BeginAnimation(UIElement.OpacityProperty, null);
+            ghost.Visibility = Visibility.Collapsed;
+        }
+
+        // 数据驱动的自动切换：当前歌曲"连续播放"（_customIconContinuousTrackSeconds，见 MainWindow.
+        // ListeningStats.cs——暂停不计时，切歌清零）满某个动作设定的 autoSwitchAfterSeconds 秒数，
+        // 就自动切过去，不用等用户点。每个播放 tick（UpdateListeningStats）都会调一次。
+        //
+        // 关键点：拿去跟阈值比较、判断"要不要自动切"的是 _customIconAutoSwitchHighWaterMark（曾经
+        // 到过的最远动作），不是 _customIconActionIndex（当前正显示的动作）——这两个字段刻意分开。
+        // 用户点击可以把 _customIconActionIndex 改成任何值（包括比 HighWaterMark 更靠前的），但
+        // HighWaterMark 只会在 SetCustomIconActionIndex 里被 Math.Max 往前推，不会被点击拉低。
+        //
+        // 如果这里跟之前一样直接拿 _customIconActionIndex 当基准：用户手动点回一个更早的动作之后，
+        // 下一个 50ms tick（这个方法每 tick 都跑一次）会立刻重新算出"当前连续播放时长早就该在
+        // 更靠后的动作"，把用户刚点回去的选择弹回去——因为只有 50ms，用户根本看不出点击生效过，
+        // 感觉就是"点了跟没点一样，换不到"。改成跟 HighWaterMark 比较之后：只要这次算出来的阶段
+        // 没有超过""曾经到过的最远""，就什么都不做，用户点哪就停在哪，一直停到真的有一个新的、
+        // 从没到过的阈值被跨过为止——那时候才应该重新推进，这也是为什么不能干脆"点了以后永远不再
+        // 自动切"：后面几个阈值仍然应该按时触发，不能因为用户点过一次就整个失效。
+        private void EvaluateAutoSwitchIconAction()
+        {
+            if (_customTheme?.Icon?.Actions is not { Count: > 0 } actions) return;
+
+            int desiredIndex = CustomThemeIconActionAutoSwitch.GetDesiredActionIndex(actions, _customIconContinuousTrackSeconds, _customIconAutoSwitchHighWaterMark);
+            if (desiredIndex > _customIconAutoSwitchHighWaterMark) SetCustomIconActionIndex(desiredIndex);
+        }
+
+        // 换歌那一刻调用（MainWindow.Lyrics.cs 的 HandleTrackChangeAsync）：连续播放计时器 +
+        // HighWaterMark 一起清零——"连续听同一首歌多久""到过多远的阶段"这两件事本来就该随着换歌
+        // 重新计起，不该带着上一首歌攒的进度。
+        //
+        // 只有这份主题真的有任何一个动作配了 autoSwitchAfterSeconds，才会顺带把姿势拉回"动作 0"
+        // 重新开始——没配这个字段的主题（绝大多数）完全不受影响，换歌不会打断用户手动点选的姿势，
+        // 跟这个功能加进来之前一模一样。真配了的主题才需要这个重置：不然新歌一开始，图标可能还顶着
+        // 上一首歌攒出来的"投入很久"那个姿势，跟新歌的实际播放时长对不上。
+        private void ResetCustomIconAutoSwitchTrackState()
+        {
+            _customIconContinuousTrackSeconds = 0;
+            if (_customTheme?.Icon?.Actions is { Count: > 0 } actions && actions.Any(a => a.AutoSwitchAfterSeconds is > 0))
+            {
+                _customIconAutoSwitchHighWaterMark = 0; // 显式清零——SetCustomIconActionIndex(0) 自己只会 Math.Max，不会把这个字段往回拉
+                SetCustomIconActionIndex(0);
+            }
+        }
+
+        // 决定图标现在该待在哪条移动轨道上（普通装饰栏 / drift 三重影 / fall 三重影 / walk 来回走），
+        // 把对应动画启动好，并且把 _customIconFrameApply 指向这条轨道该画帧的地方。actionAnimation
+        // 为 null 就是"动作 0"，或者这个动作没写自己的 animation，落回 icon 顶层那份——效果跟每个动作
+        // 只能换帧、不能换动法的那个阶段完全一样。填了的话（包括 drift/fall/walk）就用这份，图标真的
+        // 会搬进/搬出对应的专属轨道。walk 跟 Steve/火车走的是同一条装饰带（CustomIconDecorCanvas，
+        // Grid.Row="0" + ZIndex=10），单张图标在两个边界之间来回摆，不是 drift/fall 那种三重影飘过
+        // 整张卡片——这是应用户明确要求补的："跟 Steve/火车同理"的走路方式，drift/fall 的""飘""不是
+        // 同一回事。
+        //
+        // 主题刚应用（ApplyCustomSkinVisuals 调 SetCustomIconActionIndex(0)）和之后每次切动作（点击/
+        // 数据驱动自动切换）都走这一个方法，不会有两份分支逻辑走岔的风险。只有真的换了不一样的
+        // animation（按引用比较 _customIconActiveAnimationOverride）才会重新摆一遍轨道——不然每次
+        // 点击（哪怕点到的是一个没自定义 animation 的动作）都会让正在播的动画从头跳一下重新开始，
+        // 观感很糟；同一份没变的话，_customIconFrameApply 也保持不动，帧照样画在原来那条轨道上。
+        //
+        // 旧轨道的动画不主动停：切走之后对应的容器被隐藏，动画效果看不见，纯粹是省不出来一点点
+        // CPU——跟这个 app 别的地方对这类"看不见的动画还在偷偷转"的容忍度一致（ApplySkin 里
+        // _musicReactiveStoryboards.Clear() 那段注释也承认过同一类"浪费但不出错"的取舍）。点击/
+        // 自动切换都是低频事件（人手速，或者最多几个播放阈值），不是每帧都会触发，攒下来的这点空转
+        // 开销可以忽略，换来的是不用给每一种招式的 Start*Animation 方法都补一段"怎么精确撤销自己"的
+        // 对称逻辑——那部分改动面更大，也是这个环境完全没法用眼睛验证效果的地方，犯不上为了省这点
+        // 开销冒险引入新 bug。
+        private void ApplyCustomIconMovement(CustomThemeAnimation? actionAnimation)
+        {
+            if (actionAnimation == _customIconActiveAnimationOverride) return; // 同一份（都是 null，或者同一个动作再点一次绕回来），什么都不用变
+            _customIconActiveAnimationOverride = actionAnimation;
+
+            if (_customTheme is not { Icon: { } icon } theme) return;
+            var animation = actionAnimation ?? theme.Animation;
+            if (string.IsNullOrWhiteSpace(animation?.Type)) return; // 顶层 animation.type 理论上校验早保证过必填，这里只是防御
+
+            string[] animTypes = CustomThemeValidator.SplitAnimationTypes(animation.Type!);
+            if (animTypes.Length == 0) return;
+
+            bool hasActions = icon.Actions is { Count: > 0 };
+            CustomThemeColorInterop.TryParseHexColor(theme.Colors?.Accent ?? "#FFFFFF", out var accent);
+            bool musicReactive = animation.MusicReactive && _settings.SkinAudioReactiveEnabled;
+            double sensitivity = CustomThemeValidator.SensitivityToMultiplier(animation.Sensitivity);
+            double? customDuration = animation.Duration;
+
+            // 逐帧动画的换帧节奏是不是跟音乐反应、反应多强——这份跟着"现在生效的是哪份 animation"走，
+            // 不是从第一次应用主题之后就再也不变（这是这轮顺手修的一个小疏漏：之前动作专属 animation
+            // 上线时漏了同步这三个字段，只有主题刚应用那一刻的顶层 musicReactive/sensitivity 会生效，
+            // 切到一个自己开了/关了音乐律动的动作，换帧节奏并不会跟着变）
+            _customIconFramesMusicReactive = musicReactive;
+            _customIconFrameSensitivity = sensitivity;
+            _customIconFrameSpeedRatio = 1.0;
+
+            // 先把四条轨道都摆成"没有被选中"的状态，再挑一条真正启用——不去比较"上一次是哪条"，
+            // 每次都是确定状态，逻辑更简单也不容易漏掉某个分支的清理。CustomIcon/CustomWalkIcon 都在
+            // 同一个 CustomIconDecorCanvas 里（普通招式 vs walk 二选一显示），所以这两个的 Visibility
+            // 单独摆，不跟着 CustomIconDecorCanvas 本身的显隐绑在一起
+            RowDecor.Height = new GridLength(0);
+            CustomIconDecorCanvas.Visibility = Visibility.Collapsed;
+            CustomIcon.Visibility = Visibility.Collapsed;
+            CustomWalkIcon.Visibility = Visibility.Collapsed;
+            CustomDriftOverlay.Visibility = Visibility.Collapsed;
+            CustomFallOverlay.Visibility = Visibility.Collapsed;
+
+            if (animTypes[0] == "drift")
+            {
+                _customIconTrackKind = CustomIconTrackKind.Drift;
+                CustomDriftOverlay.Visibility = Visibility.Visible;
+                CustomDriftIcon1.Cursor = CustomDriftIcon2.Cursor = CustomDriftIcon3.Cursor = hasActions ? Cursors.Hand : Cursors.Arrow;
+                StartCustomDriftAnimation(CustomDrift1Transform, customDuration ?? 14, 0, musicReactive, sensitivity);
+                StartCustomDriftAnimation(CustomDrift2Transform, (customDuration ?? 14) * 1.35, 2, musicReactive, sensitivity);
+                StartCustomDriftAnimation(CustomDrift3Transform, (customDuration ?? 14) * 1.7, 5, musicReactive, sensitivity);
+                _customIconFrameApply = bmp => CustomDriftIcon1.Source = CustomDriftIcon2.Source = CustomDriftIcon3.Source = bmp;
+            }
+            else if (animTypes[0] == "fall")
+            {
+                _customIconTrackKind = CustomIconTrackKind.Fall;
+                CustomFallOverlay.Visibility = Visibility.Visible;
+                CustomFallIcon1.Cursor = CustomFallIcon2.Cursor = CustomFallIcon3.Cursor = hasActions ? Cursors.Hand : Cursors.Arrow;
+                StartCustomFallAnimation(CustomFall1Transform, customDuration ?? 6, 0, -6, 8, musicReactive, sensitivity);
+                StartCustomFallAnimation(CustomFall2Transform, (customDuration ?? 6) * 1.3, 1.5, 4, -10, musicReactive, sensitivity);
+                StartCustomFallAnimation(CustomFall3Transform, (customDuration ?? 6) * 1.6, 3, -8, 6, musicReactive, sensitivity);
+                _customIconFrameApply = bmp => CustomFallIcon1.Source = CustomFallIcon2.Source = CustomFallIcon3.Source = bmp;
+            }
+            else if (animTypes[0] == "walk")
+            {
+                _customIconTrackKind = CustomIconTrackKind.Walk;
+                // 跟 Steve/火车同一条装饰带（CustomIconDecorCanvas 本身就是 Grid.Row="0" + ZIndex=10，
+                // 跟 MinecraftDecorCanvas/CityDecorCanvas 同一层），不会被卡片下面的歌词内容挡住
                 RowDecor.Height = new GridLength(50);
                 CustomIconDecorCanvas.Visibility = Visibility.Visible;
-                CustomIcon.Source = iconBitmap; // 多帧的话这里先显示第一帧，SmoothTimer_Tick 里立刻会接管往后切
+                CustomWalkIcon.Visibility = Visibility.Visible;
+                CustomWalkIcon.Cursor = hasActions ? Cursors.Hand : Cursors.Arrow;
+                StartCustomWalkAnimation(customDuration, musicReactive, sensitivity);
+                _customIconFrameApply = bmp => CustomWalkIcon.Source = bmp;
+                UpdateCustomIconClickHint(hasActions, accent);
+            }
+            else
+            {
+                _customIconTrackKind = CustomIconTrackKind.Normal;
+                RowDecor.Height = new GridLength(50);
+                CustomIconDecorCanvas.Visibility = Visibility.Visible;
+                CustomIcon.Visibility = Visibility.Visible;
+                CustomIcon.Cursor = hasActions ? Cursors.Hand : Cursors.Arrow;
                 // 重置放在循环外面，只做一次——挪进循环里的话，组合里后一招重置的时候会把前一招刚设好的
                 // 状态（比如 sway 已经在转的角度）擦掉，等于每加一招都在跟前面打架
                 ResetCustomIconAnimationState(accent);
                 foreach (var t in animTypes) StartCustomIconAnimation(t, customDuration, musicReactive, sensitivity);
+                _customIconFrameApply = bmp => CustomIcon.Source = bmp;
+                UpdateCustomIconClickHint(hasActions, accent);
+            }
+        }
 
-                // 逐帧动画（theme.icon.frames）只在这个分支（主图标固定贴装饰栏）生效——drift/fall 那两条
-                // 三图标轨道结构不一样，暂时不支持，见 ApplyCustomSkinVisuals 开头的注释。只有真的 >1 帧
-                // 才启用，1 帧（或者压根没填 frames）就跟这个功能加进来之前完全一样，SmoothTimer_Tick 里
-                // `if (_customIconFrames != null)` 那个判断天然不会命中，不会多一份空转的开销。
-                if (iconFrames.Length > 1)
-                {
-                    _customIconFrames = iconFrames;
-                    _customIconFrameDurationSeconds = CustomThemeValidator.GetFrameDurationSeconds(theme.Icon!);
-                    _customIconFrameIndex = 0;
-                    _customIconFrameTickCounter = 0;
-                    _customIconFramesMusicReactive = musicReactive;
-                    _customIconFrameSensitivity = sensitivity;
-                    _customIconFrameSpeedRatio = 1.0;
-                }
+        // 点击可发现性：CustomIconClickHint 那圈呼吸描边，只在 Normal/Walk 这两条轨道里维护（drift/fall
+        // 没有一个单一的锚点能放这圈描边，见 XAML 里 CustomIconClickHint 的注释）。hasActions 为 false
+        // 就直接收起来并撤销动画——没有 actions 可点，不该留着一圈"我能点"的提示误导用户。
+        // _customIconClickHintAnimating 只是防止每次切轨道/切动作都重启一遍呼吸相位（视觉上会跳一下）：
+        // 已经在播的话只更新颜色，不重新 BeginAnimation。
+        private bool _customIconClickHintAnimating;
+
+        private void UpdateCustomIconClickHint(bool hasActions, Color accent)
+        {
+            if (!hasActions)
+            {
+                CustomIconClickHint.Visibility = Visibility.Collapsed;
+                CustomIconClickHint.BeginAnimation(UIElement.OpacityProperty, null);
+                _customIconClickHintAnimating = false;
+                return;
             }
 
-            ApplyCustomExtraLayers(theme, accent);
+            CustomIconClickHint.Visibility = Visibility.Visible;
+            CustomIconClickHint.BorderBrush = new SolidColorBrush(accent);
+            if (_customIconClickHintAnimating) return;
+            _customIconClickHintAnimating = true;
+
+            var breathe = new DoubleAnimation(0.12, 0.55, TimeSpan.FromSeconds(1.8))
+            {
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+            };
+            CustomIconClickHint.BeginAnimation(UIElement.OpacityProperty, breathe);
         }
 
         // theme.layers（可选，最多 2 个）：每层自己的图标 + 动画，贴在卡片四个角之一，叠加在主图标/主动画
@@ -534,11 +843,12 @@ namespace PixelLyric8BitFix
             }
         }
 
-        // 额外层的 8 招式，跟主图标 StartCustomIconAnimation 是同一套参数（保证观感一致），只是作用目标
-        // 从固定的 XAML 命名元素换成运行时传进来的实例。drift/fall 在主图标那边各自有一条"飘过/飘落整张
-        // 卡片"的专属轨道（CustomDriftOverlay/CustomFallOverlay），额外层没有那一套坐标系统，
-        // 退化成原地小幅摆动——drift 落在水平位移，fall 复用 StartBobAnimation 但幅度更大一点，
-        // 至少保留"横着晃 vs 竖着晃"这点方向感上的区别，不是完全和 sway/bob 一样。
+        // 额外层的 9 招式，跟主图标 StartCustomIconAnimation 是同一套参数（保证观感一致），只是作用目标
+        // 从固定的 XAML 命名元素换成运行时传进来的实例。drift/fall/walk 在主图标那边各自有专属的渲染
+        // 结构（CustomDriftOverlay/CustomFallOverlay 三重影轨道，walk 是装饰带里来回走的单独图标），
+        // 额外层没有那一套坐标系统/装饰带，drift 和 walk 一起退化成同一种原地水平小幅摆动，fall 复用
+        // StartBobAnimation 但幅度更大一点，至少保留"横着晃 vs 竖着晃"这点方向感上的区别，不是完全
+        // 和 sway/bob 一样。
         private void StartLayerAnimation(string type, double? customDuration, Image icon, RotateTransform rotate, TranslateTransform translate, DropShadowEffect glow, bool musicReactive, double sensitivity)
         {
             switch (type)
@@ -592,7 +902,11 @@ namespace PixelLyric8BitFix
                         else glow.BeginAnimation(DropShadowEffect.OpacityProperty, frames);
                         break;
                     }
+                // walk 跟 drift 共用这同一个 case：层没有 Steve/火车那种独立装饰带可以横穿，也没有
+                // drift/fall 主图标才有的专属轨道，两者在层里都只能退化成同一种"原地水平小幅摆动"，
+                // 没有必要为 walk 单独再写一份几乎一样的动画
                 case "drift":
+                case "walk":
                     {
                         var anim = new DoubleAnimation(-10, 10, TimeSpan.FromSeconds(SafeDuration(customDuration, 4)))
                         {
@@ -685,6 +999,31 @@ namespace PixelLyric8BitFix
             }
         }
 
+        // 客制化图标"来回走"专属（animation.type = walk）：跟 Minecraft 皮肤 Steve 走路（见下面
+        // StartSteveWalking）借的是同一套"AutoReverse 往返"手法，但起点不一样——Steve 在两个固定
+        // 端点之间摆，walk 是从图标平时待着的原位（CustomWalkTransform.X=0，跟 CustomIcon 同一个
+        // 锚点，见 MainWindow.xaml 里 CustomWalkIcon 的注释）出发向左走，走到头再走回原位，符合
+        // "图标本来待在这，只是偶尔走出去逛一圈再回来"这个直觉，而不是凭空站在别的地方来回摆。
+        // leftDistance（走多远）按窗口实际宽度算，不写死，小窗口不会走出界、大窗口也走得满；
+        // 70 = CustomWalkIcon 自身宽度(36) + 两侧留白，跟 UFO 那条没有额外装饰物占位的横穿动画
+        // （StartUfoDrift）算法思路一样，不是照抄 Steve 的 110（那个 110 里包含了 Minecraft 皮肤专属的
+        // 小树占位，客制化图标这条装饰带没有树）。
+        //
+        // 故意没做 Steve 那套"翻转朝向"（SteveFlip，走左边翻转成朝左）：客制化图标形状千变万化，
+        // 贸然做水平镜像可能把不该翻的细节（比如带文字、明显方向性的图案）翻反，不是每个图标都适合
+        // 被镜像——想要"朝左朝右换个样子"的话，用 icon.frames 自己画两帧不同朝向的图更安全、更可控。
+        private void StartCustomWalkAnimation(double? customDuration, bool musicReactive, double sensitivity)
+        {
+            double leftDistance = Math.Max(60, Width - 70);
+            var anim = new DoubleAnimation(0, -leftDistance, TimeSpan.FromSeconds(SafeDuration(customDuration, 7)))
+            {
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+            };
+            if (musicReactive) BeginMusicReactiveAnimation(CustomWalkTransform, TranslateTransform.XProperty, anim, sensitivity);
+            else CustomWalkTransform.BeginAnimation(TranslateTransform.XProperty, anim);
+        }
+
         // "浮动型"（bob）：纯粹的位置上下浮动，缓入缓出——跟 sway（绕轴心转角度摆动）是两个不同的动作。
         // 海边黄昏的帆船停在海面上、云朵漂浮的热气球飘在天上、极光雪夜的北极狐/雨夜的窗台猫，都用这同一个
         // 方法，只是幅度/时长不同；这个动作也加进了客制化主题的第 8 种可选招式，见 StartCustomIconAnimation
@@ -719,11 +1058,13 @@ namespace PixelLyric8BitFix
             CustomIconGlow.Opacity = 0.6;
         }
 
-        // 单图标动画："招式"从 pulse / twinkle / drift / fall / bob / sway / spin / flicker 里选一个或者
-        // 用 + 组合几个（组合规则见 CustomThemeValidator.ValidateAnimation），全部用代码现场构造
-        // DoubleAnimation，不需要预先在 XAML 里声明 Storyboard 资源。musicReactive 为 true 时，
-        // 不管选的是哪一招，都统一走 BeginMusicReactiveAnimation 包成可调速的 Storyboard——
-        // 见 ApplyCustomSkinVisuals 里对 "跟着音乐律动" 开关的说明
+        // 单图标动画：只处理不需要专属渲染结构的 6 招——pulse / twinkle / bob / sway / spin / flicker，
+        // 可以用 + 任意组合（组合规则见 CustomThemeValidator.ValidateAnimation）。drift/fall/walk
+        // 不会走到这个 switch——那三招各自需要专属的容器/图标（三重影轨道或者装饰带里的 CustomWalkIcon），
+        // 在 ApplyCustomIconMovement 里就已经分流走了，见该方法。全部用代码现场构造 DoubleAnimation，
+        // 不需要预先在 XAML 里声明 Storyboard 资源。musicReactive 为 true 时，不管选的是哪一招，都统一
+        // 走 BeginMusicReactiveAnimation 包成可调速的 Storyboard——见 ApplyCustomIconMovement 里对
+        // "跟着音乐律动" 开关的说明
         private void StartCustomIconAnimation(string type, double? customDuration, bool musicReactive, double sensitivity = 1.0)
         {
             switch (type)
@@ -956,7 +1297,7 @@ namespace PixelLyric8BitFix
 
             _customIconFrameTickCounter = 0;
             _customIconFrameIndex = (_customIconFrameIndex + 1) % frames.Length;
-            CustomIcon.Source = frames[_customIconFrameIndex];
+            _customIconFrameApply?.Invoke(frames[_customIconFrameIndex]);
         }
 
         // 显示模式：极简只留歌词一行，标准把标题/进度条也带上
