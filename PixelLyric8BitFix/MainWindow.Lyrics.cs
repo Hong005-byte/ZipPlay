@@ -105,7 +105,6 @@ namespace PixelLyric8BitFix
             if (_lastTrackId == trackId) return;
             string previousTrackId = _lastTrackId;
             _lastTrackId = trackId;
-            FlushListeningStats(previousTrackId); // 上一首歌剩下还没攒够阈值的零头秒数，切歌前先记到它名下
 
             // 1. 切歌一瞬间，UI 立刻响应，绝不等待网络
             //
@@ -117,8 +116,17 @@ namespace PixelLyric8BitFix
             // SetCustomIconActionIndex 摸到 RowDecor/CustomIcon 这些真正的 UI 元素，直接在外面调
             // 会在非 UI 线程碰 UI 对象，抛 InvalidOperationException("The calling thread cannot access
             // this object because a different thread owns it.")——这正是实测复现到的那个崩溃。
+            //
+            // FlushListeningStats(previousTrackId) 以前留在这个 Dispatcher.Invoke 外面直接调，是同一类
+            // 疏漏：它表面上只是"记账 + 存盘"，看着不像会碰 UI，但 FlushListeningStats ->
+            // CelebrateNewlyUnlockedAchievements -> ShowToast 这条链路末端会直接改 TxtToast.Text /
+            // ToastBadge.Visibility，且还会 new 一个 DispatcherTimer（捕获的是"当前线程"的 Dispatcher，
+            // 不是 UI 线程的）。平时这一步大部分时候什么都不做（还没攒够阈值，或者没有成就恰好在这次
+            // flush 里解锁），只有真的解锁到成就的那一刻才会摸到这几个 UI 对象——这正是"实测复现到的
+            // 那个崩溃"背后同一类"平时没事、条件凑齐了才炸"的坑，挪进来一起包在 Dispatcher.Invoke 里。
             Dispatcher.Invoke(() =>
             {
+                FlushListeningStats(previousTrackId); // 上一首歌剩下还没攒够阈值的零头秒数，切歌前先记到它名下
                 ResetCustomIconAutoSwitchTrackState(); // "连续播放同一首歌"这件事本来就该随着换歌重新计起
                 TxtSongTitle.Text = title.ToUpper();
                 TxtArtist.Text = $"BY {artist.ToUpper()}";
