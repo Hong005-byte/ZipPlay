@@ -13,9 +13,9 @@
       </StackPanel>
 
       <TextBlock x:Name="TxtCurrentSkin" Text="悬浮窗皮肤：简约风" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"/>
-      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,6,0,0">
-        <StackPanel x:Name="SkinPickerPanel" Orientation="Horizontal"/>
-      </ScrollViewer>
+      <!-- 竖着一条条往下排——外层 Page 本来就包了一层纵向 ScrollViewer，皮肤够多的话跟着整页一起往下
+           滚，不用再单独套一层横向 ScrollViewer -->
+      <StackPanel x:Name="SkinPickerPanel" Orientation="Vertical" Margin="0,6,0,0"/>
     </StackPanel>
   </ScrollViewer>
 </Page>

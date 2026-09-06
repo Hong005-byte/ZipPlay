@@ -55,7 +55,9 @@ public sealed partial class SkinPage : Page
             var button = new Button
             {
                 Content = locked ? $"🔒 {palette.DisplayName}（还差 {crownRemaining} 个成就）" : palette.DisplayName,
-                Margin = new Thickness(0, 0, 8, 0),
+                Margin = new Thickness(0, 0, 0, 8), // 竖着往下排，间距挪到下边，不是右边
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
                 Background = new SolidColorBrush(locked ? Color.FromArgb(255, 0x33, 0x33, 0x33) : ToUiColor(palette.Accent)),
                 Foreground = new SolidColorBrush(locked ? Color.FromArgb(255, 0x88, 0x88, 0x88) : ToUiColor(palette.Text)),
                 IsEnabled = !locked,
