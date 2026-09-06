@@ -17,6 +17,13 @@ public partial class App : Application
 
     protected Window? MainWindow { get; private set; }
 
+    // Android 硬件/手势返回键默认不会自己去问这个 Frame 能不能后退——那是 Activity 自己的返回栈，
+    // 跟 Frame 的导航栈是两回事，不接上的话在子页面按返回键会直接把整个 Activity 关掉/翻到系统里
+    // 上一个显示过的界面（真机上踩过：从"悬浮窗皮肤"页按返回键，翻回去的是很早之前跳转过的系统
+    // 设置页，不是回到本 App 的首页）。MainActivity.Android.cs 的 OnBackPressed 靠这个静态属性
+    // 找到当前的根 Frame，能后退就 GoBack，不能后退（已经在首页）才交给系统默认行为处理
+    public static Frame? RootFrame { get; private set; }
+
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         MainWindow = new Window();
@@ -37,6 +44,8 @@ public partial class App : Application
 
             rootFrame.NavigationFailed += OnNavigationFailed;
         }
+
+        RootFrame = rootFrame;
 
         if (rootFrame.Content == null)
         {

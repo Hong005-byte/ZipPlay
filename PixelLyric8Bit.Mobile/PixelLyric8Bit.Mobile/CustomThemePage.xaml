@@ -1,0 +1,30 @@
+<Page x:Class="PixelLyric8Bit.Mobile.CustomThemePage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:local="using:PixelLyric8Bit.Mobile"
+      Background="#0D0D0D">
+
+  <!-- 自定义主题——精简版：只吃 JSON（跟桌面版自定义主题页同一份格式，能直接互通），见
+       CustomThemePage.xaml.cs 顶部说明 -->
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Padding="24">
+      <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
+        <Button Content="‹ 返回" Click="BtnBack_Click" Margin="0,0,12,0"/>
+        <TextBlock Text="🖌️ 自定义主题" FontFamily="Consolas" Foreground="White" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
+      </StackPanel>
+
+      <TextBlock Text="自定义主题（粘贴/编辑 JSON，格式跟桌面版通用）" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"/>
+      <TextBox x:Name="TxtCustomThemeJson" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"
+               Height="140" Margin="0,6,0,0" Background="#1A1A1A" Foreground="White"/>
+      <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+        <Button Content="校验并保存" Click="BtnSaveCustomTheme_Click" Margin="0,0,8,0"/>
+        <Button Content="填入示例" Click="BtnFillExampleTheme_Click" Margin="0,0,8,0"/>
+        <Button Content="删除当前选中" Click="BtnDeleteCustomTheme_Click"/>
+      </StackPanel>
+      <TextBlock x:Name="TxtCustomThemeError" FontFamily="Consolas" Foreground="#FF8080" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"/>
+      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,8,0,0">
+        <StackPanel x:Name="CustomThemePickerPanel" Orientation="Horizontal"/>
+      </ScrollViewer>
+    </StackPanel>
+  </ScrollViewer>
+</Page>

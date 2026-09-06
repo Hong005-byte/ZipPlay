@@ -1,0 +1,21 @@
+<Page x:Class="PixelLyric8Bit.Mobile.SkinPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:local="using:PixelLyric8Bit.Mobile"
+      Background="#0D0D0D">
+
+  <!-- 悬浮窗皮肤选择——见 SkinPage.xaml.cs 顶部说明 -->
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Padding="24">
+      <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
+        <Button Content="‹ 返回" Click="BtnBack_Click" Margin="0,0,12,0"/>
+        <TextBlock Text="🎨 悬浮窗皮肤" FontFamily="Consolas" Foreground="White" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
+      </StackPanel>
+
+      <TextBlock x:Name="TxtCurrentSkin" Text="悬浮窗皮肤：简约风" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"/>
+      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,6,0,0">
+        <StackPanel x:Name="SkinPickerPanel" Orientation="Horizontal"/>
+      </ScrollViewer>
+    </StackPanel>
+  </ScrollViewer>
+</Page>

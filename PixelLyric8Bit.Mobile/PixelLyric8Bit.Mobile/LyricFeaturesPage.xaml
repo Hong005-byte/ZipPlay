@@ -1,0 +1,28 @@
+<Page x:Class="PixelLyric8Bit.Mobile.LyricFeaturesPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:local="using:PixelLyric8Bit.Mobile"
+      Background="#0D0D0D">
+
+  <!-- 歌词功能设置：卡拉OK 逐字上色 / 双语歌词 / 同步偏移，见 LyricFeaturesPage.xaml.cs 顶部说明 -->
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Padding="24">
+      <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
+        <Button Content="‹ 返回" Click="BtnBack_Click" Margin="0,0,12,0"/>
+        <TextBlock Text="🎤 歌词功能设置" FontFamily="Consolas" Foreground="White" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
+      </StackPanel>
+
+      <CheckBox x:Name="ChkKaraoke" Content="卡拉OK 逐字上色" IsChecked="True" Foreground="#AAAAAA"
+                Checked="ChkKaraoke_Toggled" Unchecked="ChkKaraoke_Toggled"/>
+      <CheckBox x:Name="ChkBilingual" Content="🌐 双语歌词（联网翻译）" Foreground="#AAAAAA" Margin="0,4,0,0"
+                Checked="ChkBilingual_Toggled" Unchecked="ChkBilingual_Toggled"/>
+      <StackPanel Orientation="Horizontal" Margin="0,10,0,0" VerticalAlignment="Center">
+        <TextBlock x:Name="TxtSyncOffset" Text="歌词同步偏移：0ms" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"
+                   VerticalAlignment="Center" Margin="0,0,10,0"/>
+        <Button Content="-50ms" Click="BtnOffsetMinus_Click" Margin="0,0,6,0"/>
+        <Button Content="+50ms" Click="BtnOffsetPlus_Click" Margin="0,0,6,0"/>
+        <Button Content="重置" Click="BtnOffsetReset_Click"/>
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+</Page>
