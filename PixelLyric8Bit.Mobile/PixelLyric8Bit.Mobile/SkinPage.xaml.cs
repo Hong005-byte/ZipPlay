@@ -59,7 +59,9 @@ public sealed partial class SkinPage : Page
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Left,
                 Background = new SolidColorBrush(locked ? Color.FromArgb(255, 0x33, 0x33, 0x33) : ToUiColor(palette.Accent)),
-                Foreground = new SolidColorBrush(locked ? Color.FromArgb(255, 0x88, 0x88, 0x88) : ToUiColor(palette.Text)),
+                // 按钮背景是皮肤的 Accent 色，不是悬浮窗那个深色背景——皮肤自己配的 Text 色是给深色
+                // 背景设计的，直接搬过来经常跟 Accent 撞色看不清，见 RgbaColor.PickReadableForeground
+                Foreground = new SolidColorBrush(locked ? Color.FromArgb(255, 0x88, 0x88, 0x88) : ToUiColor(RgbaColor.PickReadableForeground(palette.Accent))),
                 IsEnabled = !locked,
             };
             string id = palette.Id; // 闭包捕获循环变量的经典坑，显式拷贝一份，不然点哪个按钮都会选到最后一个皮肤

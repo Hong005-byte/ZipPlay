@@ -50,7 +50,9 @@ public sealed partial class CustomThemePage : Page
                 Content = palette.DisplayName,
                 Margin = new Thickness(0, 0, 8, 0),
                 Background = new SolidColorBrush(ToUiColor(palette.Accent)),
-                Foreground = new SolidColorBrush(ToUiColor(palette.Text)),
+                // 皮肤自己配的 Text 色是给深色悬浮窗背景设计的，直接搬来这块用 Accent 当背景的按钮上
+                // 经常撞色看不清，见 RgbaColor.PickReadableForeground（跟 SkinPage 同一个坑、同一个修法）
+                Foreground = new SolidColorBrush(ToUiColor(RgbaColor.PickReadableForeground(palette.Accent))),
             };
             string skinId = MobileSkinCatalog.CustomThemePrefix + entry.FileName; // 闭包捕获循环变量的经典坑，显式拷贝一份，不然点哪个按钮都会选到最后一个主题
             button.Click += (_, _) => SelectSkin(skinId);
