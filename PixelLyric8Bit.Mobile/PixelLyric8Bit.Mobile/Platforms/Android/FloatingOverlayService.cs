@@ -139,6 +139,12 @@ public class FloatingOverlayService : Service
     private bool _fetchInFlight;
     private System.Threading.CancellationTokenSource? _fetchCts;
 
+    // 🖼️ 歌词分享卡片——UpdateOverlayText 每 tick 顺手把"这一刻真的显示出来的那一行原文"记一份在这，
+    // 跟 _lastRenderedText 不是一回事：那个是"最后一次真的推给 TextView 的完整字符串"（可能是提示语，
+    // 也可能是 SpannableString），这个是"干净的一行歌词原文，没有就是 null"，点一下悬浮窗触发分享
+    // （见 ShowOverlay 里的 Touch 手势）时只需要这个，不用反过来从渲染结果里剥
+    private string? _currentLyricLine;
+
     public static bool IsRunning { get; private set; }
 
     public override IBinder? OnBind(Intent? intent) => null;
@@ -246,9 +252,16 @@ public class FloatingOverlayService : Service
 
         // 拖动手势——按住拖到屏幕任意位置，这是悬浮窗最基本的交互，不给拖的话跟一张固定贴纸没区别。
         // 手动记初始触点+初始窗口位置，松手不用做任何事，Android 的 WindowManager 会记着这个
-        // LayoutParams 对象最后一次 UpdateViewLayout 传的位置，不用自己再存一份
+        // LayoutParams 对象最后一次 UpdateViewLayout 传的位置，不用自己再存一份。
+        //
+        // 顺手在这上面加了"点一下（不是拖）分享当前这句歌词"——按下到松手之间移动距离没超过
+        // tapMoveThresholdPx 就算一次单纯的点击，不是拖动，见 MotionEventActions.Up；跟拖动共用同一个
+        // 手势识别器而不是单独挂一个 Click，是因为悬浮窗一直在拦截触摸事件做拖动，另外挂的 Click
+        // 永远收不到事件
         float touchStartX = 0, touchStartY = 0;
         int windowStartX = 0, windowStartY = 0;
+        bool movedPastTapThreshold = false;
+        float tapMoveThresholdPx = 12 * density;
         _overlayContainer.Touch += (s, e) =>
         {
             var ev = e.Event!;
@@ -259,12 +272,19 @@ public class FloatingOverlayService : Service
                     windowStartY = _layoutParams.Y;
                     touchStartX = ev.RawX;
                     touchStartY = ev.RawY;
+                    movedPastTapThreshold = false;
                     e.Handled = true;
                     break;
                 case MotionEventActions.Move:
-                    _layoutParams.X = windowStartX + (int)(ev.RawX - touchStartX);
-                    _layoutParams.Y = windowStartY + (int)(ev.RawY - touchStartY);
+                    float dx = ev.RawX - touchStartX, dy = ev.RawY - touchStartY;
+                    if (Math.Abs(dx) > tapMoveThresholdPx || Math.Abs(dy) > tapMoveThresholdPx) movedPastTapThreshold = true;
+                    _layoutParams.X = windowStartX + (int)dx;
+                    _layoutParams.Y = windowStartY + (int)dy;
                     _windowManager.UpdateViewLayout(_overlayContainer, _layoutParams);
+                    e.Handled = true;
+                    break;
+                case MotionEventActions.Up:
+                    if (!movedPastTapThreshold) ShareCurrentLyricLine();
                     e.Handled = true;
                     break;
             }
@@ -665,12 +685,14 @@ public class FloatingOverlayService : Service
     {
         if (_controller == null)
         {
+            _currentLyricLine = null; // 没有正在播放的 App，没有"正在显示的歌词"这回事，点一下分享要能立刻发现这点
             SetOverlayText("ZipPlay 悬浮歌词骨架\n（现在没有检测到正在播放的 App）");
             return;
         }
 
         if (_currentLines == null)
         {
+            _currentLyricLine = null; // 还没抓到词/抓词失败，同上
             SetOverlayText(_fetchInFlight
                 ? $"{_currentTitle} - {_currentArtist}\n（正在联网找歌词…）"
                 : $"{_currentTitle} - {_currentArtist}\n（没找到歌词）");
@@ -692,11 +714,13 @@ public class FloatingOverlayService : Service
 
         if (currentIndex < 0)
         {
+            _currentLyricLine = null; // 歌词抓到了，但播放位置还没到第一行的时间戳，同上
             SetOverlayText($"{_currentTitle} - {_currentArtist}");
             return;
         }
 
         var (lineStartMs, lineText) = _currentLines[currentIndex];
+        _currentLyricLine = lineText; // 分享卡片要的就是这一行原文，不带卡拉OK 上色/双语翻译那些展示层的东西
         // 这一行唱到什么时候算完——下一行开始的时间，或者（最后一行）总时长；两个都拿不到就兜底
         // 留 4 秒，跟桌面版骨架示例数据那个"最后一句放完留 4 秒"是同一个数字，没有特殊含义只是个保守值
         int lineEndMs = currentIndex + 1 < _currentLines.Count
@@ -716,6 +740,52 @@ public class FloatingOverlayService : Service
         }
 
         SetOverlayLyricLine(lineText, sungChars, translationText);
+    }
+
+    // ── 🖼️ 歌词分享卡片 ───────────────────────────────────────────────────────────
+    // 触发点见 ShowOverlay 里的 Touch 手势——点一下悬浮窗（不是拖）就是这个，跟桌面版右键菜单点
+    // "截成图片"是同一个功能，只是手机上没有右键菜单，借用"点一下"当入口。
+
+    /// <summary>把 _currentLyricLine 画成一张图存进系统相册，再弹系统分享面板——没有正在显示的歌词
+    /// （没在放歌/还没抓到词/播放位置还没到第一行）就提示一句，不弹一张空卡片出来。</summary>
+    private void ShareCurrentLyricLine()
+    {
+        if (string.IsNullOrEmpty(_currentLyricLine))
+        {
+            Toast.MakeText(this, "现在没有正在显示的歌词，放着歌再点一下悬浮窗试试", ToastLength.Short)?.Show();
+            return;
+        }
+
+        try
+        {
+            // 直接拿 _iconView 这一刻真的在显示的那张位图——跟悬浮窗上看到的是同一张（哪怕 icon.frames
+            // 逐帧动画正播到中间某一帧），不重新渲染一遍，也不用另外记一份"当前是第几帧"
+            Bitmap? icon = (_iconView?.Drawable as BitmapDrawable)?.Bitmap;
+            var card = LyricShareCardRenderer.Render(_currentLyricLine, _currentTitle, _currentArtist, _currentPalette, icon);
+
+            string? uriString = MediaStore.Images.Media.InsertImage(ContentResolver, card, "ZipPlay歌词分享", "ZipPlay 歌词分享卡片");
+            if (uriString == null)
+            {
+                Toast.MakeText(this, "生成分享图失败，稍后再试试", ToastLength.Short)?.Show();
+                return;
+            }
+
+            var uri = global::Android.Net.Uri.Parse(uriString);
+            var shareIntent = new Intent(Intent.ActionSend);
+            shareIntent.SetType("image/png");
+            shareIntent.PutExtra(Intent.ExtraStream, uri);
+            shareIntent.AddFlags(ActivityFlags.GrantReadUriPermission);
+
+            // 从 Service（不是 Activity）发 Intent 必须带 NewTask，不然系统直接拒绝——这是 Android
+            // 的硬性要求，不是我们自己想加的
+            var chooser = Intent.CreateChooser(shareIntent, "分享歌词")!;
+            chooser.AddFlags(ActivityFlags.NewTask);
+            StartActivity(chooser);
+        }
+        catch (Exception ex)
+        {
+            Toast.MakeText(this, "分享失败：" + ex.Message, ToastLength.Short)?.Show();
+        }
     }
 
     /// <summary>真正碰 TextView 之前先比一下"这次要显示的东西"跟上次是不是一样——大部分 200ms tick 里
