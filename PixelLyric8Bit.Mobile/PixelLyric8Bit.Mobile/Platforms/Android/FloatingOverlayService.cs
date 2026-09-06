@@ -602,9 +602,30 @@ public class FloatingOverlayService : Service
     {
         if (_overlayView == null) return; // 悬浮窗已经被关掉了，不用再排下一次
 
+        RetryBindControllerIfMissing();
         UpdateOverlayText();
         UpdateListeningStats(); // 复用这个 tick 顺手攒听歌时长，不用再单独开一个定时器
         _mainHandler?.PostDelayed(_renderAction!, RenderIntervalMs);
+    }
+
+    // 绑定媒体会话本来只在 BindMediaSessionManager 里查一次，之后全靠"活跃会话列表变化"这个系统
+    // 广播（ActiveSessionsListener）推更新——真机上踩过这个坑：悬浮窗刚启动那一刻
+    // MediaNotificationListenerService.Instance 恰好还没连接上（服务重启/系统刚杀过又重连这类情况，
+    // 不一定是权限问题），那一次 RebindController(null) 就把 _controller 定死成 null，之后哪怕
+    // 服务真的连上了，只要活跃会话列表本身没有再变化过（比如用户开始播放前会话就已经存在），
+    // 就永远没有下一次机会重新查——用户会一直看到"没有检测到正在播放的 App"，得自己去系统设置
+    // 把权限关了再开一次才能救回来。这里顶个每隔几秒重试一次的兜底：只要还没绑定到任何会话，
+    // 就重新问一遍，服务晚连上了也能自愈，不用整套指望系统那个"列表变化"广播。
+    private const int ControllerRebindRetryIntervalMs = 3000;
+    private DateTimeOffset _lastControllerRebindAttempt = DateTimeOffset.MinValue;
+
+    private void RetryBindControllerIfMissing()
+    {
+        if (_controller != null) return;
+        if ((DateTimeOffset.Now - _lastControllerRebindAttempt).TotalMilliseconds < ControllerRebindRetryIntervalMs) return;
+
+        _lastControllerRebindAttempt = DateTimeOffset.Now;
+        RebindController(MediaNotificationListenerService.Instance?.GetActiveMediaControllers());
     }
 
     // ── 听歌统计 + 成就 ───────────────────────────────────────────────────────────
@@ -763,14 +784,25 @@ public class FloatingOverlayService : Service
             Bitmap? icon = (_iconView?.Drawable as BitmapDrawable)?.Bitmap;
             var card = LyricShareCardRenderer.Render(_currentLyricLine, _currentTitle, _currentArtist, _currentPalette, icon);
 
-            string? uriString = MediaStore.Images.Media.InsertImage(ContentResolver, card, "ZipPlay歌词分享", "ZipPlay 歌词分享卡片");
-            if (uriString == null)
+            // 不用 MediaStore.Images.Media.InsertImage——那个旧 API 内部固定把图压成 JPEG 质量 50，
+            // 像素图标的硬边缘/文字会被压出可见的模糊和色块，跟这份卡片"像素画不做模糊处理"的
+            // 一贯做法直接冲突。手动插入一条 MediaStore 记录再用 Bitmap.Compress(Png, 100) 写进去，
+            // 才是真的无损 PNG，也让下面 Intent 里声明的 "image/png" 名副其实（用 InsertImage 那版
+            // 声明是 png、实际存的是 jpg，类型对不上）
+            var values = new ContentValues();
+            values.Put("_display_name", $"ZipPlay_lyric_{DateTimeOffset.Now:yyyyMMdd_HHmmss}.png");
+            values.Put("mime_type", "image/png");
+            var uri = ContentResolver!.Insert(MediaStore.Images.Media.ExternalContentUri!, values);
+            if (uri == null)
             {
                 Toast.MakeText(this, "生成分享图失败，稍后再试试", ToastLength.Short)?.Show();
                 return;
             }
+            using (var stream = ContentResolver.OpenOutputStream(uri))
+            {
+                card.Compress(Bitmap.CompressFormat.Png!, 100, stream);
+            }
 
-            var uri = global::Android.Net.Uri.Parse(uriString);
             var shareIntent = new Intent(Intent.ActionSend);
             shareIntent.SetType("image/png");
             shareIntent.PutExtra(Intent.ExtraStream, uri);
