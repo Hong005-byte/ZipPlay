@@ -1,0 +1,31 @@
+<Page x:Class="PixelLyric8Bit.Mobile.HighlightsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:local="using:PixelLyric8Bit.Mobile"
+      Background="#0D0D0D">
+
+  <!-- ✨ 亮点回顾——一张卡片说一件事，点"下一张"翻页，见 HighlightsPage.xaml.cs 顶部说明 -->
+  <StackPanel Padding="24" VerticalAlignment="Center">
+    <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
+      <Button Content="‹ 返回" Click="BtnBack_Click" Margin="0,0,12,0"/>
+      <TextBlock Text="✨ 亮点回顾" FontFamily="Consolas" Foreground="White" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
+    </StackPanel>
+
+    <Border Background="#1A1A1A" BorderBrush="#8AB4F8" BorderThickness="2" CornerRadius="14" Padding="24" MinHeight="220">
+      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+        <TextBlock x:Name="TxtSlideIcon" Text="🎧" FontSize="48" HorizontalAlignment="Center"/>
+        <TextBlock x:Name="TxtSlideHeadline" Text="" FontFamily="Consolas" Foreground="White" FontSize="22" FontWeight="Bold"
+                   TextAlignment="Center" TextWrapping="Wrap" Margin="0,12,0,0"/>
+        <TextBlock x:Name="TxtSlideSubtext" Text="" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="14"
+                   TextAlignment="Center" TextWrapping="Wrap" Margin="0,8,0,0"/>
+      </StackPanel>
+    </Border>
+
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,16,0,0">
+      <Button x:Name="BtnPrev" Content="‹ 上一张" Click="BtnPrev_Click" Margin="0,0,12,0"/>
+      <TextBlock x:Name="TxtPageIndicator" Text="1 / 1" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="14"
+                 VerticalAlignment="Center" Margin="0,0,12,0"/>
+      <Button x:Name="BtnNext" Content="下一张 ›" Click="BtnNext_Click"/>
+    </StackPanel>
+  </StackPanel>
+</Page>
