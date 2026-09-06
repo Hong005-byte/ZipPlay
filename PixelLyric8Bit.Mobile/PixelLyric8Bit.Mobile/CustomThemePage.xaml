@@ -28,6 +28,15 @@
       </Border>
       <TextBlock x:Name="TxtPreviewHint" Text="预览：JSON 还没校验通过，改好格式会自动出现" FontFamily="Consolas" Foreground="#666666" FontSize="12" Margin="0,6,0,0" TextWrapping="Wrap"/>
 
+      <!-- 图标细节放大——跟 PreviewIcon 共用同一批渲染出来的位图（不是重新画一遍），原图直接放大显示、
+           不做模糊处理，方格开大了也看得清哪一格是什么颜色；有 icon.frames 的话跟主预览同步播放同一帧，
+           见 UpdatePreview/ApplyPreviewTheme。JSON 没校验通过就跟主预览一起隐藏 -->
+      <TextBlock Text="图标细节放大" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,14,0,0"/>
+      <Border x:Name="IconZoomCard" Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" Padding="10"
+              HorizontalAlignment="Left" Margin="0,6,0,0" Visibility="Collapsed">
+        <Image x:Name="IconZoomPreview" Stretch="Uniform" MaxWidth="220" MaxHeight="220"/>
+      </Border>
+
       <TextBox x:Name="TxtCustomThemeJson" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"
                Height="140" Margin="0,10,0,0" Background="#1A1A1A" Foreground="White" TextChanged="TxtCustomThemeJson_TextChanged"/>
       <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
@@ -40,6 +49,25 @@
       <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,8,0,0">
         <StackPanel x:Name="CustomThemePickerPanel" Orientation="Horizontal"/>
       </ScrollViewer>
+
+      <!-- 🔗 分享码：当前编辑框里这份 JSON 校验通过才能生成，压成一段带识别前缀的纯文本，
+           聊天框里发一行字就行，不用像导出文件那样对方还得找地方存；导入是反过来，从剪贴板读一段
+           分享码解出 JSON 塞回编辑框，见 BtnCopyShareCode_Click / BtnImportShareCode_Click -->
+      <TextBlock Text="🔗 主题分享码（复制/粘贴一段文字分享，不用发文件）" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,18,0,0" TextWrapping="Wrap"/>
+      <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+        <Button Content="复制分享码" Click="BtnCopyShareCode_Click" Margin="0,0,8,0"/>
+        <Button Content="粘贴分享码导入" Click="BtnImportShareCode_Click"/>
+      </StackPanel>
+      <TextBlock x:Name="TxtShareCodeStatus" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"/>
+
+      <!-- 导入 / 导出成文件——系统的文件选择器，能存到手机任意位置或者从任意位置读，发给别人/收别人
+           发来的文件都是走这条路，见 BtnExportFile_Click / BtnImportFile_Click -->
+      <TextBlock Text="导入 / 导出成文件" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,18,0,0"/>
+      <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+        <Button Content="📤 导出到文件" Click="BtnExportFile_Click" Margin="0,0,8,0"/>
+        <Button Content="📥 从文件导入" Click="BtnImportFile_Click"/>
+      </StackPanel>
+      <TextBlock x:Name="TxtFileIoStatus" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"/>
     </StackPanel>
   </ScrollViewer>
 </Page>
