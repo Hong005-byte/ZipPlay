@@ -1,6 +1,7 @@
 using System.Linq;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.UI.Xaml.Navigation;
 using Windows.UI;
 using PixelLyric8BitFix;
 
@@ -56,6 +57,24 @@ public sealed partial class CustomThemePage : Page
     {
         if (Frame.CanGoBack) Frame.GoBack();
     }
+
+    // 从图标画板点"插入到编辑框"回来的时候，结果放在 IconPainterPage.PendingResultJson 这个静态
+    // 字段里（Frame 导航本身没有内建的返回值机制，见 IconPainterPage 顶部注释）。这个页面本身是
+    // NavigationCacheMode.Required 缓存的单一实例，构造函数只在第一次创建时跑一遍，所以"回到这个
+    // 页面"这件事必须靠 OnNavigatedTo（每次真的导航过来都会触发，不管是不是缓存的实例）来接，用完
+    // 立刻清空那个静态字段，不然下次不是从画板回来、只是普通导航过来也会被错误地当成"有新结果"
+    protected override void OnNavigatedTo(NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        if (IconPainterPage.PendingResultJson is { } json)
+        {
+            IconPainterPage.PendingResultJson = null;
+            TxtCustomThemeJson.Text = json; // 触发 TxtCustomThemeJson_TextChanged -> UpdatePreview()
+        }
+    }
+
+    private void BtnOpenIconPainter_Click(object sender, RoutedEventArgs e) =>
+        Frame.Navigate(typeof(IconPainterPage), TxtCustomThemeJson.Text);
 
     // ── 实时预览 ──────────────────────────────────────────────────────────────
 

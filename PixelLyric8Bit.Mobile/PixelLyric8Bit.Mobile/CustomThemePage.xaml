@@ -35,6 +35,7 @@
         <Button Content="填入示例" Click="BtnFillExampleTheme_Click" Margin="0,0,8,0"/>
         <Button Content="删除当前选中" Click="BtnDeleteCustomTheme_Click"/>
       </StackPanel>
+      <Button Content="🖌️ 打开图标画板" Click="BtnOpenIconPainter_Click" Margin="0,8,0,0" HorizontalAlignment="Left"/>
       <TextBlock x:Name="TxtCustomThemeError" FontFamily="Consolas" Foreground="#FF8080" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"/>
       <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,8,0,0">
         <StackPanel x:Name="CustomThemePickerPanel" Orientation="Horizontal"/>

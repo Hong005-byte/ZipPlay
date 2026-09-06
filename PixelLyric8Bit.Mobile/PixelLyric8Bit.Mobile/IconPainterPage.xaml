@@ -1,0 +1,54 @@
+<Page x:Class="PixelLyric8Bit.Mobile.IconPainterPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:local="using:PixelLyric8Bit.Mobile"
+      Background="#0D0D0D">
+
+  <!-- 🖌️ 图标画板——点格子画图标代替手写字符网格，见 IconPainterPage.xaml.cs 顶部说明 -->
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Padding="24">
+      <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
+        <Button Content="‹ 返回" Click="BtnBack_Click" Margin="0,0,12,0"/>
+        <TextBlock Text="🖌️ 图标画板" FontFamily="Consolas" Foreground="White" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
+      </StackPanel>
+
+      <TextBlock x:Name="TxtSizeHint" Text="8 行 x 8 列" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"/>
+
+      <!-- 调色板：点一个色块选中当前要画的颜色，再点格子涂上去；橡皮擦是特殊的"颜色"（'.'，透明） -->
+      <TextBlock Text="调色板（点选中，再去下面点格子涂色）" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,14,0,0"/>
+      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,6,0,0">
+        <StackPanel x:Name="PalettePanel" Orientation="Horizontal"/>
+      </ScrollViewer>
+      <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
+        <TextBox x:Name="TxtNewColorHex" PlaceholderText="#RRGGBB" Width="140" FontFamily="Consolas" Background="#1A1A1A" Foreground="White" Margin="0,0,8,0"/>
+        <Button Content="+ 加一种颜色" Click="BtnAddColor_Click"/>
+      </StackPanel>
+      <TextBlock x:Name="TxtPaletteError" FontFamily="Consolas" Foreground="#FF8080" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"/>
+
+      <!-- 画布：格子够多的话两个方向都能滚，不会把外层页面撑变形 -->
+      <TextBlock Text="画布（点格子涂色）" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,14,0,0"/>
+      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" MaxHeight="420" Margin="0,6,0,0"
+                    Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1">
+        <Grid x:Name="CanvasGrid" Margin="4"/>
+      </ScrollViewer>
+
+      <!-- 帧列表（逐帧动画）：只画 1 帧就是普通静态图标，2 帧以上"插入到编辑框"会生成 icon.frames -->
+      <TextBlock x:Name="TxtFrameLabel" Text="帧：1 / 1" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,14,0,0"/>
+      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,6,0,0">
+        <StackPanel x:Name="FrameStripPanel" Orientation="Horizontal"/>
+      </ScrollViewer>
+      <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+        <Button Content="➕ 新增帧" Click="BtnAddFrame_Click" Margin="0,0,8,0"/>
+        <Button Content="📋 复制当前帧" Click="BtnDuplicateFrame_Click" Margin="0,0,8,0"/>
+        <Button Content="🗑 删除当前帧" Click="BtnDeleteFrame_Click"/>
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" Margin="0,10,0,0" VerticalAlignment="Center">
+        <TextBlock Text="每帧播放（秒）：" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+        <TextBox x:Name="TxtFrameDuration" Text="0.25" Width="70" FontFamily="Consolas" Background="#1A1A1A" Foreground="White"/>
+      </StackPanel>
+
+      <Button Content="插入到编辑框" Click="BtnInsert_Click" Margin="0,18,0,0" HorizontalAlignment="Left"/>
+      <TextBlock x:Name="TxtInsertResult" FontFamily="Consolas" Foreground="#FF8080" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"/>
+    </StackPanel>
+  </ScrollViewer>
+</Page>
