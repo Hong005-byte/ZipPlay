@@ -165,7 +165,23 @@ PixelLyric8Bit.Core/                 纯逻辑共享库（net8.0，不带 -windo
                                      的 Android（Uno Platform）版本复用，两边共用同一份算法，不用分别维护两套。
 ├── LrcParser.cs                  LRC 文本解析/取最后时间戳，抓词校验和主窗口歌词解析共用同一份逻辑
 ├── KaraokeTiming.cs              卡拉OK扫光"唱到第几个字"的估算逻辑，纯函数
+├── PlaybackPositionEstimator.cs  "锚点位置 + 锚点时间 + 此刻时间 -> 插值算出此刻播放到哪了"这段纯数学，
+                                     从桌面版 MainWindow.xaml.cs 的 SmoothTimer_Tick 抄出来单独成函数；目前
+                                     PixelLyric8Bit.Mobile 的 FloatingOverlayService 用它按 MediaController
+                                     推过来的播放状态插值，不用每次画面刷新都再问系统一次；桌面版自己那份还是
+                                     内联在 MainWindow.xaml.cs 里，没有回头改成调用这个共享版本（行为完全一样，
+                                     只是没必要为了"复用"去动一段已经稳定跑了很久、没出过问题的代码）
 ├── AudioVisualizerMath.cs        AudioVisualizer 里不碰音频硬件的纯数学部分（幅度压缩/区间平均/冲击检测）
+├── MobileSkinPalette.cs          Mobile 悬浮窗用的精简皮肤表：桌面版 21 套内置皮肤（PlayerSkin 除了
+                                     Custom）全部有对应条目，只搬"配色"这一层（直接抄桌面版 SkinTheme.cs
+                                     对应皮肤的 LyricBoxBg/Accent/Lyric 色值，不是配的新颜色）——像素图标见
+                                     MobileSkinIcon.cs，专属动画（转速/闪光/跳动这些）还没有，那套完整皮肤
+                                     系统留到以后真要做的时候。还带了 FromCustomTheme，把一份客制化主题的
+                                     colors 也转成同一种精简皮肤，内置的跟自定义的走的是同一套渲染路径
+├── MobileSkinIcon.cs             Mobile 悬浮窗用的精简像素图标表——桌面版 21 套内置皮肤（除了 Custom）的
+                                     Mini 图标全部有对应条目，图形数据（字符网格 + 调色板）直接抄桌面版
+                                     PixelArt.cs 对应皮肤的 Create*Icon() 方法，保证图标形状跟桌面版一样；
+                                     跟 MobileSkinPalette 是两张独立的表，皮肤 Id 是两边对齐的唯一线索
 ├── AchievementCalculator.cs      8 个成就（含限定皮肤解锁条件）的纯计算逻辑
 ├── ListeningStats.cs             听歌统计的数据模型（按天记录时长/曲目）
 ├── ListeningStatsAggregator.cs   听歌统计的纯计算部分：总时长/活跃天数/连续天数/热门艺人榜/热门歌曲榜
@@ -180,20 +196,63 @@ PixelLyric8Bit.Core/                 纯逻辑共享库（net8.0，不带 -windo
 ├── CustomThemeRemixer.cs / CustomThemeShareCode.cs   混搭逻辑 / 主题"分享码"（JSON ⇄ 带识别前缀的 Base64 纯文本）
 ├── PixelIconEditor.cs            画板的纯逻辑：网格状态 ⇄ CustomThemeIcon JSON 互转（含桶装填充/图片导入量化），
                                      颜色也是 RgbaColor；点格子画图标这个交互本身还在 WPF 那边的 IconPainterWindow
-└── LyricsFetcher.cs              多引擎并发抓词（LRCLIB / 网易云 / QQ音乐 / 酷狗）——HttpClient 是构造函数传进来的，
-                                     跟怎么创建这个 HttpClient（桌面版 NetworkHelpers 强制走 IPv4 那个坑）完全解耦，
-                                     Android 端已经验证过真的能联网抓到真实歌词，见 PixelLyric8Bit.Mobile
+├── LyricsFetcher.cs              多引擎并发抓词（LRCLIB / 网易云 / QQ音乐 / 酷狗）——HttpClient 是构造函数传进来的，
+│                                    跟怎么创建这个 HttpClient（桌面版 NetworkHelpers 强制走 IPv4 那个坑）完全解耦，
+│                                    Android 端已经验证过真的能联网抓到真实歌词，见 PixelLyric8Bit.Mobile
+├── LyricsCacheStore.cs           歌词本地缓存（原文 + 翻译，按 trackId 哈希成文件名）——逻辑照抄桌面版
+│                                    PixelLyric8BitFix/LyricsCache.cs，唯一区别是缓存目录是构造函数参数不是写死
+│                                    的 ApplyData 路径，桌面版用 Environment.SpecialFolder，Android 那边目录得从
+│                                    Context.CacheDir 问系统要，两边拿目录的方式不一样，索性做成参数两边共用
+├── LyricsTranslator.cs           双语歌词翻译——逻辑照抄桌面版 PixelLyric8BitFix/LiveTranslator.cs（同一套分批 +
+│                                    递归拆分兜底、同一个 Google 翻译网页版接口），类名不叫 LiveTranslator 是因为
+│                                    两边在同一命名空间下、桌面项目又直接引用 Core，撞名会有二义性编译错误，
+│                                    见该文件顶部注释
+├── ListeningStatsFileStore.cs    听歌统计的磁盘存取——逻辑照抄桌面版 PixelLyric8BitFix/ListeningStatsStore.cs
+│                                    （整份 ListeningStats 存成单个 JSON 文件），文件路径也是构造函数参数，
+│                                    跟 LyricsCacheStore/LyricsTranslator 同样的"平台专属部分做成参数"套路；
+│                                    类名不叫 ListeningStatsStore 同样是撞名会有二义性编译错误
+├── MobileAchievementUnlockTracker.cs  给"成就解锁那一刻弹庆祝"记一份"已经庆祝过的成就 id"——逻辑照抄
+│                                    桌面版 PixelLyric8BitFix/AchievementUnlockTracker.cs，同样的文件路径参数化 +
+│                                    改名套路
+├── MobileCustomThemeStore.cs     客制化主题的磁盘存取（一个主题一个 JSON 文件，最多 10 个）——逻辑照抄
+│                                    桌面版 PixelLyric8BitFix/CustomThemeStore.cs，同样的目录参数化 + 改名套路
+│                                    （MobileCustomThemeEntry 对应桌面版的 CustomThemeEntry）。校验用的是
+│                                    CustomThemeValidator（本来就在 Core，两边完全同一份规则/报错文案）
+└── MobileCustomThemeExample.cs   自定义主题的示例 JSON——跟桌面版 PixelLyric8BitFix/CustomThemeExample.cs
+                                     是同一份文本（Sunset 皮肤当例子），保证两边"照着示例改"看到的是同一份
 
 PixelLyric8BitFix.Tests/
-└── *Tests.cs                     LrcParser / KaraokeTiming / LyricsFetcher.IsDurationPlausible / AudioVisualizerMath / AchievementCalculator /
-                                     ListeningStatsAggregator / ListeningHeatmap / ListeningHighlightsBuilder / CustomThemeShareCode /
-                                     CustomThemeRandomizer / CustomThemeRemixer / PixelIconEditor 等的单元测试（xUnit，覆盖
-                                     PixelLyric8BitFix 和 PixelLyric8Bit.Core 两边的纯逻辑）
+└── *Tests.cs                     LrcParser / KaraokeTiming / PlaybackPositionEstimator / MobileSkinCatalog /
+                                     LyricsCacheStore / LyricsTranslator（用假 HttpMessageHandler 模拟 Google 翻译
+                                     接口响应，不打真实网络）/ ListeningStatsFileStore / MobileAchievementUnlockTracker /
+                                     MobileCustomThemeStore / LyricsFetcher.IsDurationPlausible / AudioVisualizerMath /
+                                     AchievementCalculator / ListeningStatsAggregator / ListeningHeatmap /
+                                     ListeningHighlightsBuilder / CustomThemeShareCode / CustomThemeRandomizer /
+                                     CustomThemeRemixer / PixelIconEditor 等的单元测试（xUnit，覆盖 PixelLyric8BitFix
+                                     和 PixelLyric8Bit.Core 两边的纯逻辑）
 
 PixelLyric8Bit.Mobile/                探索中的 Android 版本（Uno Platform，net10.0-android），跟桌面版共用
-                                     PixelLyric8Bit.Core 那份"大脑"。目前是验证阶段的骨架，不是完整产品：
-├── MainPage.xaml(.cs)             悬浮歌词骨架页：用 Core 的 LrcParser/LyricsFetcher 做真实的联网抓词 + 按
-                                     系统媒体会话播放位置同步显示，还带一块权限状态调试面板
+                                     PixelLyric8Bit.Core 那份"大脑"。核心链路（真实抓词/事件驱动同步/皮肤/
+                                     歌词功能/统计成就/自定义主题）都已经真机验证过，精简版也补上了内置皮肤
+                                     像素图标 + 客制化主题 icon.frames 逐帧动画（真机验证过每 frameDuration
+                                     切一帧）；多层装饰（layers）/点击切姿势（icon.actions）/分享卡片这些
+                                     视觉细节桌面版有、这边还没有，见各文件自己的说明：
+├── MainPage.xaml(.cs)             权限状态调试面板 + 悬浮窗设置 + 听歌统计/成就墙 + 自定义主题：通知使用权/
+                                     悬浮窗权限开没开、悬浮窗现在显不显示，皮肤选择器（MobileSkinCatalog，
+                                     21 套内置皮肤 + 客制化主题，尊贵皇冠风限定皮肤没点亮全部 7 个常规成就
+                                     会显示成锁住、点不了，跟桌面版是同一条规则）、卡拉OK/双语歌词开关、
+                                     同步偏移 ±50ms 微调（都存到 MobileSettingsStore），
+                                     总时长/活跃天数/连续天数 + 8 个成就 checklist（定时器每 3 秒重新读一次
+                                     stats.json——统计数据是 FloatingOverlayService 在悬浮窗那边攒的，这个
+                                     页面跟悬浮窗是不同组件，只有磁盘文件是共同点，见该文件里的
+                                     _statsRefreshTimer），以及一个自定义主题编辑区（粘贴/编辑 JSON，格式
+                                     跟桌面版通用，MobileCustomThemeStore 存最多 10 个，选中的那个会跟内置
+                                     皮肤一样立刻套到悬浮窗——像素图标/icon.frames 逐帧动画悬浮窗那边已经画
+                                     得出来了（见 FloatingOverlayService），多层装饰（layers）还没有，见
+                                     MobileSkinCatalog.FromCustomTheme）。整页包了
+                                     一层 ScrollViewer，设置项多了不会被裁掉。自己的歌词区还是写死的示例
+                                     LRC 循环播放（用 Core 的 LrcParser）——真正联网抓真实歌词、按系统媒体
+                                     会话播放位置同步显示的是下面的 FloatingOverlayService，不是这个页面
 ├── PixelIconRenderer.cs           把字符网格 + RgbaColor 调色板画成 WriteableBitmap，给 Uno 的 Image 用——
                                      跟桌面版 PixelArt.cs 是同一套"数据"、不同的渲染代码（两边 WriteableBitmap
                                      类型来自不同图形栈，没法共享渲染这一步，能共享的是数据）
@@ -201,8 +260,31 @@ PixelLyric8Bit.Mobile/                探索中的 Android 版本（Uno Platform
     ├── MediaNotificationListenerService.cs  注册成通知监听服务换取 MediaSessionManager 访问权——
     │                                          桌面版 Windows SMTC 在 Android 上的对应物，读"现在系统里
     │                                          随便哪个 App 正在播放什么"，真机验证过读到真实 Spotify 歌曲
-    └── FloatingOverlayService.cs      前台 Service + IWindowManager 加一个原生 View 的真悬浮窗（不是 Uno
-                                          渲染的窗口），真机验证过浮在桌面/别的 App 上层，还接了真实抓词
+    ├── MobilePixelIconRenderer.cs      把字符网格 + RgbaColor 调色板画成 Android.Graphics.Bitmap，给悬浮窗的
+    │                                     ImageView 用——跟 Uno 那边的 PixelIconRenderer.cs 是同一个数据源、
+    │                                     不同的渲染代码。RenderFrames 是逐帧版本，挨个画出 icon.frames 每一帧，
+    │                                     循环播放归调用方（FloatingOverlayService 的 IconFrameTick）管
+    ├── FloatingOverlayService.cs      前台 Service + IWindowManager 加一个原生 View 的真悬浮窗（不是 Uno
+    │                                     渲染的窗口），真机验证过浮在桌面/别的 App 上层。数据链路：事件驱动
+    │                                     订阅播放状态（不是轮询）+ LyricsCacheStore 本地缓存 + LyricsFetcher
+    │                                     联网抓词 + LyricsTranslator 双语翻译；显示这块：MobileSkinPalette
+    │                                     精简皮肤（配色 + 边框呼吸动效，内置皮肤或者选中的客制化主题——
+    │                                     ApplySkin 认 "custom:文件名" 前缀，查不到就落回默认皮肤，真机
+    │                                     验证过保存/选中/渲染/删除整条链路）+ 像素图标（内置皮肤用
+    │                                     MobileSkinIconCatalog，客制化主题用 icon.rows/icon.frames，>1 帧
+    │                                     真机验证过按 frameDuration 循环切帧，见 IconFrameTick）+
+    │                                     SpannableString 卡拉OK 两级上色 + 同步偏移，这几项设置悬浮窗开着的
+    │                                     时候改也会立刻生效；这个 Service
+    │                                     还顺手按真实播放时长攒听歌统计（ListeningStatsFileStore 存盘，
+    │                                     跟桌面版 MainWindow.ListeningStats.cs 同一个攒法：满 10 秒才 flush、
+    │                                     换歌/换会话/关闭悬浮窗都会补 flush 一次零头），每次真的写了新数据
+    │                                     顺手评估一遍 8 个成就，刚解锁的用系统 Toast 弹一下（8 个成就门槛都
+    │                                     要累计听满至少 1 小时，真机验证的是攒时长/存盘/读回这条链路，
+    │                                     没有真等到解锁弹 Toast 那一刻）
+    └── MobileSettingsStore.cs         本地设置读写（选了哪套皮肤/同步偏移/卡拉OK 开关/双语开关）——桌面版
+                                          对应的是 AppSettings.cs，这边用 Android 标准的 SharedPreferences，
+                                          不用自己另外搭一套文件读写；MainPage（设置页）和 FloatingOverlayService
+                                          （悬浮窗，读设置 + 订阅变化）两边共用同一份
 
 installer/
 └── ZipPlay.iss                   Inno Setup 打包脚本

@@ -1,21 +1,27 @@
 using System.Diagnostics;
+using Microsoft.UI.Xaml.Media;
+using Windows.UI;
 using PixelLyric8BitFix;
 
 namespace PixelLyric8Bit.Mobile;
 
 /// <summary>
-/// 悬浮歌词界面骨架——第一步做的是"歌词按时间戳切换"这条链路（见 Timer_Tick），用的是
-/// PixelLyric8Bit.Core 里跟桌面版同一份 <see cref="PixelLyric8BitFix.LrcParser"/>。
+/// 悬浮歌词界面骨架——这个页面本身还是用写死的示例 LRC 循环播放（见 Timer_Tick），用的是
+/// PixelLyric8Bit.Core 里跟桌面版同一份 <see cref="PixelLyric8BitFix.LrcParser"/>；这里只是个
+/// 权限状态验证面板，不是真正显示歌词的地方。
 ///
-/// 这一步在第一版基础上加了两块 Android 专属能力的验证面板（对应的实现在 Platforms/Android/
-/// 下，`#if __ANDROID__` 隔开，非 Android 平台编译时这些代码直接被预处理器去掉）：
+/// 页面上是两块 Android 专属能力的验证区（对应的实现在 Platforms/Android/ 下，`#if __ANDROID__`
+/// 隔开，非 Android 平台编译时这些代码直接被预处理器去掉）：
 /// - 系统媒体会话读取（MediaNotificationListenerService）——桌面版 SMTC 的对应物，读"现在系统里
 ///   随便哪个 App 正在播放什么"，需要用户去系统设置手动开一次"通知使用权"。
 /// - 真正的悬浮窗（FloatingOverlayService）——一个前台 Service 用 IWindowManager 加一个能拖动的
 ///   原生 View，不是 Uno 渲染的页面；需要用户手动开一次"显示在其他应用上层"权限。
 ///
-/// 两块目前还是各自独立验证（状态区显示各自的信息），还没有把"读到的真实播放信息"接进悬浮窗
-/// 里显示——那是下一步：两条链路都验证通了，才有把它们接在一起的意义。
+/// 这两块的"读到的真实播放信息接进悬浮窗里显示"这一步已经在 FloatingOverlayService 里做完了——
+/// 订阅媒体会话的播放状态/元数据变化事件、联网抓真实歌词、按 PlaybackPositionEstimator 插值出的
+/// 播放位置显示对应那一行，见该文件顶部注释。这个页面（MainPage）本身显示的还是假数据，纯粹是
+/// 因为它只是个"两个特殊权限开没开、悬浮窗要不要显示"的开关面板，跟悬浮窗是两个独立的 UI，没有
+/// 必要接同一份真实歌词——除非以后想在 App 主界面里也做一个跟悬浮窗同步的歌词视图。
 /// </summary>
 public sealed partial class MainPage : Page
 {
@@ -69,7 +75,274 @@ public sealed partial class MainPage : Page
 
         RefreshMediaSessionStatus();
         RefreshOverlayStatus();
+        BuildSkinPicker();
+        BuildLyricFeatureSettings();
+        BuildListeningStatsSection();
+        BuildCustomThemeSection();
     }
+
+    // ── 悬浮窗皮肤（精简版：只挑配色，见 MobileSkinPalette.cs） ───────────────────────
+
+    private void BuildSkinPicker()
+    {
+#if __ANDROID__
+        string selectedId = Droid.MobileSettingsStore.SelectedSkinId;
+
+        // 尊贵皇冠风是限定皮肤——桌面版要先在成就墙点亮全部 7 个常规听歌成就才解锁，这是这套皮肤
+        // 唯一的获取方式，见 AchievementCalculator.CrownSkin 的注释。Mobile 这边阶段 4 已经在攒同一份
+        // 听歌统计了，理应遵守同一条规则，不能让手机这边随便点一下就绕过桌面版特意设计的"很难拿到"
+        var stats = new ListeningStatsFileStore(GetStatsFilePath()).Load();
+        var (crownUnlocked, crownRemaining) = AchievementCalculator.EvaluateCrownLock(stats);
+
+        foreach (var palette in MobileSkinCatalog.All)
+        {
+            bool locked = palette.Id == "Crown" && !crownUnlocked;
+
+            var button = new Button
+            {
+                Content = locked ? $"🔒 {palette.DisplayName}（还差 {crownRemaining} 个成就）" : palette.DisplayName,
+                Margin = new Thickness(0, 0, 8, 0),
+                Background = new SolidColorBrush(locked ? Color.FromArgb(255, 0x33, 0x33, 0x33) : ToUiColor(palette.Accent)),
+                Foreground = new SolidColorBrush(locked ? Color.FromArgb(255, 0x88, 0x88, 0x88) : ToUiColor(palette.Text)),
+                IsEnabled = !locked,
+            };
+            string id = palette.Id; // 闭包捕获循环变量的经典坑，显式拷贝一份，不然点哪个按钮都会选到最后一个皮肤
+            if (!locked) button.Click += (_, _) => SelectSkin(id);
+            SkinPickerPanel.Children.Add(button);
+        }
+        UpdateCurrentSkinLabel(selectedId);
+#else
+        TxtCurrentSkin.Text = "悬浮窗皮肤：这个功能只在 Android 上有意义";
+#endif
+    }
+
+    private void SelectSkin(string skinId)
+    {
+#if __ANDROID__
+        Droid.MobileSettingsStore.SelectedSkinId = skinId; // 悬浮窗（哪怕已经开着）会订阅到这次变化自己换色，见 FloatingOverlayService
+        UpdateCurrentSkinLabel(skinId);
+#endif
+    }
+
+    private void UpdateCurrentSkinLabel(string skinId)
+    {
+#if __ANDROID__
+        // "custom:文件名" 得去自定义主题存档里查名字，内置表里根本没有这个 id——Find 兜底回第一套
+        // 皮肤的名字会显示成错的（比如明明选的是自定义主题，标签却显示"简约风"）
+        if (skinId.StartsWith(MobileSkinCatalog.CustomThemePrefix, StringComparison.Ordinal))
+        {
+            string fileName = skinId[MobileSkinCatalog.CustomThemePrefix.Length..];
+            var theme = GetCustomThemeStore().Load(fileName);
+            TxtCurrentSkin.Text = $"悬浮窗皮肤：{(theme?.Name ?? "（自定义主题，已被删除）")}";
+            return;
+        }
+#endif
+        var palette = MobileSkinCatalog.Find(skinId);
+        TxtCurrentSkin.Text = $"悬浮窗皮肤：{palette.DisplayName}";
+    }
+
+    private static Color ToUiColor(RgbaColor c) => Color.FromArgb(c.A, c.R, c.G, c.B);
+
+    // ── 自定义主题（精简版：只吃 JSON，见 MainPage.xaml 顶部说明） ────────────────────────
+    // 存取用的是跟 FloatingOverlayService 完全同一份 MobileCustomThemeStore、同一个磁盘目录
+    // （FilesDir/custom_themes）——两边各自 new 一个实例出来，不是共享同一个对象引用（本来就是
+    // 不同组件），但读写的是同一批文件，这就够了。
+
+#if __ANDROID__
+    private static MobileCustomThemeStore GetCustomThemeStore() => new(
+        System.IO.Path.Combine(global::Android.App.Application.Context.FilesDir!.AbsolutePath, "custom_themes"));
+#endif
+
+    private void BuildCustomThemeSection()
+    {
+#if __ANDROID__
+        TxtCustomThemeJson.Text = MobileCustomThemeExample.Json; // 先给一份能直接保存成功的示例，照着改比空白框容易上手
+        RefreshCustomThemeList();
+#else
+        TxtCustomThemeError.Text = "自定义主题：这个功能只在 Android 上有意义";
+#endif
+    }
+
+#if __ANDROID__
+    private void RefreshCustomThemeList()
+    {
+        CustomThemePickerPanel.Children.Clear();
+        foreach (var entry in GetCustomThemeStore().ListAll())
+        {
+            var palette = MobileSkinCatalog.FromCustomTheme(entry.Theme);
+            var button = new Button
+            {
+                Content = palette.DisplayName,
+                Margin = new Thickness(0, 0, 8, 0),
+                Background = new SolidColorBrush(ToUiColor(palette.Accent)),
+                Foreground = new SolidColorBrush(ToUiColor(palette.Text)),
+            };
+            string skinId = MobileSkinCatalog.CustomThemePrefix + entry.FileName; // 闭包捕获，见 BuildSkinPicker 同样的注释
+            button.Click += (_, _) => SelectSkin(skinId);
+            CustomThemePickerPanel.Children.Add(button);
+        }
+    }
+#endif
+
+    private void BtnSaveCustomTheme_Click(object sender, RoutedEventArgs e)
+    {
+#if __ANDROID__
+        var (theme, errors) = CustomThemeValidator.ParseAndValidate(TxtCustomThemeJson.Text);
+        if (errors.Count > 0)
+        {
+            TxtCustomThemeError.Text = string.Join("\n", errors);
+            return;
+        }
+
+        var (success, error, fileName) = GetCustomThemeStore().Save(theme!);
+        if (!success)
+        {
+            TxtCustomThemeError.Text = error;
+            return;
+        }
+
+        TxtCustomThemeError.Text = "";
+        RefreshCustomThemeList();
+        SelectSkin(MobileSkinCatalog.CustomThemePrefix + fileName); // 存完直接切过去用，看得到效果，不用再手动点一下选它
+#endif
+    }
+
+    private void BtnFillExampleTheme_Click(object sender, RoutedEventArgs e)
+    {
+#if __ANDROID__
+        TxtCustomThemeJson.Text = MobileCustomThemeExample.Json;
+        TxtCustomThemeError.Text = "";
+#endif
+    }
+
+    private void BtnDeleteCustomTheme_Click(object sender, RoutedEventArgs e)
+    {
+#if __ANDROID__
+        string skinId = Droid.MobileSettingsStore.SelectedSkinId;
+        if (!skinId.StartsWith(MobileSkinCatalog.CustomThemePrefix, StringComparison.Ordinal))
+        {
+            TxtCustomThemeError.Text = "当前选中的是内置皮肤，不是自定义主题——先在下面选一个自定义主题再删。";
+            return;
+        }
+
+        string fileName = skinId[MobileSkinCatalog.CustomThemePrefix.Length..];
+        GetCustomThemeStore().Delete(fileName);
+        TxtCustomThemeError.Text = "";
+        RefreshCustomThemeList();
+        SelectSkin(MobileSkinCatalog.DefaultSkinId); // 选中的那个没了，退回默认皮肤，不留一个指向空文件的选择
+#endif
+    }
+
+    // ── 歌词功能设置：卡拉OK 逐字上色 / 双语歌词 / 同步偏移 ─────────────────────────────
+    // 三个都是悬浮窗（FloatingOverlayService）实际在用的设置，这个页面只是个开关面板——改一下
+    // MobileSettingsStore，悬浮窗那边订阅了变更通知会自己跟着生效，这边不用（也没法）直接摸悬浮窗
+    // 里的任何状态，两个组件是完全解耦的，见 FloatingOverlayService.RefreshSettingsFromStore。
+
+    private void BuildLyricFeatureSettings()
+    {
+#if __ANDROID__
+        ChkKaraoke.IsChecked = Droid.MobileSettingsStore.KaraokeEnabled;
+        ChkBilingual.IsChecked = Droid.MobileSettingsStore.BilingualEnabled;
+        UpdateSyncOffsetLabel(Droid.MobileSettingsStore.SyncOffsetMs);
+#else
+        ChkKaraoke.IsEnabled = false;
+        ChkBilingual.IsEnabled = false;
+        TxtSyncOffset.Text = "歌词同步偏移：这个功能只在 Android 上有意义";
+#endif
+    }
+
+    private void ChkKaraoke_Toggled(object sender, RoutedEventArgs e)
+    {
+#if __ANDROID__
+        Droid.MobileSettingsStore.KaraokeEnabled = ChkKaraoke.IsChecked == true;
+#endif
+    }
+
+    private void ChkBilingual_Toggled(object sender, RoutedEventArgs e)
+    {
+#if __ANDROID__
+        Droid.MobileSettingsStore.BilingualEnabled = ChkBilingual.IsChecked == true;
+#endif
+    }
+
+    private void BtnOffsetMinus_Click(object sender, RoutedEventArgs e) => AdjustSyncOffset(-50);
+
+    private void BtnOffsetPlus_Click(object sender, RoutedEventArgs e) => AdjustSyncOffset(50);
+
+    private void BtnOffsetReset_Click(object sender, RoutedEventArgs e) => AdjustSyncOffset(0, absolute: true);
+
+    private void AdjustSyncOffset(int deltaOrValue, bool absolute = false)
+    {
+#if __ANDROID__
+        int newValue = absolute ? deltaOrValue : Droid.MobileSettingsStore.SyncOffsetMs + deltaOrValue;
+        Droid.MobileSettingsStore.SyncOffsetMs = newValue;
+        UpdateSyncOffsetLabel(newValue);
+#endif
+    }
+
+    private void UpdateSyncOffsetLabel(int offsetMs) => TxtSyncOffset.Text = $"歌词同步偏移：{offsetMs}ms";
+
+    // ── 听歌统计 + 成就墙（精简版：几个核心数字 + 一份 checklist，见 MainPage.xaml 顶部说明） ──────
+    // 统计数据是 FloatingOverlayService 在悬浮窗那边攒、存盘的，这个页面完全不采集——两边是不同的
+    // 组件（Service vs. Page），没有共享内存状态，只有同一份磁盘文件是两边的共同点，所以这里用定时器
+    // 隔几秒重新读一次文件，不是订阅什么变更通知（跟皮肤那种"同进程内 SharedPreferences 监听"不是
+    // 一回事，读文件本身足够便宜，没必要为了这个再多做一层通知机制）。
+
+    private DispatcherTimer? _statsRefreshTimer;
+
+    private void BuildListeningStatsSection()
+    {
+#if __ANDROID__
+        _statsRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _statsRefreshTimer.Tick += (_, _) => RefreshListeningStats();
+        _statsRefreshTimer.Start();
+        RefreshListeningStats();
+#else
+        TxtListeningSummary.Text = "听歌统计：这个功能只在 Android 上有意义";
+#endif
+    }
+
+#if __ANDROID__
+    private static string GetStatsFilePath() =>
+        System.IO.Path.Combine(global::Android.App.Application.Context.FilesDir!.AbsolutePath, "stats.json");
+#endif
+
+    private void RefreshListeningStats()
+    {
+#if __ANDROID__
+        var stats = new ListeningStatsFileStore(GetStatsFilePath()).Load();
+
+        int totalSeconds = PixelLyric8BitFix.ListeningStatsAggregator.GetTotalSeconds(stats, DateOnly.MinValue, DateOnly.MaxValue);
+        int activeDays = PixelLyric8BitFix.ListeningStatsAggregator.GetActiveDayCount(stats, DateOnly.MinValue, DateOnly.MaxValue);
+        int longestStreak = PixelLyric8BitFix.ListeningStatsAggregator.GetLongestStreakDays(stats);
+
+        TxtListeningSummary.Text = totalSeconds > 0
+            ? $"听歌统计：总时长 {PixelLyric8BitFix.ListeningStatsAggregator.FormatDuration(totalSeconds)} · 活跃 {activeDays} 天 · 最长连续 {longestStreak} 天"
+            : "听歌统计：还没有数据（悬浮窗打开、真的在放歌的时候才会开始攒）";
+
+        BuildAchievementRows(stats);
+#endif
+    }
+
+#if __ANDROID__
+    private void BuildAchievementRows(PixelLyric8BitFix.ListeningStats stats)
+    {
+        AchievementsPanel.Children.Clear();
+        foreach (var progress in PixelLyric8BitFix.AchievementCalculator.Evaluate(stats))
+        {
+            var row = new TextBlock
+            {
+                Text = $"{(progress.Unlocked ? "✅" : "🔒")} {progress.Achievement.Icon} {progress.Achievement.Name}"
+                    + $" —— {progress.Achievement.Description}",
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 12,
+                Margin = new Thickness(0, 2, 0, 0),
+                Foreground = new SolidColorBrush(progress.Unlocked ? Color.FromArgb(255, 255, 255, 255) : Color.FromArgb(255, 0x55, 0x55, 0x55)),
+            };
+            AchievementsPanel.Children.Add(row);
+        }
+    }
+#endif
 
     private void Timer_Tick(object? sender, object e)
     {
