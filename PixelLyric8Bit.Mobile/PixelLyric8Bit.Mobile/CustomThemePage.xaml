@@ -14,8 +14,22 @@
       </StackPanel>
 
       <TextBlock Text="自定义主题（粘贴/编辑 JSON，格式跟桌面版通用）" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"/>
+
+      <!-- 实时预览——照着悬浮窗真实会画出来的样子来（背景/边框/图标含逐帧动画/文字色），不是桌面版
+           那张完整播放器卡片；JSON 一改（TxtCustomThemeJson_TextChanged）立刻重画，校验没过就隐藏
+           换成下面这行提示，不在这里报具体错误，具体错误还是走"校验并保存"那条路，见
+           CustomThemePage.xaml.cs 的 UpdatePreview 说明 -->
+      <TextBlock Text="实时预览" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,10,0,0"/>
+      <Border x:Name="PreviewCard" CornerRadius="14" BorderThickness="2" Padding="14,10" MinHeight="60" Margin="0,6,0,0" Visibility="Collapsed">
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+          <Image x:Name="PreviewIcon" Width="40" Height="40" Stretch="Uniform" Margin="0,0,10,0" VerticalAlignment="Center"/>
+          <TextBlock x:Name="PreviewText" Text="ZipPlay 预览歌词" FontFamily="Consolas" FontSize="14" TextWrapping="Wrap" VerticalAlignment="Center"/>
+        </StackPanel>
+      </Border>
+      <TextBlock x:Name="TxtPreviewHint" Text="预览：JSON 还没校验通过，改好格式会自动出现" FontFamily="Consolas" Foreground="#666666" FontSize="12" Margin="0,6,0,0" TextWrapping="Wrap"/>
+
       <TextBox x:Name="TxtCustomThemeJson" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"
-               Height="140" Margin="0,6,0,0" Background="#1A1A1A" Foreground="White"/>
+               Height="140" Margin="0,10,0,0" Background="#1A1A1A" Foreground="White" TextChanged="TxtCustomThemeJson_TextChanged"/>
       <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
         <Button Content="校验并保存" Click="BtnSaveCustomTheme_Click" Margin="0,0,8,0"/>
         <Button Content="填入示例" Click="BtnFillExampleTheme_Click" Margin="0,0,8,0"/>

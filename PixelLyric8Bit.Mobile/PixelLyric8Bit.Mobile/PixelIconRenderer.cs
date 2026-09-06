@@ -66,4 +66,19 @@ internal static class PixelIconRenderer
         bitmap.Invalidate();
         return bitmap;
     }
+
+    /// <summary>逐帧动画版本——CustomThemePage 的实时预览要看 icon.frames 的动画效果，跟 Android 端
+    /// FloatingOverlayService 用的 MobilePixelIconRenderer.RenderFrames 是同一个思路，只是这边画出来的
+    /// 是 Uno 的 WriteableBitmap 给 Image 控件用，不是 Android.Graphics.Bitmap 给原生 ImageView 用——
+    /// 两边图形栈不同，没法共享这一步，能共享的是数据（见类顶部注释）。循环播放归调用方
+    /// （CustomThemePage 的 PreviewFrameTick）自己管，这里只管"数据转位图"。</summary>
+    public static WriteableBitmap[] RenderFrames(IReadOnlyList<string[]> frames, IReadOnlyDictionary<char, RgbaColor> palette, int scale = 6)
+    {
+        var result = new WriteableBitmap[frames.Count];
+        for (int i = 0; i < frames.Count; i++)
+        {
+            result[i] = Render(frames[i], palette, scale);
+        }
+        return result;
+    }
 }

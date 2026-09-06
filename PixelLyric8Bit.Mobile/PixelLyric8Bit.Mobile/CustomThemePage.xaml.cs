@@ -1,4 +1,6 @@
+using System.Linq;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.UI;
 using PixelLyric8BitFix;
 
@@ -14,16 +16,36 @@ namespace PixelLyric8Bit.Mobile;
 /// （FilesDir/custom_themes）——两边各自 new 一个实例出来，不是共享同一个对象引用（本来就是
 /// 不同组件），但读写的是同一批文件，这就够了。NavigationCacheMode=Required——编辑到一半的 JSON
 /// 不该因为切去别的页面看一眼又切回来就被清空，缓存住这个页面实例正好保留这份没保存的草稿。
+///
+/// 实时预览（PreviewCard）：照着悬浮窗真实会画出来的样子来——背景/边框/图标（含逐帧动画）/文字色，
+/// 不是桌面版 CustomThemeWindow 那张完整播放器卡片，那边还有标题/歌手名两行、歌词框、多层装饰、
+/// 8 种内置动画（呼吸发光/摇摆/旋转……）这些精简版悬浮窗压根画不出来的东西，预览里硬做出来反而
+/// 会让人以为悬浮窗上也有——诚实地只预览悬浮窗真的会画的这几样。跟桌面版同一个交互套路：改一下
+/// JSON（TxtCustomThemeJson_TextChanged）立刻重画，校验没过就把预览换成一行提示，不在这里重复
+/// 报具体错误，那是"校验并保存"按钮的事，见 UpdatePreview。
 /// </summary>
 public sealed partial class CustomThemePage : Page
 {
+    // 预览的逐帧动画 tick——跟 FloatingOverlayService 的 IconFrameTick 是同一个"tick 累计时间、攒够
+    // 一帧的时长才切"思路，这边独立一份计时器，不跟真悬浮窗共用（本来就是两个不同的组件，预览这边
+    // 就算悬浮窗没开着也照样能看动画）
+    private const int PreviewFrameTickIntervalMs = 100;
+    private readonly DispatcherTimer _previewFrameTimer = new() { Interval = TimeSpan.FromMilliseconds(PreviewFrameTickIntervalMs) };
+    private WriteableBitmap[]? _previewFrames; // null 或者只有 1 张就是静态图标，tick 直接跳过
+    private double _previewFrameDurationSeconds;
+    private double _previewFrameElapsedMs;
+    private int _previewFrameIndex;
+
     public CustomThemePage()
     {
         this.InitializeComponent();
         this.NavigationCacheMode = NavigationCacheMode.Required;
 
+        _previewFrameTimer.Tick += (_, _) => PreviewFrameTick();
+        _previewFrameTimer.Start();
+
 #if __ANDROID__
-        TxtCustomThemeJson.Text = MobileCustomThemeExample.Json; // 先给一份能直接保存成功的示例，照着改比空白框容易上手
+        TxtCustomThemeJson.Text = MobileCustomThemeExample.Json; // 触发 TxtCustomThemeJson_TextChanged -> UpdatePreview()，先给一份能直接保存成功、看得到预览的示例，照着改比空白框容易上手
         RefreshCustomThemeList();
 #else
         TxtCustomThemeError.Text = "自定义主题：这个功能只在 Android 上有意义";
@@ -34,6 +56,126 @@ public sealed partial class CustomThemePage : Page
     {
         if (Frame.CanGoBack) Frame.GoBack();
     }
+
+    // ── 实时预览 ──────────────────────────────────────────────────────────────
+
+    private void TxtCustomThemeJson_TextChanged(object sender, TextChangedEventArgs e) => UpdatePreview();
+
+    // 每次改动 JSON 就现算一遍——跟"校验并保存"用的是同一套 CustomThemeValidator.ParseAndValidate，
+    // 只有整份 JSON 都过校验才会照着重画预览卡片，校验没过就留白换成提示（不在这里重复报错，具体
+    // 错误还是走 BtnSaveCustomTheme_Click 那条路），免得用户还没打完一个字段就被一堆报错轰炸
+    private void UpdatePreview()
+    {
+#if __ANDROID__
+        var (theme, errors) = CustomThemeValidator.ParseAndValidate(TxtCustomThemeJson.Text);
+        if (theme != null && errors.Count == 0)
+        {
+            try
+            {
+                ApplyPreviewTheme(theme);
+                PreviewCard.Visibility = Visibility.Visible;
+                TxtPreviewHint.Visibility = Visibility.Collapsed;
+                return;
+            }
+            catch
+            {
+                // 校验都过了理论上不该再炸，真出意外也只是预览留空，不影响正常编辑/保存
+            }
+        }
+#endif
+        ClearPreview();
+    }
+
+    private void ClearPreview()
+    {
+        PreviewCard.Visibility = Visibility.Collapsed;
+        TxtPreviewHint.Visibility = Visibility.Visible;
+        _previewFrames = null;
+    }
+
+#if __ANDROID__
+    // 把校验通过的 CustomTheme 套到预览卡片上——只画悬浮窗真的画得出来的这几样（背景/边框/图标/
+    // 文字色），见类顶部注释为什么不照抄桌面版 CustomThemeWindow 那张完整播放器卡片
+    private void ApplyPreviewTheme(CustomTheme theme)
+    {
+        var colors = theme.Colors!;
+        CustomThemeValidator.TryParseHexColor(colors.Accent!, out var accent);
+        CustomThemeValidator.TryParseHexColor(colors.Lyric!, out var lyric);
+
+        PreviewCard.Background = BuildBackgroundBrush(theme.Background!);
+        PreviewCard.BorderBrush = new SolidColorBrush(ToUiColor(accent));
+        PreviewText.Foreground = new SolidColorBrush(ToUiColor(lyric));
+        PreviewText.FontFamily = new FontFamily(string.IsNullOrWhiteSpace(theme.Font) ? "Consolas" : theme.Font);
+
+        var palette = CustomThemeValidator.BuildIconPalette(theme.Icon!);
+        _previewFrameIndex = 0;
+        _previewFrameElapsedMs = 0;
+
+        // 有 Frames 就只认 Frames（跟 FloatingOverlayService.ApplySkin 同一条规则），1 帧当静态图标，
+        // >1 帧启动这个页面自己的逐帧 tick；没有 Frames 才用 Rows
+        if (theme.Icon!.Frames is { Count: > 0 } frames)
+        {
+            var frameRows = frames.Select(f => f.ToArray()).ToList();
+            var bitmaps = PixelIconRenderer.RenderFrames(frameRows, palette);
+            PreviewIcon.Source = bitmaps[0];
+            if (bitmaps.Length > 1)
+            {
+                _previewFrames = bitmaps;
+                _previewFrameDurationSeconds = CustomThemeValidator.GetFrameDurationSeconds(theme.Icon);
+            }
+            else
+            {
+                _previewFrames = null;
+            }
+        }
+        else
+        {
+            _previewFrames = null;
+            PreviewIcon.Source = PixelIconRenderer.Render(theme.Icon!.Rows!.ToArray(), palette);
+        }
+    }
+
+    // 跟桌面版 CustomThemeWindow.BuildBackgroundBrush 是同一个思路（纯色/渐变，渐变支持 vertical/
+    // diagonal 两个方向），只是这边用的是 Microsoft.UI.Xaml.Media 的画刷类型，不是 WPF 那套
+    private static Brush BuildBackgroundBrush(CustomThemeBackground bg)
+    {
+        var stops = (bg.Stops ?? new List<string>())
+            .Select(s => { CustomThemeValidator.TryParseHexColor(s, out var c); return ToUiColor(c); })
+            .ToList();
+
+        if (string.Equals(bg.Type, "gradient", StringComparison.OrdinalIgnoreCase) && stops.Count >= 2)
+        {
+            var gradient = new LinearGradientBrush
+            {
+                StartPoint = new Windows.Foundation.Point(0, 0),
+                EndPoint = string.Equals(bg.Direction, "diagonal", StringComparison.OrdinalIgnoreCase)
+                    ? new Windows.Foundation.Point(1, 1) : new Windows.Foundation.Point(0, 1),
+            };
+            for (int i = 0; i < stops.Count; i++)
+            {
+                gradient.GradientStops.Add(new GradientStop { Color = stops[i], Offset = stops.Count == 1 ? 0 : (double)i / (stops.Count - 1) });
+            }
+            return gradient;
+        }
+        return new SolidColorBrush(stops.Count > 0 ? stops[0] : Color.FromArgb(255, 0, 0, 0));
+    }
+
+    private void PreviewFrameTick()
+    {
+        var frames = _previewFrames;
+        if (frames is not { Length: > 1 }) return;
+
+        _previewFrameElapsedMs += PreviewFrameTickIntervalMs;
+        double frameDurationMs = Math.Max(50, _previewFrameDurationSeconds * 1000); // 下限保护，见 FloatingOverlayService.IconFrameTick 同样的注释
+        if (_previewFrameElapsedMs < frameDurationMs) return;
+
+        _previewFrameElapsedMs = 0;
+        _previewFrameIndex = (_previewFrameIndex + 1) % frames.Length;
+        PreviewIcon.Source = frames[_previewFrameIndex];
+    }
+#endif
+
+    // ── 已存主题存取 ──────────────────────────────────────────────────────────
 
 #if __ANDROID__
     private static MobileCustomThemeStore GetCustomThemeStore() => new(
@@ -92,7 +234,7 @@ public sealed partial class CustomThemePage : Page
     private void BtnFillExampleTheme_Click(object sender, RoutedEventArgs e)
     {
 #if __ANDROID__
-        TxtCustomThemeJson.Text = MobileCustomThemeExample.Json;
+        TxtCustomThemeJson.Text = MobileCustomThemeExample.Json; // 触发 TxtCustomThemeJson_TextChanged -> UpdatePreview()
         TxtCustomThemeError.Text = "";
 #endif
     }
