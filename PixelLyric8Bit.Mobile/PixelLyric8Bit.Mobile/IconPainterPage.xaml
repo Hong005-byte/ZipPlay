@@ -14,6 +14,21 @@
 
       <TextBlock x:Name="TxtSizeHint" Text="8 行 x 8 列" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"/>
 
+      <!-- 画布尺寸：4~64（跟桌面版同一个范围，见 CustomThemeValidator.MinIconSize/MaxIconSize），
+           +/- 按了立刻生效，不用额外点"应用"——改小会从右/下边裁掉超出的部分，改大只是在右/下边补
+           透明格子，已经画的内容都在左上角对齐，不会因为调过尺寸就整个清空重画，见 ResizeCanvas -->
+      <TextBlock Text="画布尺寸（4~64，改了立刻生效，已画的内容左上对齐保留）" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,10,0,0" TextWrapping="Wrap"/>
+      <StackPanel Orientation="Horizontal" Margin="0,6,0,0" VerticalAlignment="Center">
+        <TextBlock Text="宽：" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" VerticalAlignment="Center"/>
+        <Button Content="-" Click="BtnWidthMinus_Click" Width="44" Margin="4,0,0,0"/>
+        <TextBlock x:Name="TxtWidthValue" Text="8" FontFamily="Consolas" Foreground="White" FontSize="13" Width="36" TextAlignment="Center" VerticalAlignment="Center"/>
+        <Button Content="+" Click="BtnWidthPlus_Click" Width="44" Margin="0,0,16,0"/>
+        <TextBlock Text="高：" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" VerticalAlignment="Center"/>
+        <Button Content="-" Click="BtnHeightMinus_Click" Width="44" Margin="4,0,0,0"/>
+        <TextBlock x:Name="TxtHeightValue" Text="8" FontFamily="Consolas" Foreground="White" FontSize="13" Width="36" TextAlignment="Center" VerticalAlignment="Center"/>
+        <Button Content="+" Click="BtnHeightPlus_Click" Width="44"/>
+      </StackPanel>
+
       <!-- 调色板：点一个色块选中当前要画的颜色，再点格子涂上去；橡皮擦是特殊的"颜色"（'.'，透明） -->
       <TextBlock Text="调色板（点选中，再去下面点格子涂色）" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,14,0,0"/>
       <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,6,0,0">

@@ -88,7 +88,7 @@ public sealed partial class IconPainterPage : Page
 
         _currentFrameIndex = 0;
         _selectedChar = _palette.Keys.OrderBy(c => c).FirstOrDefault('#');
-        TxtSizeHint.Text = $"{_height} 行 x {_width} 列" + (loaded != null ? "（续画已有图标）" : "（新图标，8x8 起步）");
+        UpdateSizeHint(loaded != null);
         TxtPaletteError.Text = "";
         TxtInsertResult.Text = "";
 
@@ -100,6 +100,55 @@ public sealed partial class IconPainterPage : Page
     private void BtnBack_Click(object sender, RoutedEventArgs e)
     {
         if (Frame.CanGoBack) Frame.GoBack();
+    }
+
+    // ── 画布尺寸：4~64，跟桌面版同一个范围（CustomThemeValidator.MinIconSize/MaxIconSize） ──────
+
+    private const int MinSize = 4;
+    private const int MaxSize = 64;
+
+    private void UpdateSizeHint(bool continuing)
+    {
+        TxtSizeHint.Text = $"{_height} 行 x {_width} 列" + (continuing ? "（续画已有图标）" : "（新图标）");
+        TxtWidthValue.Text = _width.ToString();
+        TxtHeightValue.Text = _height.ToString();
+    }
+
+    private void BtnWidthMinus_Click(object sender, RoutedEventArgs e) => ResizeCanvas(_width - 1, _height);
+
+    private void BtnWidthPlus_Click(object sender, RoutedEventArgs e) => ResizeCanvas(_width + 1, _height);
+
+    private void BtnHeightMinus_Click(object sender, RoutedEventArgs e) => ResizeCanvas(_width, _height - 1);
+
+    private void BtnHeightPlus_Click(object sender, RoutedEventArgs e) => ResizeCanvas(_width, _height + 1);
+
+    // 改小从右/下边裁掉超出的部分，改大在右/下边补透明格子（'.'）——已经画的内容永远停在左上角，
+    // 不会因为调过一次尺寸就整份清空重画，这样"先随便画 8x8，画到一半发现不够大再往外扩"才有意义，
+    // 不用被迫一开始就想清楚最终尺寸。所有帧一起改，保持"帧与帧必须同尺寸"这条规则（
+    // PixelIconEditor.BuildFrames/TryLoadFrames 都要求这个），不会出现有的帧改了有的没改
+    private void ResizeCanvas(int newWidth, int newHeight)
+    {
+        newWidth = Math.Clamp(newWidth, MinSize, MaxSize);
+        newHeight = Math.Clamp(newHeight, MinSize, MaxSize);
+        if (newWidth == _width && newHeight == _height) return; // 已经是上限/下限了，+/- 没有实际效果
+
+        for (int i = 0; i < _frames.Count; i++)
+        {
+            var oldGrid = _frames[i];
+            var newGrid = NewBlankGrid(newWidth, newHeight);
+            int copyWidth = Math.Min(_width, newWidth);
+            int copyHeight = Math.Min(_height, newHeight);
+            for (int y = 0; y < copyHeight; y++)
+                for (int x = 0; x < copyWidth; x++)
+                    newGrid[y, x] = oldGrid[y, x];
+            _frames[i] = newGrid;
+        }
+
+        _width = newWidth;
+        _height = newHeight;
+        UpdateSizeHint(continuing: false); // 尺寸已经改过了，"续画已有图标"这个说法不再准确，跟新画的没区别
+        RenderCanvas();
+        RenderFrameStrip();
     }
 
     private static System.Collections.Generic.Dictionary<char, RgbaColor> SeedDefaultPalette()
