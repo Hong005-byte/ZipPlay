@@ -8,7 +8,12 @@
        但这个页面本身不是真正显示歌词的地方，真正联网抓词/按播放位置同步显示的是
        FloatingOverlayService（见该文件顶部说明），这里的歌词框还是一份写死的示例循环播放，只是
        用来验证 PixelLyric8Bit.Core 的 LrcParser 在 Uno/Android 上能不能跑通。
-       整页包一层 ScrollViewer——设置项越加越多，小屏幕手机装不下的话能滚动看到，不会被裁掉。 -->
+
+       每个功能区收进一个可展开/收起的按钮里（跟桌面版首页 Hub 的便当格是同一个用意——先看到一份
+       功能清单，点进去才看到具体内容），不再是一整页从头滚到尾的平铺列表。展开状态用 Button.Tag
+       存对应内容面板的名字，点击统一走 ToggleSection_Click（见 MainPage.xaml.cs），不用每个区域
+       各写一个几乎一样的开关处理方法。整页包一层 ScrollViewer——设置项越加越多，小屏幕手机装不下
+       的话能滚动看到，不会被裁掉。 -->
   <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
     <Grid Padding="24">
       <Grid.RowDefinitions>
@@ -21,7 +26,7 @@
         <RowDefinition Height="Auto"/>
       </Grid.RowDefinitions>
 
-      <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,12">
+      <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,16">
         <!-- 跟桌面版 PixelArt.CreateNoteIcon 同一个形状/配色的像素音符图标——渲染代码没法共享
              （WPF 和 Uno 各自的 WriteableBitmap 是不同图形栈的类型），但"画出来长什么样"这份设计
              是共享的，两边看到的是同一个图标，见 PixelIconRenderer.cs 的说明 -->
@@ -30,42 +35,55 @@
         <TextBlock x:Name="TxtArtist" Text=" 悬浮歌词骨架" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="8,5,0,0" VerticalAlignment="Center"/>
       </StackPanel>
 
-      <!-- 系统媒体会话 / 悬浮窗权限这两块骨架专用的状态区——跟正式产品的设置页不是一回事，
-           纯粹是这一步"验证这两个权限能不能申请到、申请到之后数据/悬浮窗能不能用"的调试面板 -->
-      <StackPanel Grid.Row="1" Margin="0,0,0,16">
-        <TextBlock x:Name="TxtMediaSessionStatus" Text="通知使用权：检查中…" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" TextWrapping="Wrap"/>
-        <Button x:Name="BtnOpenNotificationSettings" Content="去开启「通知使用权」" Click="BtnOpenNotificationSettings_Click" Margin="0,6,0,0" HorizontalAlignment="Left"/>
+      <!-- 系统媒体会话 / 悬浮窗权限——跟正式产品的设置页不是一回事，纯粹是这一步"验证这两个权限
+           能不能申请到、申请到之后数据/悬浮窗能不能用"的调试面板 -->
+      <StackPanel Grid.Row="1" Margin="0,0,0,10">
+        <Button x:Name="BtnSectionPermissions" Content="▸ 🔔 权限与悬浮窗" Tag="PanelPermissions" Click="ToggleSection_Click"
+                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"/>
+        <StackPanel x:Name="PanelPermissions" Visibility="Collapsed" Margin="0,8,0,0">
+          <TextBlock x:Name="TxtMediaSessionStatus" Text="通知使用权：检查中…" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" TextWrapping="Wrap"/>
+          <Button x:Name="BtnOpenNotificationSettings" Content="去开启「通知使用权」" Click="BtnOpenNotificationSettings_Click" Margin="0,6,0,0" HorizontalAlignment="Left"/>
 
-        <TextBlock x:Name="TxtOverlayStatus" Text="悬浮窗权限：检查中…" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,12,0,0" TextWrapping="Wrap"/>
-        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-          <Button x:Name="BtnOpenOverlaySettings" Content="去开启「悬浮窗权限」" Click="BtnOpenOverlaySettings_Click" Margin="0,0,8,0"/>
-          <Button x:Name="BtnToggleOverlay" Content="显示悬浮窗" Click="BtnToggleOverlay_Click"/>
+          <TextBlock x:Name="TxtOverlayStatus" Text="悬浮窗权限：检查中…" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,12,0,0" TextWrapping="Wrap"/>
+          <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+            <Button x:Name="BtnOpenOverlaySettings" Content="去开启「悬浮窗权限」" Click="BtnOpenOverlaySettings_Click" Margin="0,0,8,0"/>
+            <Button x:Name="BtnToggleOverlay" Content="显示悬浮窗" Click="BtnToggleOverlay_Click"/>
+          </StackPanel>
         </StackPanel>
       </StackPanel>
 
-      <!-- 悬浮窗皮肤选择——精简版：只挑配色，不是桌面版那套带像素图标+专属动画的完整皮肤系统，
+      <!-- 悬浮窗皮肤选择——精简版：内置皮肤配色+像素图标，客制化主题的 icon.rows/icon.frames 也画得出来
+           （见 FloatingOverlayService.ApplySkin），不是桌面版那套带多层装饰+专属律动的完整皮肤系统，
            见 MobileSkinPalette.cs 顶部注释。选好之后存到 MobileSettingsStore，悬浮窗（哪怕已经开着）
            会跟着立刻换色，不用重新打开悬浮窗才生效。 -->
-      <StackPanel Grid.Row="2" Margin="0,0,0,16">
-        <TextBlock x:Name="TxtCurrentSkin" Text="悬浮窗皮肤：简约风" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"/>
-        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,6,0,0">
-          <StackPanel x:Name="SkinPickerPanel" Orientation="Horizontal"/>
-        </ScrollViewer>
+      <StackPanel Grid.Row="2" Margin="0,0,0,10">
+        <Button x:Name="BtnSectionSkin" Content="▸ 🎨 悬浮窗皮肤" Tag="PanelSkin" Click="ToggleSection_Click"
+                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"/>
+        <StackPanel x:Name="PanelSkin" Visibility="Collapsed" Margin="0,8,0,0">
+          <TextBlock x:Name="TxtCurrentSkin" Text="悬浮窗皮肤：简约风" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"/>
+          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,6,0,0">
+            <StackPanel x:Name="SkinPickerPanel" Orientation="Horizontal"/>
+          </ScrollViewer>
+        </StackPanel>
       </StackPanel>
 
       <!-- 歌词功能设置：卡拉OK 逐字上色 / 双语歌词 / 同步偏移——对应桌面版这几个开关和滚轮微调，
            见 FloatingOverlayService.cs 顶部说明。改了悬浮窗（哪怕已经开着）立刻生效，不用重开。 -->
-      <StackPanel Grid.Row="3" Margin="0,0,0,16">
-        <CheckBox x:Name="ChkKaraoke" Content="卡拉OK 逐字上色" IsChecked="True" Foreground="#AAAAAA"
-                  Checked="ChkKaraoke_Toggled" Unchecked="ChkKaraoke_Toggled"/>
-        <CheckBox x:Name="ChkBilingual" Content="🌐 双语歌词（联网翻译）" Foreground="#AAAAAA" Margin="0,4,0,0"
-                  Checked="ChkBilingual_Toggled" Unchecked="ChkBilingual_Toggled"/>
-        <StackPanel Orientation="Horizontal" Margin="0,10,0,0" VerticalAlignment="Center">
-          <TextBlock x:Name="TxtSyncOffset" Text="歌词同步偏移：0ms" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"
-                     VerticalAlignment="Center" Margin="0,0,10,0"/>
-          <Button Content="-50ms" Click="BtnOffsetMinus_Click" Margin="0,0,6,0"/>
-          <Button Content="+50ms" Click="BtnOffsetPlus_Click" Margin="0,0,6,0"/>
-          <Button Content="重置" Click="BtnOffsetReset_Click"/>
+      <StackPanel Grid.Row="3" Margin="0,0,0,10">
+        <Button x:Name="BtnSectionLyricFeatures" Content="▸ 🎤 歌词功能设置" Tag="PanelLyricFeatures" Click="ToggleSection_Click"
+                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"/>
+        <StackPanel x:Name="PanelLyricFeatures" Visibility="Collapsed" Margin="0,8,0,0">
+          <CheckBox x:Name="ChkKaraoke" Content="卡拉OK 逐字上色" IsChecked="True" Foreground="#AAAAAA"
+                    Checked="ChkKaraoke_Toggled" Unchecked="ChkKaraoke_Toggled"/>
+          <CheckBox x:Name="ChkBilingual" Content="🌐 双语歌词（联网翻译）" Foreground="#AAAAAA" Margin="0,4,0,0"
+                    Checked="ChkBilingual_Toggled" Unchecked="ChkBilingual_Toggled"/>
+          <StackPanel Orientation="Horizontal" Margin="0,10,0,0" VerticalAlignment="Center">
+            <TextBlock x:Name="TxtSyncOffset" Text="歌词同步偏移：0ms" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"
+                       VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <Button Content="-50ms" Click="BtnOffsetMinus_Click" Margin="0,0,6,0"/>
+            <Button Content="+50ms" Click="BtnOffsetPlus_Click" Margin="0,0,6,0"/>
+            <Button Content="重置" Click="BtnOffsetReset_Click"/>
+          </StackPanel>
         </StackPanel>
       </StackPanel>
 
@@ -73,31 +91,42 @@
            checklist，不是桌面版 ListeningStatsWindow 那套本月/今年/全部时间切换 + 热力图 + 亮点回顾。
            统计数据是 FloatingOverlayService 在悬浮窗那边攒的（这个页面不采集，两边隔着一个 Service
            边界），这里定时重新读一次存档文件显示最新值，见 MainPage.xaml.cs 的 _statsRefreshTimer。 -->
-      <StackPanel Grid.Row="4" Margin="0,0,0,16">
-        <TextBlock x:Name="TxtListeningSummary" Text="听歌统计：还没有数据" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" TextWrapping="Wrap"/>
-        <StackPanel x:Name="AchievementsPanel" Margin="0,8,0,0"/>
+      <StackPanel Grid.Row="4" Margin="0,0,0,10">
+        <Button x:Name="BtnSectionStats" Content="▸ 📊 听歌统计与成就" Tag="PanelStats" Click="ToggleSection_Click"
+                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"/>
+        <StackPanel x:Name="PanelStats" Visibility="Collapsed" Margin="0,8,0,0">
+          <TextBlock x:Name="TxtListeningSummary" Text="听歌统计：还没有数据" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" TextWrapping="Wrap"/>
+          <StackPanel x:Name="AchievementsPanel" Margin="0,8,0,0"/>
+        </StackPanel>
       </StackPanel>
 
       <!-- 自定义主题——精简版：只吃 JSON（跟桌面版自定义主题页同一份格式，能直接互通），没有画板/
-           随机生成/混搭/分享码这些交互式工具，也不渲染像素图标/逐帧动画/多层装饰，只把 colors 那几个
-           颜色抽出来当精简皮肤用，见 MobileSkinCatalog.FromCustomTheme。校验用的是 Core 里跟桌面版
-           完全同一份 CustomThemeValidator，报错文案两边一模一样。 -->
-      <StackPanel Grid.Row="5" Margin="0,0,0,16">
-        <TextBlock Text="自定义主题（粘贴/编辑 JSON，格式跟桌面版通用）" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"/>
-        <TextBox x:Name="TxtCustomThemeJson" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"
-                 Height="140" Margin="0,6,0,0" Background="#1A1A1A" Foreground="White"/>
-        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-          <Button Content="校验并保存" Click="BtnSaveCustomTheme_Click" Margin="0,0,8,0"/>
-          <Button Content="填入示例" Click="BtnFillExampleTheme_Click" Margin="0,0,8,0"/>
-          <Button Content="删除当前选中" Click="BtnDeleteCustomTheme_Click"/>
+           随机生成/混搭/分享码这些交互式工具；像素图标（icon.rows/icon.frames，含逐帧动画）悬浮窗那边
+           已经画得出来了，多层装饰（layers）还没有，见 MobileSkinCatalog.FromCustomTheme。校验用的是
+           Core 里跟桌面版完全同一份 CustomThemeValidator，报错文案两边一模一样。 -->
+      <StackPanel Grid.Row="5" Margin="0,0,0,10">
+        <Button x:Name="BtnSectionCustomTheme" Content="▸ 🖌️ 自定义主题" Tag="PanelCustomTheme" Click="ToggleSection_Click"
+                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"/>
+        <StackPanel x:Name="PanelCustomTheme" Visibility="Collapsed" Margin="0,8,0,0">
+          <TextBlock Text="自定义主题（粘贴/编辑 JSON，格式跟桌面版通用）" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"/>
+          <TextBox x:Name="TxtCustomThemeJson" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"
+                   Height="140" Margin="0,6,0,0" Background="#1A1A1A" Foreground="White"/>
+          <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+            <Button Content="校验并保存" Click="BtnSaveCustomTheme_Click" Margin="0,0,8,0"/>
+            <Button Content="填入示例" Click="BtnFillExampleTheme_Click" Margin="0,0,8,0"/>
+            <Button Content="删除当前选中" Click="BtnDeleteCustomTheme_Click"/>
+          </StackPanel>
+          <TextBlock x:Name="TxtCustomThemeError" FontFamily="Consolas" Foreground="#FF8080" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"/>
+          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,8,0,0">
+            <StackPanel x:Name="CustomThemePickerPanel" Orientation="Horizontal"/>
+          </ScrollViewer>
         </StackPanel>
-        <TextBlock x:Name="TxtCustomThemeError" FontFamily="Consolas" Foreground="#FF8080" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"/>
-        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,8,0,0">
-          <StackPanel x:Name="CustomThemePickerPanel" Orientation="Horizontal"/>
-        </ScrollViewer>
       </StackPanel>
 
-      <Border Grid.Row="6" Background="#D9111111" BorderBrush="#222222" BorderThickness="2" Padding="16" MinHeight="120" VerticalAlignment="Center" CornerRadius="8">
+      <!-- 示例歌词预览——骨架阶段唯一常驻不收起的区域，跟上面几个"设置面板"性质不一样，是这个页面
+           唯一还在"动"的东西，收起来的话页面看着像死的，不收 -->
+      <Border Grid.Row="6" Background="#D9111111" BorderBrush="#222222" BorderThickness="2" Padding="16" MinHeight="120"
+              VerticalAlignment="Center" CornerRadius="8" Margin="0,6,0,0">
         <TextBlock x:Name="TxtDynamicLyric" Text="LOADING..." FontFamily="Consolas" Foreground="#FFFF55" FontSize="22"
                    TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center"/>
       </Border>

@@ -81,6 +81,27 @@ public sealed partial class MainPage : Page
         BuildCustomThemeSection();
     }
 
+    // ── 功能区展开/收起：每个区域顶部一个按钮，点了就切换下面内容面板的显隐 ─────────────────
+    // 所有区域共用这一个处理方法——Button.Tag 存着要切换的那个内容面板的 x:Name，用 FindName 按
+    // 名字找到它（跟桌面版首页 Hub 那种"一堆格子各管各的"不是同一种实现，那边是真的导航到不同窗口，
+    // 这边只是一个页面里的手风琴式折叠，没有引入 Frame 导航，改动面更小），不用每个区域各写一份
+    // 几乎一样的"翻转 Visibility + 换箭头"代码。默认全部收起（XAML 里 Visibility="Collapsed"），
+    // 展开的箭头用 ▸/▾ 区分，纯粹是视觉提示，不影响任何功能判断。
+    private void ToggleSection_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.Tag is not string panelName) return;
+        if (this.FindName(panelName) is not FrameworkElement panel) return;
+
+        bool expanding = panel.Visibility != Visibility.Visible;
+        panel.Visibility = expanding ? Visibility.Visible : Visibility.Collapsed;
+
+        string text = button.Content?.ToString() ?? "";
+        if (text.StartsWith("▸ ", StringComparison.Ordinal) || text.StartsWith("▾ ", StringComparison.Ordinal))
+        {
+            button.Content = (expanding ? "▾ " : "▸ ") + text[2..];
+        }
+    }
+
     // ── 悬浮窗皮肤（精简版：只挑配色，见 MobileSkinPalette.cs） ───────────────────────
 
     private void BuildSkinPicker()
