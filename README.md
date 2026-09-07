@@ -218,8 +218,12 @@ PixelLyric8Bit.Core/                 纯逻辑共享库（net8.0，不带 -windo
 │                                    桌面版 PixelLyric8BitFix/CustomThemeStore.cs，同样的目录参数化 + 改名套路
 │                                    （MobileCustomThemeEntry 对应桌面版的 CustomThemeEntry）。校验用的是
 │                                    CustomThemeValidator（本来就在 Core，两边完全同一份规则/报错文案）
-└── MobileCustomThemeExample.cs   自定义主题的示例 JSON——跟桌面版 PixelLyric8BitFix/CustomThemeExample.cs
-                                     是同一份文本（Sunset 皮肤当例子），保证两边"照着示例改"看到的是同一份
+├── MobileCustomThemeExample.cs   自定义主题的示例 JSON——跟桌面版 PixelLyric8BitFix/CustomThemeExample.cs
+│                                    是同一份文本（Sunset 皮肤当例子），保证两边"照着示例改"看到的是同一份
+└── MobileUpdateChecker.cs        手机版检查更新——跟桌面版 UpdateChecker.cs 同一个"靠 GitHub Release
+                                     判断"思路，但查的是 /releases 列表（不是 /latest 单条端点），只认
+                                     "mobile-v" 开头的 tag，找 Release 附件里的 .apk（桌面版找 .exe）；
+                                     两边独立判断、共用同一个 GitHub 仓库，互不干扰，见该类顶部注释
 
 PixelLyric8BitFix.Tests/
 └── *Tests.cs                     LrcParser / KaraokeTiming / PlaybackPositionEstimator / MobileSkinCatalog /
@@ -231,28 +235,41 @@ PixelLyric8BitFix.Tests/
                                      CustomThemeRemixer / PixelIconEditor 等的单元测试（xUnit，覆盖 PixelLyric8BitFix
                                      和 PixelLyric8Bit.Core 两边的纯逻辑）
 
-PixelLyric8Bit.Mobile/                探索中的 Android 版本（Uno Platform，net10.0-android），跟桌面版共用
+PixelLyric8Bit.Mobile/                Android 版本（Uno Platform，net10.0-android），跟桌面版共用
                                      PixelLyric8Bit.Core 那份"大脑"。核心链路（真实抓词/事件驱动同步/皮肤/
-                                     歌词功能/统计成就/自定义主题）都已经真机验证过，精简版也补上了内置皮肤
-                                     像素图标 + 客制化主题 icon.frames 逐帧动画（真机验证过每 frameDuration
-                                     切一帧）；多层装饰（layers）/点击切姿势（icon.actions）/分享卡片这些
-                                     视觉细节桌面版有、这边还没有，见各文件自己的说明：
-├── MainPage.xaml(.cs)             权限状态调试面板 + 悬浮窗设置 + 听歌统计/成就墙 + 自定义主题：通知使用权/
-                                     悬浮窗权限开没开、悬浮窗现在显不显示，皮肤选择器（MobileSkinCatalog，
-                                     21 套内置皮肤 + 客制化主题，尊贵皇冠风限定皮肤没点亮全部 7 个常规成就
-                                     会显示成锁住、点不了，跟桌面版是同一条规则）、卡拉OK/双语歌词开关、
-                                     同步偏移 ±50ms 微调（都存到 MobileSettingsStore），
-                                     总时长/活跃天数/连续天数 + 8 个成就 checklist（定时器每 3 秒重新读一次
-                                     stats.json——统计数据是 FloatingOverlayService 在悬浮窗那边攒的，这个
-                                     页面跟悬浮窗是不同组件，只有磁盘文件是共同点，见该文件里的
-                                     _statsRefreshTimer），以及一个自定义主题编辑区（粘贴/编辑 JSON，格式
-                                     跟桌面版通用，MobileCustomThemeStore 存最多 10 个，选中的那个会跟内置
-                                     皮肤一样立刻套到悬浮窗——像素图标/icon.frames 逐帧动画悬浮窗那边已经画
-                                     得出来了（见 FloatingOverlayService），多层装饰（layers）还没有，见
-                                     MobileSkinCatalog.FromCustomTheme）。整页包了
-                                     一层 ScrollViewer，设置项多了不会被裁掉。自己的歌词区还是写死的示例
-                                     LRC 循环播放（用 Core 的 LrcParser）——真正联网抓真实歌词、按系统媒体
-                                     会话播放位置同步显示的是下面的 FloatingOverlayService，不是这个页面
+                                     歌词功能/统计成就/自定义主题/全屏播放/多层装饰/点击切姿势/皮肤音乐律动/
+                                     检查更新）都已经真机验证过，第一个版本（v1）：
+├── MainPage.xaml(.cs)             首页——七个功能入口的清单（权限与悬浮窗 / 悬浮窗皮肤 / 全屏播放 /
+                                     歌词功能设置 / 听歌统计与成就 / 自定义主题 / 关于与更新），点按钮用
+                                     Frame.Navigate 跳到各自独立的 Page，不在首页本身堆内容——跟桌面版首页
+                                     Hub 便当格是同一个用意，只是那边是真的多个窗口，这边是同一个 Frame 里的
+                                     多个 Page，靠 Frame 自带的返回栈"退回去"
+├── PermissionsPage.xaml(.cs)      通知使用权 / 悬浮窗权限的开关状态 + 申请入口，还有皮肤音乐律动那个
+                                     需要跳系统"开始录制"同意框的开关（得先显示悬浮窗才能开，见
+                                     AudioReactiveCapture.cs 顶部注释为什么有这个先后顺序）
+├── SkinPage.xaml(.cs)             悬浮窗皮肤选择——21 套内置皮肤 + 已存的客制化主题，尊贵皇冠风限定皮肤
+                                     没点亮全部 7 个常规成就会显示成锁住、点不了，跟桌面版是同一条规则
+├── FullScreenPlayerPage.xaml(.cs) 全屏播放——手机版独占功能，把播放器撑满整个屏幕（沉浸式隐藏状态栏/
+                                     导航栏），大字歌词居中显示 + 底部可拖拽的进度条，屏幕常亮；桌面版是
+                                     一整个窗口，没有"悬浮窗之外还要不要占满全屏"这个选项，所以没有对应物
+├── LyricFeaturesPage.xaml(.cs)    卡拉OK 逐字上色 / 双语歌词开关 + 歌词同步偏移 ±50ms 微调
+├── StatsPage.xaml(.cs)            听歌统计与成就墙——本月/今年/全部时间切换、热门艺人/歌曲榜、🔥 热力图、
+                                     ✨ 亮点回顾入口，跟桌面版 ListeningStatsWindow 是同一份数据/同一套算法
+├── HighlightsPage.xaml(.cs)       ✨ 亮点回顾——一张卡片说一件事，点"下一张"翻页
+├── CustomThemePage.xaml(.cs)      自定义主题——粘贴/编辑 JSON（格式跟桌面版通用，MobileCustomThemeStore
+                                     存最多 10 个）、实时预览（含 icon.frames 逐帧动画同步播放）、
+                                     🔗 分享码、导入/导出成文件、🖌️ 打开图标画板入口
+├── IconPainterPage.xaml(.cs)      🖌️ 图标画板——点格子画图标代替手写字符网格，支持 4~64 可调画布尺寸、
+                                     多帧编辑（icon.frames）；多层装饰（layers）/点击切姿势（icon.actions）
+                                     这两个字段目前还没有专门的可视化编辑器，得在上面 CustomThemePage 的
+                                     JSON 框里手写，校验和渲染都是通的，只是没有画板辅助
+├── AboutPage.xaml(.cs)            关于与更新——版本号 + 手动检查更新，见 PixelLyric8Bit.Core 的
+                                     MobileUpdateChecker（跟桌面版 UpdateChecker 同一个"靠 GitHub Release
+                                     判断"思路，但手机版走自己的 "mobile-v" tag 前缀，两边互不干扰）+
+                                     Platforms/Android/AndroidUpdateInstaller（下载 APK、唤出系统安装器，
+                                     Android 没有桌面版那种静默自动装的路，用户要自己点一下确认）
+├── AppVersion.cs                  手机版当前版本号，检查更新拿这个跟 GitHub Release 的 tag 比大小；发布
+                                     新版本要跟 csproj 的 ApplicationDisplayVersion 一起改，见该文件注释
 ├── PixelIconRenderer.cs           把字符网格 + RgbaColor 调色板画成 WriteableBitmap，给 Uno 的 Image 用——
                                      跟桌面版 PixelArt.cs 是同一套"数据"、不同的渲染代码（两边 WriteableBitmap
                                      类型来自不同图形栈，没法共享渲染这一步，能共享的是数据）
@@ -263,31 +280,49 @@ PixelLyric8Bit.Mobile/                探索中的 Android 版本（Uno Platform
     ├── MobilePixelIconRenderer.cs      把字符网格 + RgbaColor 调色板画成 Android.Graphics.Bitmap，给悬浮窗的
     │                                     ImageView 用——跟 Uno 那边的 PixelIconRenderer.cs 是同一个数据源、
     │                                     不同的渲染代码。RenderFrames 是逐帧版本，挨个画出 icon.frames 每一帧，
-    │                                     循环播放归调用方（FloatingOverlayService 的 IconFrameTick）管
+    │                                     循环播放归调用方（FloatingOverlayService 的 FrameAnimState）管
     ├── FloatingOverlayService.cs      前台 Service + IWindowManager 加一个原生 View 的真悬浮窗（不是 Uno
     │                                     渲染的窗口），真机验证过浮在桌面/别的 App 上层。数据链路：事件驱动
     │                                     订阅播放状态（不是轮询）+ LyricsCacheStore 本地缓存 + LyricsFetcher
     │                                     联网抓词 + LyricsTranslator 双语翻译；显示这块：MobileSkinPalette
     │                                     精简皮肤（配色 + 边框呼吸动效，内置皮肤或者选中的客制化主题——
-    │                                     ApplySkin 认 "custom:文件名" 前缀，查不到就落回默认皮肤，真机
-    │                                     验证过保存/选中/渲染/删除整条链路）+ 像素图标（内置皮肤用
-    │                                     MobileSkinIconCatalog，客制化主题用 icon.rows/icon.frames，>1 帧
-    │                                     真机验证过按 frameDuration 循环切帧，见 IconFrameTick）+
-    │                                     SpannableString 卡拉OK 两级上色 + 同步偏移，这几项设置悬浮窗开着的
-    │                                     时候改也会立刻生效；这个 Service
-    │                                     还顺手按真实播放时长攒听歌统计（ListeningStatsFileStore 存盘，
-    │                                     跟桌面版 MainWindow.ListeningStats.cs 同一个攒法：满 10 秒才 flush、
-    │                                     换歌/换会话/关闭悬浮窗都会补 flush 一次零头），每次真的写了新数据
-    │                                     顺手评估一遍 8 个成就，刚解锁的用系统 Toast 弹一下（8 个成就门槛都
-    │                                     要累计听满至少 1 小时，真机验证的是攒时长/存盘/读回这条链路，
-    │                                     没有真等到解锁弹 Toast 那一刻）
-    └── MobileSettingsStore.cs         本地设置读写（选了哪套皮肤/同步偏移/卡拉OK 开关/双语开关）——桌面版
-                                          对应的是 AppSettings.cs，这边用 Android 标准的 SharedPreferences，
-                                          不用自己另外搭一套文件读写；MainPage（设置页）和 FloatingOverlayService
-                                          （悬浮窗，读设置 + 订阅变化）两边共用同一份
+    │                                     ApplySkin 认 "custom:文件名" 前缀，查不到就落回默认皮肤）+ 主图标
+    │                                     （内置皮肤/客制化主题 icon.rows/icon.frames，>1 帧循环切帧）+
+    │                                     🖼️ 多层装饰（layers，最多 2 个，贴在卡片四角）+ 🖱️ 点击切姿势
+    │                                     （icon.actions，点一下装饰栏图标循环切换，支持
+    │                                     autoSwitchAfterSeconds 数据驱动自动切换）+ animation 字段的 6 种
+    │                                     简单招式（pulse/twinkle/sway/spin/flicker/bob，见 IconMotionState；
+    │                                     drift/fall/walk 这三招桌面版要专属渲染轨道，这版还没做，选了图标
+    │                                     静止不动但不报错）+ 皮肤音乐律动（musicReactive，靠
+    │                                     AudioReactiveCapture 抓别的 App 正在播的响度/鼓点给这几招简单招式
+    │                                     变速，时域 RMS 近似，不是频谱精确分析）+ SpannableString 卡拉OK
+    │                                     两级上色 + 同步偏移 + 🖼️ 歌词分享卡片（点一下悬浮窗把当前这句
+    │                                     截成图片分享，图标有 icon.actions 的话点图标是切姿势、点悬浮窗
+    │                                     其它地方才是分享），这几项设置悬浮窗开着的时候改也会立刻生效；
+    │                                     这个 Service 还顺手按真实播放时长攒听歌统计（ListeningStatsFileStore
+    │                                     存盘，跟桌面版 MainWindow.ListeningStats.cs 同一个攒法：满 10 秒才
+    │                                     flush、换歌/换会话/关闭悬浮窗都会补 flush 一次零头），每次真的写了
+    │                                     新数据顺手评估一遍 8 个成就，刚解锁的用系统 Toast 弹一下
+    ├── AudioReactiveCapture.cs        皮肤音乐律动的数据源——AudioPlaybackCaptureConfiguration + AudioRecord
+    │                                     抓别的 App 正在播的 PCM，算 RMS 时域响度（没做 FFT 频谱分解，是
+    │                                     有意识的简化），复用 Core 的 AudioVisualizerMath.CompressMagnitude/
+    │                                     ComputeImpact 换算成速度倍率。音频源要绑一个 MediaProjection
+    │                                     token，得经过一次系统"开始录制"同意框（MainActivity.
+    │                                     RequestAudioCaptureConsent 发起），token 不持久化，App 进程被
+    │                                     完全杀掉重开要重新走一次；真机踩过一个 Android 14+ 的坑：拿 token
+    │                                     之前就必须已经是一个带 TypeMediaProjection 的前台服务在跑，不是
+    │                                     拿到 token 之后才补声明，见 FloatingOverlayService.
+    │                                     StartForegroundWithNotification 那段注释
+    ├── AndroidUpdateInstaller.cs       下载 AboutPage 查到的 APK 直链、通过 FileProvider 换算出 content://
+    │                                     URI 唤出系统包安装器——Android 没有桌面版那种"/VERYSILENT 静默跑
+    │                                     安装包"的路，用户必须自己点一下确认，见该文件顶部说明
+    └── MobileSettingsStore.cs         本地设置读写（选了哪套皮肤/同步偏移/卡拉OK 开关/双语开关/皮肤音乐
+                                          律动总开关）——桌面版对应的是 AppSettings.cs，这边用 Android 标准
+                                          的 SharedPreferences，不用自己另外搭一套文件读写；各设置页和
+                                          FloatingOverlayService（悬浮窗，读设置 + 订阅变化）共用同一份
 
 installer/
-└── ZipPlay.iss                   Inno Setup 打包脚本
+└── ZipPlay.iss                   Inno Setup 打包脚本（桌面版）
 ```
 
 ## 发布新版本（给维护者看）
@@ -305,6 +340,21 @@ installer/
    产物在 `installer\output\ZipPlay-Setup-x.x.x.exe`
 4. 在 GitHub 上发一个新 Release，tag 打成 `v2.1.0`（要跟 csproj 里的版本号对上，`UpdateChecker` 是拿 tag 名字去比大小的），把上一步的安装包作为附件传上去
 5. 所有已经装过旧版本的人，下次打开 app 就会看到右上角的更新提示
+
+### 手机版发布新版本
+
+跟桌面版共用同一个 GitHub 仓库，但走独立的 tag 前缀（`mobile-v` 开头），互不干扰——`MobileUpdateChecker` 只认这个前缀，不会把桌面版的 Release 误判成"手机版也该更新"，见该类顶部注释。
+
+1. 改代码：[AppVersion.cs](PixelLyric8Bit.Mobile/PixelLyric8Bit.Mobile/AppVersion.cs) 的 `AppVersion.Current` 和 [PixelLyric8Bit.Mobile.csproj](PixelLyric8Bit.Mobile/PixelLyric8Bit.Mobile/PixelLyric8Bit.Mobile.csproj) 的 `<ApplicationDisplayVersion>` 一起往上调（保持两处一致，比如都改成 `1.1.0`）
+2. 打包 Release APK：
+   ```bash
+   cd PixelLyric8Bit.Mobile/PixelLyric8Bit.Mobile
+   dotnet build PixelLyric8Bit.Mobile.csproj -f net10.0-android -c Release -p:AndroidPackageFormat=apk
+   ```
+   产物在 `bin/Release/net10.0-android/com.zipplay.mobile-Signed.apk`
+3. **签名密钥**：release 密钥已经生成好并配置好了（`%USERPROFILE%\keystores\zipplay-mobile\zipplay-mobile-release.keystore`，30 年有效期），本机 `PixelLyric8Bit.Mobile.csproj.user`（在 `.gitignore` 里，不会被提交）里已经配了 `AndroidKeyStore`/`AndroidSigningKeyStore`/`AndroidSigningKeyAlias`/`AndroidSigningStorePass`/`AndroidSigningKeyPass` 这几个 MSBuild 属性，Release 配置编译出来的 APK 会自动用这把密钥签，不用每次手动指定。**这台开发机之外的地方（新开发机、CI）要打包 Release 版本，得先把这个 keystore 文件和密码（旁边 `zipplay-mobile-release.SECRETS.txt`）复制过去、`.csproj.user` 也要重新配一份**——密码本身没有额外加密存放，钥匙和密码文件都要自己找安全的地方长期备份（密码管理器/加密盘/云端保险箱），弄丢了以后所有更新都发不出去，只能让所有用户卸载重装。Android 的硬规则：同一个包名的 App，之后每一次更新的安装包都必须用同一把签名密钥签过，签名对不上用户设备会直接拒绝安装升级。
+4. 在 GitHub 上发一个新 Release，tag 打成 `mobile-v1.1.0`，把第 2 步的 `com.zipplay.mobile-Signed.apk` 作为附件传上去
+5. 所有已经装过旧版本、开着"检查更新"的人，手动点一下"关于与更新"页的「检查更新」就能查到，下载后系统会弹出安装确认（Android 不支持像桌面版那样静默自动装，见 [AndroidUpdateInstaller.cs](PixelLyric8Bit.Mobile/PixelLyric8Bit.Mobile/Platforms/Android/AndroidUpdateInstaller.cs) 顶部说明）
 
 ## 免责声明
 

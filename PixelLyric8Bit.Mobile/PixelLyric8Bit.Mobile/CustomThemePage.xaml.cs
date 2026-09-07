@@ -45,10 +45,13 @@ public sealed partial class CustomThemePage : Page
         this.InitializeComponent();
         this.NavigationCacheMode = NavigationCacheMode.Required;
 
+#if __ANDROID__
+        // PreviewFrameTick 本身也是 #if __ANDROID__ 里定义的方法（逐帧图标动画只有 Android 用得上），
+        // 订阅得跟着挪进这个块——之前这行在 #if 外面，net10.0（非 Android）这个 TFM 编译直接报
+        // "PreviewFrameTick 不存在"，是个之前没人跑过那个 TFM 才没被发现的编译错误
         _previewFrameTimer.Tick += (_, _) => PreviewFrameTick();
         _previewFrameTimer.Start();
 
-#if __ANDROID__
         TxtCustomThemeJson.Text = MobileCustomThemeExample.Json; // 触发 TxtCustomThemeJson_TextChanged -> UpdatePreview()，先给一份能直接保存成功、看得到预览的示例，照着改比空白框容易上手
         RefreshCustomThemeList();
 #else

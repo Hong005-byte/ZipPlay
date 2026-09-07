@@ -29,14 +29,23 @@ public sealed partial class PermissionsPage : Page
         this.InitializeComponent();
         this.NavigationCacheMode = NavigationCacheMode.Required;
 
+#if __ANDROID__
+        // 只在页面刚建好这一次读设置初始化勾选框——之后 ChkMusicReactive_Toggled 是唯一改这个设置的
+        // 地方，不能让下面 500ms 一次的定时器也去碰这个勾选框，不然用户刚点一下会被下一次 tick 立刻
+        // 拽回去（定时器只用来刷新"现在真的采集到没有"那行状态文字，见 RefreshMusicReactiveStatus）
+        ChkMusicReactive.IsChecked = Droid.MobileSettingsStore.MusicReactiveEnabled;
+#endif
+
         RefreshMediaSessionStatus();
         RefreshOverlayStatus();
+        RefreshMusicReactiveStatus();
 
         _refreshTimer.Interval = TimeSpan.FromMilliseconds(RefreshIntervalMs);
         _refreshTimer.Tick += (_, _) =>
         {
             RefreshMediaSessionStatus();
             RefreshOverlayStatus();
+            RefreshMusicReactiveStatus();
         };
         _refreshTimer.Start();
     }
@@ -131,6 +140,63 @@ public sealed partial class PermissionsPage : Page
             Droid.FloatingOverlayService.Start(context);
         }
         RefreshOverlayStatus();
+#endif
+    }
+
+    // ── 皮肤音乐律动 ───────────────────────────────────────────────────────
+
+    /// <summary>只刷新"现在真的采集到没有"这行状态文字，不碰 ChkMusicReactive 本身（那是设置项，
+    /// 不是可以被系统悄悄改掉的东西，见构造函数注释）。三种状态：设置没开／设置开了但这次进程还没
+    /// 真的走过同意框（IsActive=false）／已经在真的采集。</summary>
+    private void RefreshMusicReactiveStatus()
+    {
+#if __ANDROID__
+        if (!Droid.MobileSettingsStore.MusicReactiveEnabled)
+        {
+            TxtMusicReactiveStatus.Text = "状态：没开";
+            return;
+        }
+        TxtMusicReactiveStatus.Text = Droid.AudioReactiveCapture.IsActive
+            ? "状态：已经在采集，跟着响度/鼓点变速中"
+            : "状态：已经勾选，但这次还没拿到系统同意（App 完全重启过、或者刚勾上还没跳完同意框）";
+#else
+        TxtMusicReactiveStatus.Text = "皮肤音乐律动：这个功能只在 Android 上有意义";
+#endif
+    }
+
+    /// <summary>勾上就立刻跳一次系统同意框（RequestAudioCaptureConsent 内部处理了拿不到 Activity/
+    /// 系统版本太低这些情况，不用在这里判断），不需要用户再单独点一个"申请"按钮——这个开关本身就是
+    /// 触发点，跟桌面版"翻一下开关就生效"是同一个体验。取消勾选就把已经在跑的采集停掉，收回
+    /// MediaProjection token（不这么做的话状态栏"正在被捕获"那个提示会一直挂着，用户会疑惑"我明明
+    /// 关了怎么还在录"）。</summary>
+    private void ChkMusicReactive_Toggled(object sender, RoutedEventArgs e)
+    {
+#if __ANDROID__
+        bool enabled = ChkMusicReactive.IsChecked == true;
+
+        // 真机踩过的坑：Android 要求"拿 MediaProjection token 这一刻之前"就已经是一个带
+        // TypeMediaProjection 的前台服务在跑（见 FloatingOverlayService.StartForegroundWithNotification
+        // 那段注释），不是拿到 token 之后才补声明。悬浮窗没开着的话这个前台服务压根没在跑，这时候跳
+        // 同意框只会换来一次必然失败的 SecurityException——所以这里先检查悬浮窗开没开，没开就提示
+        // 用户先开悬浮窗，不白跳一次注定失败的系统同意框
+        if (enabled && !Droid.FloatingOverlayService.IsRunning)
+        {
+            ChkMusicReactive.IsChecked = false; // 挡下这次勾选，不留一个"勾着但其实没生效"的假状态
+            TxtMusicReactiveStatus.Text = "状态：请先点上面「显示悬浮窗」，悬浮窗开着的时候才能开这个开关";
+            return;
+        }
+
+        Droid.MobileSettingsStore.MusicReactiveEnabled = enabled;
+
+        if (enabled)
+        {
+            Droid.MainActivity.Current?.RequestAudioCaptureConsent();
+        }
+        else
+        {
+            Droid.AudioReactiveCapture.Stop();
+        }
+        RefreshMusicReactiveStatus();
 #endif
     }
 }

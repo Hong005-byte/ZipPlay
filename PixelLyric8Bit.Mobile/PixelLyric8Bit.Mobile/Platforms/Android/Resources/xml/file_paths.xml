@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider 的路径映射——AndroidUpdateInstaller 把下载好的 APK 存在 CacheDir/update/ 下，
+     这里给这个目录起个名字（"update_apk"），FileProvider.GetUriForFile 靠这份映射把一个
+     file:// 路径换算成 content:// URI，见 AndroidUpdateInstaller.cs 顶部注释为什么必须这么绕一圈。 -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+  <cache-path name="update_apk" path="update/" />
+</paths>

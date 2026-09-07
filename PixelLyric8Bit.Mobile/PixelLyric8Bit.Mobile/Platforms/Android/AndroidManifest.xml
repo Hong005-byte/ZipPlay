@@ -9,9 +9,42 @@
   <!-- FloatingOverlayService 声明的 ForegroundServiceType.SpecialUse 要求配一条这个属性，说明"这个
        特殊用途具体是干嘛的"——Android 14/API 34 起，两边缺一个都会在启动前台服务时直接抛异常崩溃 -->
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+  <!-- 皮肤音乐律动（跟着别的 App 正在播的响度/鼓点变速）——见 AudioReactiveCapture.cs 顶部说明。
+       RECORD_AUDIO 是 AudioPlaybackCaptureConfiguration/AudioRecord 这条官方 API 本身的硬性要求，
+       哪怕抓的不是麦克风、是别的 App 的播放音频，系统一样按"录音"这类权限管；
+       FOREGROUND_SERVICE_MEDIA_PROJECTION 是 Android 14/API 34 起前台服务类型要带 mediaProjection
+       时必须配的权限，跟 FOREGROUND_SERVICE_SPECIAL_USE 是同一个套路，缺了会在启动前台服务时崩。
+       这两个权限本身不会让用户看到系统弹窗——真正需要用户手动同意的是 MediaProjection 那次"开始
+       录制"系统确认框，是运行时才会弹的，见 MainActivity.Android.cs 的 RequestAudioCaptureConsent -->
+  <uses-permission android:name="android.permission.RECORD_AUDIO" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
+  <!-- 检查更新——AboutPage 手动点/启动时后台静默查一次都走 MobileUpdateChecker（纯网络请求，
+       INTERNET 权限上面已经声明过，这里不用再加）。REQUEST_INSTALL_PACKAGES 是"允许安装未知来源
+       应用"这个特殊权限——跟悬浮窗/通知使用权同一个套路，装完不会自动有，得用户自己去系统设置手动
+       开一次，见 AndroidUpdateInstaller.cs 顶部注释；没开的话系统会在唤出安装器那一步自己弹引导页，
+       不需要这边额外写一套状态检查 UI。 -->
+  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
   <application android:allowBackup="true" android:supportsRtl="true">
     <property
         android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
         android:value="floating_lyrics_overlay" />
+
+    <!-- FileProvider——AndroidUpdateInstaller 把下载好的 APK 从 file:// 路径换算成 content:// URI
+         才能塞给系统包安装器，见该文件顶部注释为什么绕不开这一步。authorities 直接写死包名前缀
+         （没有用 ${applicationId} 占位符——这个项目的 ApplicationId 是 csproj 里的固定值
+         "com.zipplay.mobile"，不会跟着编译配置变，写死更省心，也避免占位符在这套 .NET for Android
+         的清单合并流程里到底支不支持这件事本身还得单独验证）。 -->
+    <provider
+        android:name="androidx.core.content.FileProvider"
+        android:authorities="com.zipplay.mobile.fileprovider"
+        android:exported="false"
+        android:grantUriPermissions="true">
+      <meta-data
+          android:name="android.support.FILE_PROVIDER_PATHS"
+          android:resource="@xml/file_paths" />
+    </provider>
   </application>
 </manifest>

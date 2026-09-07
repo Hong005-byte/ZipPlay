@@ -12,32 +12,50 @@
         <TextBlock Text="📊 听歌统计与成就" FontFamily="Consolas" Foreground="White" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
       </StackPanel>
 
-      <!-- 时间范围切换——只影响下面的总览数字/热门榜单，热力图固定今年 1 月 1 日到今天，
+      <!-- 卡片容器——把原来一整条竖直堆到底的内容按"逻辑上是一件事"拆成几张卡片（总览 / 榜单 / 热力图 /
+           成就），每张卡片自己是一个视觉单元，滚动的时候一眼能看出上一块结束、下一块开始，不是一整块
+           分不清段落的纯文字流；卡片风格跟其它设置页统一，见 PermissionsPage.xaml 同处注释 -->
+
+      <!-- 时间范围切换——只影响这张卡片和下面榜单卡片的数字，热力图固定今年 1 月 1 日到今天，
            不跟着这三个按钮走（跟桌面版 ListeningStatsWindow 同一条规则），成就墙也一直是全部时间 -->
-      <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-        <Button x:Name="BtnRangeMonth" Content="本月" Click="BtnRangeMonth_Click" Margin="0,0,8,0"/>
-        <Button x:Name="BtnRangeYear" Content="今年" Click="BtnRangeYear_Click" Margin="0,0,8,0"/>
-        <Button x:Name="BtnRangeAll" Content="全部时间" Click="BtnRangeAll_Click"/>
-      </StackPanel>
+      <Border Background="#141414" BorderBrush="#262626" BorderThickness="1" CornerRadius="14" Padding="18">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal">
+            <Button x:Name="BtnRangeMonth" Content="本月" Click="BtnRangeMonth_Click" Margin="0,0,8,0"/>
+            <Button x:Name="BtnRangeYear" Content="今年" Click="BtnRangeYear_Click" Margin="0,0,8,0"/>
+            <Button x:Name="BtnRangeAll" Content="全部时间" Click="BtnRangeAll_Click"/>
+          </StackPanel>
+          <TextBlock x:Name="TxtListeningSummary" Text="听歌统计：还没有数据" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,12,0,0" TextWrapping="Wrap"/>
+          <Button Content="✨ 查看亮点回顾" Click="BtnHighlights_Click" Margin="0,14,0,0" HorizontalAlignment="Left"/>
+        </StackPanel>
+      </Border>
 
-      <TextBlock x:Name="TxtListeningSummary" Text="听歌统计：还没有数据" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" TextWrapping="Wrap"/>
+      <Border Background="#141414" BorderBrush="#262626" BorderThickness="1" CornerRadius="14" Padding="18" Margin="0,14,0,0">
+        <StackPanel>
+          <TextBlock Text="🎤 热门艺人" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"/>
+          <StackPanel x:Name="TopArtistsPanel" Margin="0,6,0,0"/>
 
-      <TextBlock Text="🎤 热门艺人" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,16,0,0"/>
-      <StackPanel x:Name="TopArtistsPanel" Margin="0,6,0,0"/>
+          <TextBlock Text="🎵 热门歌曲" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,16,0,0"/>
+          <StackPanel x:Name="TopTracksPanel" Margin="0,6,0,0"/>
+        </StackPanel>
+      </Border>
 
-      <TextBlock Text="🎵 热门歌曲" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,16,0,0"/>
-      <StackPanel x:Name="TopTracksPanel" Margin="0,6,0,0"/>
+      <Border Background="#141414" BorderBrush="#262626" BorderThickness="1" CornerRadius="14" Padding="18" Margin="0,14,0,0">
+        <StackPanel>
+          <TextBlock Text="🔥 听歌热力图（今年 1 月 1 日至今）" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" TextWrapping="Wrap"/>
+          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,6,0,0">
+            <Grid x:Name="HeatmapGrid"/>
+          </ScrollViewer>
+          <TextBlock x:Name="TxtHeatmapHint" Foreground="#666666" FontFamily="Consolas" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
+        </StackPanel>
+      </Border>
 
-      <TextBlock Text="🔥 听歌热力图（今年 1 月 1 日至今）" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,16,0,0" TextWrapping="Wrap"/>
-      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,6,0,0">
-        <Grid x:Name="HeatmapGrid"/>
-      </ScrollViewer>
-      <TextBlock x:Name="TxtHeatmapHint" Foreground="#666666" FontFamily="Consolas" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
-
-      <Button Content="✨ 查看亮点回顾" Click="BtnHighlights_Click" Margin="0,16,0,0" HorizontalAlignment="Left"/>
-
-      <TextBlock Text="🏆 成就（全部时间，不受上面时间范围影响）" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,20,0,0" TextWrapping="Wrap"/>
-      <StackPanel x:Name="AchievementsPanel" Margin="0,8,0,0"/>
+      <Border Background="#141414" BorderBrush="#262626" BorderThickness="1" CornerRadius="14" Padding="18" Margin="0,14,0,0">
+        <StackPanel>
+          <TextBlock Text="🏆 成就（全部时间，不受上面时间范围影响）" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" TextWrapping="Wrap"/>
+          <StackPanel x:Name="AchievementsPanel" Margin="0,8,0,0"/>
+        </StackPanel>
+      </Border>
     </StackPanel>
   </ScrollViewer>
 </Page>

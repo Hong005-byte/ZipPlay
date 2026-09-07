@@ -4,16 +4,15 @@
       xmlns:local="using:PixelLyric8Bit.Mobile"
       Background="#0D0D0D">
 
-  <!-- 首页——只是一份功能清单 + 示例歌词预览，具体内容都在各自独立的页面里（PermissionsPage /
-       SkinPage / LyricFeaturesPage / StatsPage / CustomThemePage），点按钮用 Frame.Navigate 真的
+  <!-- 首页——只是一份功能清单，具体内容都在各自独立的页面里（PermissionsPage / SkinPage /
+       LyricFeaturesPage / StatsPage / CustomThemePage / AboutPage），点按钮用 Frame.Navigate 真的
        跳过去，不是在这一页里展开/收起（那是上一版的做法，见这几个 Btn*_Click）。跟桌面版首页 Hub
-       的便当格是同一个用意：先看到一份功能清单，点进去才看到具体内容，只是那边是真的多个窗口，
-       这边是同一个 Frame 里的多个 Page，靠 Frame 自带的返回栈"退回去"，各子页面顶部都有一个
-       "‹ 返回" 按钮调 Frame.GoBack()。 -->
+       的便当格是同一个用意：先看到一份功能清单，点进去才看到具体内容，只是那边是真的多个窗口，这边
+       是同一个 Frame 里的多个 Page，靠 Frame 自带的返回栈"退回去"，各子页面顶部都有一个"‹ 返回"
+       按钮调 Frame.GoBack()。 -->
   <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
     <Grid Padding="24">
       <Grid.RowDefinitions>
-        <RowDefinition Height="Auto"/>
         <RowDefinition Height="Auto"/>
         <RowDefinition Height="Auto"/>
       </Grid.RowDefinitions>
@@ -27,25 +26,26 @@
         <TextBlock x:Name="TxtArtist" Text=" 悬浮歌词骨架" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="8,5,0,0" VerticalAlignment="Center"/>
       </StackPanel>
 
-      <!-- 五个功能入口——每个都是独立页面，见各自 .xaml(.cs) 顶部说明 -->
-      <StackPanel Grid.Row="1" Margin="0,0,0,16">
-        <Button Content="🔔 权限与悬浮窗" Click="BtnNavPermissions_Click" Margin="0,0,0,10"
-                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"/>
-        <Button Content="🎨 悬浮窗皮肤" Click="BtnNavSkin_Click" Margin="0,0,0,10"
-                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"/>
-        <Button Content="🎤 歌词功能设置" Click="BtnNavLyricFeatures_Click" Margin="0,0,0,10"
-                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"/>
-        <Button Content="📊 听歌统计与成就" Click="BtnNavStats_Click" Margin="0,0,0,10"
-                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"/>
-        <Button Content="🖌️ 自定义主题" Click="BtnNavCustomTheme_Click"
-                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"/>
-      </StackPanel>
-
-      <!-- 示例歌词预览——骨架阶段唯一留在首页的"内容"，不是设置项，收进某个子页面里反而奇怪 -->
-      <Border Grid.Row="2" Background="#D9111111" BorderBrush="#222222" BorderThickness="2" Padding="16" MinHeight="120"
-              VerticalAlignment="Center" CornerRadius="8">
-        <TextBlock x:Name="TxtDynamicLyric" Text="LOADING..." FontFamily="Consolas" Foreground="#FFFF55" FontSize="22"
-                   TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center"/>
+      <!-- 七个功能入口——每个都是独立页面，见各自 .xaml(.cs) 顶部说明；套一层卡片背景把这一整块
+           跟页面背景分出层次，按钮统一用强调色主按钮样式（App.xaml 的 PrimaryButtonStyle），这是
+           首页最想让人点下去的地方 -->
+      <Border Grid.Row="1" Background="#141414" BorderBrush="#262626" BorderThickness="1" CornerRadius="14" Padding="14">
+        <StackPanel>
+          <Button Content="🔔 权限与悬浮窗" Click="BtnNavPermissions_Click" Margin="0,0,0,10"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Style="{StaticResource PrimaryButtonStyle}"/>
+          <Button Content="🎨 悬浮窗皮肤" Click="BtnNavSkin_Click" Margin="0,0,0,10"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Style="{StaticResource PrimaryButtonStyle}"/>
+          <Button Content="⛶ 全屏播放" Click="BtnNavFullScreen_Click" Margin="0,0,0,10"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Style="{StaticResource PrimaryButtonStyle}"/>
+          <Button Content="🎤 歌词功能设置" Click="BtnNavLyricFeatures_Click" Margin="0,0,0,10"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Style="{StaticResource PrimaryButtonStyle}"/>
+          <Button Content="📊 听歌统计与成就" Click="BtnNavStats_Click" Margin="0,0,0,10"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Style="{StaticResource PrimaryButtonStyle}"/>
+          <Button Content="🖌️ 自定义主题" Click="BtnNavCustomTheme_Click" Margin="0,0,0,10"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Style="{StaticResource PrimaryButtonStyle}"/>
+          <Button Content="ℹ️ 关于与更新" Click="BtnNavAbout_Click"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Style="{StaticResource PrimaryButtonStyle}"/>
+        </StackPanel>
       </Border>
     </Grid>
   </ScrollViewer>

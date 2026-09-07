@@ -9,7 +9,48 @@
         <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
       </ResourceDictionary.MergedDictionaries>
 
-      <!-- Add resources here -->
+      <!-- 全局美化：每个子页面之前都是自己在 XAML 里给每个按钮/文本框单独写一遍 Background/
+           Foreground/圆角，一多起来东一块西一块地不统一（有的圆角 8，有的没有圆角，颜色深浅也各不
+           一样）。这两个隐式 Style（没有 x:Key，靠 TargetType 自动套到所有 Button/TextBox 上，不用
+           改任何一个子页面的 XAML）统一成同一套配色：卡片色背景（比页面背景 #0D0D0D 略亮一档，
+           分得出层次）、细描边、圆角，比默认 WinUI 控件的方角/纯白背景更贴这个 App 一贯的深色像素
+           风格。子页面里已经写了 Background="..." 的按钮（比如 SkinPage/CustomThemePage 里那些按
+           皮肤 Accent 上色的按钮）不受影响——本地设的值永远比这里的隐式 Style 优先级高，这两条规则
+           只补那些"没特别指定颜色"的普通按钮/文本框。 -->
+      <Style TargetType="Button">
+        <Setter Property="Background" Value="#1E1E1E"/>
+        <Setter Property="Foreground" Value="#EDEDED"/>
+        <Setter Property="BorderBrush" Value="#333333"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Padding" Value="16,10"/>
+        <Setter Property="FontFamily" Value="Consolas"/>
+        <Setter Property="FontSize" Value="14"/>
+      </Style>
+      <Style TargetType="TextBox">
+        <Setter Property="Background" Value="#1A1A1A"/>
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="BorderBrush" Value="#333333"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Padding" Value="10"/>
+      </Style>
+
+      <!-- 首页 5 个功能入口 + 全屏播放按钮、全屏播放页中间那个播放/暂停键——这几个是"这一页最想让人
+           点下去"的主按钮，配这个套里唯一的强调色（暖金色，跟歌词预览那行经典的 CRT 琥珀黄
+           #FFFF55 是同一个色系，比它暗一档方便当按钮底色时文字还能看清），跟上面按普通按钮走的
+           其它按钮拉出区分度，不是所有按钮都在抢视觉重量。 -->
+      <Style x:Key="PrimaryButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="#E0A526"/>
+        <Setter Property="Foreground" Value="#141414"/>
+        <Setter Property="BorderBrush" Value="#E0A526"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Padding" Value="16,12"/>
+        <Setter Property="FontFamily" Value="Consolas"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="FontSize" Value="14"/>
+      </Style>
 
     </ResourceDictionary>
   </Application.Resources>

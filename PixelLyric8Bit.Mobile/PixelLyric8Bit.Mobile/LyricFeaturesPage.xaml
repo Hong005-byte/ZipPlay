@@ -12,17 +12,22 @@
         <TextBlock Text="🎤 歌词功能设置" FontFamily="Consolas" Foreground="White" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
       </StackPanel>
 
-      <CheckBox x:Name="ChkKaraoke" Content="卡拉OK 逐字上色" IsChecked="True" Foreground="#AAAAAA"
-                Checked="ChkKaraoke_Toggled" Unchecked="ChkKaraoke_Toggled"/>
-      <CheckBox x:Name="ChkBilingual" Content="🌐 双语歌词（联网翻译）" Foreground="#AAAAAA" Margin="0,4,0,0"
-                Checked="ChkBilingual_Toggled" Unchecked="ChkBilingual_Toggled"/>
-      <StackPanel Orientation="Horizontal" Margin="0,10,0,0" VerticalAlignment="Center">
-        <TextBlock x:Name="TxtSyncOffset" Text="歌词同步偏移：0ms" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"
-                   VerticalAlignment="Center" Margin="0,0,10,0"/>
-        <Button Content="-50ms" Click="BtnOffsetMinus_Click" Margin="0,0,6,0"/>
-        <Button Content="+50ms" Click="BtnOffsetPlus_Click" Margin="0,0,6,0"/>
-        <Button Content="重置" Click="BtnOffsetReset_Click"/>
-      </StackPanel>
+      <!-- 卡片容器——见 PermissionsPage.xaml 同一处改动的注释 -->
+      <Border Background="#141414" BorderBrush="#262626" BorderThickness="1" CornerRadius="14" Padding="18">
+        <StackPanel>
+          <CheckBox x:Name="ChkKaraoke" Content="卡拉OK 逐字上色" IsChecked="True" Foreground="#AAAAAA"
+                    Checked="ChkKaraoke_Toggled" Unchecked="ChkKaraoke_Toggled"/>
+          <CheckBox x:Name="ChkBilingual" Content="🌐 双语歌词（联网翻译）" Foreground="#AAAAAA" Margin="0,4,0,0"
+                    Checked="ChkBilingual_Toggled" Unchecked="ChkBilingual_Toggled"/>
+          <StackPanel Orientation="Horizontal" Margin="0,10,0,0" VerticalAlignment="Center">
+            <TextBlock x:Name="TxtSyncOffset" Text="歌词同步偏移：0ms" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"
+                       VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <Button Content="-50ms" Click="BtnOffsetMinus_Click" Margin="0,0,6,0"/>
+            <Button Content="+50ms" Click="BtnOffsetPlus_Click" Margin="0,0,6,0"/>
+            <Button Content="重置" Click="BtnOffsetReset_Click"/>
+          </StackPanel>
+        </StackPanel>
+      </Border>
     </StackPanel>
   </ScrollViewer>
 </Page>

@@ -18,6 +18,7 @@ public static class MobileSettingsStore
     private const string KeySyncOffsetMs = "sync_offset_ms";
     private const string KeyKaraokeEnabled = "karaoke_enabled";
     private const string KeyBilingualEnabled = "bilingual_enabled";
+    private const string KeyMusicReactiveEnabled = "music_reactive_enabled";
 
     private static ISharedPreferences Prefs =>
         global::Android.App.Application.Context.GetSharedPreferences(PrefsName, FileCreationMode.Private)!;
@@ -68,6 +69,24 @@ public static class MobileSettingsStore
         {
             using var editor = Prefs.Edit()!;
             editor.PutBoolean(KeyBilingualEnabled, value);
+            editor.Apply();
+        }
+    }
+
+    /// <summary>皮肤音乐律动总开关——对应桌面版音频律动页那个开关，只管"这个功能想不想要"，不代表
+    /// 这一次真的拿到了系统那次 MediaProjection 同意（token 不持久化，进程重启/这个开关重新开一次都
+    /// 得重新走一遍同意框，见 AudioReactiveCapture.cs 顶部注释）——真的有没有在采集看
+    /// AudioReactiveCapture.IsActive，不是看这个设置项。这个开关只负责"记住用户上次开没开"，方便
+    /// 下次打开设置页时勾选框回到上次的状态，以及决定 ApplySkin 要不要把 musicReactive 这个字段的
+    /// 效果接上（关掉这个总开关的话，就算主题自己写了 musicReactive:true 也不生效，见
+    /// FloatingOverlayService.ApplySkin）。</summary>
+    public static bool MusicReactiveEnabled
+    {
+        get => Prefs.GetBoolean(KeyMusicReactiveEnabled, false); // 默认关——涉及一次系统同意框，不该不问用户就自己开
+        set
+        {
+            using var editor = Prefs.Edit()!;
+            editor.PutBoolean(KeyMusicReactiveEnabled, value);
             editor.Apply();
         }
     }

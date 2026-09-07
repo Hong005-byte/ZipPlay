@@ -14,55 +14,78 @@
 
       <TextBlock x:Name="TxtSizeHint" Text="8 行 x 8 列" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"/>
 
-      <!-- 画布尺寸：4~64（跟桌面版同一个范围，见 CustomThemeValidator.MinIconSize/MaxIconSize），
+      <!-- 卡片容器——按操作分区拆成几张卡片（尺寸 / 调色板 / 画布 / 帧列表），见 PermissionsPage.xaml
+           同处注释。画布尺寸：4~64（跟桌面版同一个范围，见 CustomThemeValidator.MinIconSize/MaxIconSize），
            +/- 按了立刻生效，不用额外点"应用"——改小会从右/下边裁掉超出的部分，改大只是在右/下边补
            透明格子，已经画的内容都在左上角对齐，不会因为调过尺寸就整个清空重画，见 ResizeCanvas -->
-      <TextBlock Text="画布尺寸（4~64，改了立刻生效，已画的内容左上对齐保留）" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,10,0,0" TextWrapping="Wrap"/>
-      <StackPanel Orientation="Horizontal" Margin="0,6,0,0" VerticalAlignment="Center">
-        <TextBlock Text="宽：" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" VerticalAlignment="Center"/>
-        <Button Content="-" Click="BtnWidthMinus_Click" Width="44" Margin="4,0,0,0"/>
-        <TextBlock x:Name="TxtWidthValue" Text="8" FontFamily="Consolas" Foreground="White" FontSize="13" Width="36" TextAlignment="Center" VerticalAlignment="Center"/>
-        <Button Content="+" Click="BtnWidthPlus_Click" Width="44" Margin="0,0,16,0"/>
-        <TextBlock Text="高：" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" VerticalAlignment="Center"/>
-        <Button Content="-" Click="BtnHeightMinus_Click" Width="44" Margin="4,0,0,0"/>
-        <TextBlock x:Name="TxtHeightValue" Text="8" FontFamily="Consolas" Foreground="White" FontSize="13" Width="36" TextAlignment="Center" VerticalAlignment="Center"/>
-        <Button Content="+" Click="BtnHeightPlus_Click" Width="44"/>
-      </StackPanel>
+      <Border Background="#141414" BorderBrush="#262626" BorderThickness="1" CornerRadius="14" Padding="18" Margin="0,10,0,0">
+        <StackPanel>
+          <TextBlock Text="画布尺寸（4~64，改了立刻生效，已画的内容左上对齐保留）" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" TextWrapping="Wrap"/>
+          <!-- 真机验证过：横向 ScrollViewer 在这个 Uno 渲染管线上没有正确裁剪视口（内容照样溢出、也
+               拖不动），"宽/高各一组 -数字+ "拆成两行摆，不再赌 ScrollViewer 能不能用，见
+               CustomThemePage.xaml 那处按钮行同样的注释 -->
+          <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
+            <TextBlock Text="宽：" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" VerticalAlignment="Center"/>
+            <Button Content="-" Click="BtnWidthMinus_Click" Width="44" Margin="4,0,0,0"/>
+            <TextBlock x:Name="TxtWidthValue" Text="8" FontFamily="Consolas" Foreground="White" FontSize="13" Width="36" TextAlignment="Center" VerticalAlignment="Center"/>
+            <Button Content="+" Click="BtnWidthPlus_Click" Width="44"/>
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
+            <TextBlock Text="高：" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" VerticalAlignment="Center"/>
+            <Button Content="-" Click="BtnHeightMinus_Click" Width="44" Margin="4,0,0,0"/>
+            <TextBlock x:Name="TxtHeightValue" Text="8" FontFamily="Consolas" Foreground="White" FontSize="13" Width="36" TextAlignment="Center" VerticalAlignment="Center"/>
+            <Button Content="+" Click="BtnHeightPlus_Click" Width="44"/>
+          </StackPanel>
+        </StackPanel>
+      </Border>
 
       <!-- 调色板：点一个色块选中当前要画的颜色，再点格子涂上去；橡皮擦是特殊的"颜色"（'.'，透明） -->
-      <TextBlock Text="调色板（点选中，再去下面点格子涂色）" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,14,0,0"/>
-      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,6,0,0">
-        <StackPanel x:Name="PalettePanel" Orientation="Horizontal"/>
-      </ScrollViewer>
-      <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
-        <TextBox x:Name="TxtNewColorHex" PlaceholderText="#RRGGBB" Width="140" FontFamily="Consolas" Background="#1A1A1A" Foreground="White" Margin="0,0,8,0"/>
-        <Button Content="+ 加一种颜色" Click="BtnAddColor_Click"/>
-      </StackPanel>
-      <TextBlock x:Name="TxtPaletteError" FontFamily="Consolas" Foreground="#FF8080" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"/>
+      <Border Background="#141414" BorderBrush="#262626" BorderThickness="1" CornerRadius="14" Padding="18" Margin="0,14,0,0">
+        <StackPanel>
+          <TextBlock Text="调色板（点选中，再去下面点格子涂色）" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"/>
+          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,6,0,0">
+            <StackPanel x:Name="PalettePanel" Orientation="Horizontal"/>
+          </ScrollViewer>
+          <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
+            <TextBox x:Name="TxtNewColorHex" PlaceholderText="#RRGGBB" Width="140" FontFamily="Consolas" Background="#1A1A1A" Foreground="White" Margin="0,0,8,0"/>
+            <Button Content="+ 加一种颜色" Click="BtnAddColor_Click"/>
+          </StackPanel>
+          <TextBlock x:Name="TxtPaletteError" FontFamily="Consolas" Foreground="#FF8080" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"/>
+        </StackPanel>
+      </Border>
 
       <!-- 画布：格子够多的话两个方向都能滚，不会把外层页面撑变形 -->
-      <TextBlock Text="画布（点格子涂色）" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,14,0,0"/>
-      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" MaxHeight="420" Margin="0,6,0,0"
-                    Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1">
-        <Grid x:Name="CanvasGrid" Margin="4"/>
-      </ScrollViewer>
+      <Border Background="#141414" BorderBrush="#262626" BorderThickness="1" CornerRadius="14" Padding="18" Margin="0,14,0,0">
+        <StackPanel>
+          <TextBlock Text="画布（点格子涂色）" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"/>
+          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" MaxHeight="420" Margin="0,6,0,0"
+                        Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1">
+            <Grid x:Name="CanvasGrid" Margin="4"/>
+          </ScrollViewer>
+        </StackPanel>
+      </Border>
 
       <!-- 帧列表（逐帧动画）：只画 1 帧就是普通静态图标，2 帧以上"插入到编辑框"会生成 icon.frames -->
-      <TextBlock x:Name="TxtFrameLabel" Text="帧：1 / 1" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,14,0,0"/>
-      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,6,0,0">
-        <StackPanel x:Name="FrameStripPanel" Orientation="Horizontal"/>
-      </ScrollViewer>
-      <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-        <Button Content="➕ 新增帧" Click="BtnAddFrame_Click" Margin="0,0,8,0"/>
-        <Button Content="📋 复制当前帧" Click="BtnDuplicateFrame_Click" Margin="0,0,8,0"/>
-        <Button Content="🗑 删除当前帧" Click="BtnDeleteFrame_Click"/>
-      </StackPanel>
-      <StackPanel Orientation="Horizontal" Margin="0,10,0,0" VerticalAlignment="Center">
-        <TextBlock Text="每帧播放（秒）：" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
-        <TextBox x:Name="TxtFrameDuration" Text="0.25" Width="70" FontFamily="Consolas" Background="#1A1A1A" Foreground="White"/>
-      </StackPanel>
+      <Border Background="#141414" BorderBrush="#262626" BorderThickness="1" CornerRadius="14" Padding="18" Margin="0,14,0,0">
+        <StackPanel>
+          <TextBlock x:Name="TxtFrameLabel" Text="帧：1 / 1" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"/>
+          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,6,0,0">
+            <StackPanel x:Name="FrameStripPanel" Orientation="Horizontal"/>
+          </ScrollViewer>
+          <!-- 拆两行摆，同上——横向 ScrollViewer 在这个渲染管线上不裁剪视口 -->
+          <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+            <Button Content="➕ 新增帧" Click="BtnAddFrame_Click" Margin="0,0,8,0"/>
+            <Button Content="📋 复制当前帧" Click="BtnDuplicateFrame_Click"/>
+          </StackPanel>
+          <Button Content="🗑 删除当前帧" Click="BtnDeleteFrame_Click" Margin="0,8,0,0" HorizontalAlignment="Left"/>
+          <StackPanel Orientation="Horizontal" Margin="0,10,0,0" VerticalAlignment="Center">
+            <TextBlock Text="每帧播放（秒）：" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <TextBox x:Name="TxtFrameDuration" Text="0.25" Width="70" FontFamily="Consolas" Background="#1A1A1A" Foreground="White"/>
+          </StackPanel>
+        </StackPanel>
+      </Border>
 
-      <Button Content="插入到编辑框" Click="BtnInsert_Click" Margin="0,18,0,0" HorizontalAlignment="Left"/>
+      <Button Content="插入到编辑框" Click="BtnInsert_Click" Margin="0,18,0,0" HorizontalAlignment="Left" Style="{StaticResource PrimaryButtonStyle}"/>
       <TextBlock x:Name="TxtInsertResult" FontFamily="Consolas" Foreground="#FF8080" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"/>
     </StackPanel>
   </ScrollViewer>

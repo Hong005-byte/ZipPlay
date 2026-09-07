@@ -16,6 +16,11 @@ namespace PixelLyric8Bit.Mobile;
 /// 完全可能"进这页看一眼 -> 返回 -> 去自定义主题页存/删一个 -> 再进这页"，缓存的旧按钮列表就对不上
 /// 最新的存档了。所以按钮列表的构建放在 OnNavigatedTo（每次真的导航到这个页面都会触发，不管页面
 /// 实例是不是缓存的），不是只在构造函数里跑一次，见 UpdateCurrentSkinLabel 同样要查自定义主题名字。
+///
+/// BuildSkinPicker 现在也会把已存的客制化主题列进来（之前这里漏掉了，只画了内置皮肤——存好的
+/// 自定义主题只能回自定义主题页自己那条横向选择条里选，这一页压根看不到，见 CustomThemePage.
+/// RefreshCustomThemeList 那边一直有类似列表，这边补上同一份逻辑），跟内置皮肤共用同一个竖排
+/// 列表，一条分隔文字隔开。
 /// </summary>
 public sealed partial class SkinPage : Page
 {
@@ -68,6 +73,40 @@ public sealed partial class SkinPage : Page
             if (!locked) button.Click += (_, _) => SelectSkin(id);
             SkinPickerPanel.Children.Add(button);
         }
+
+        // 已存的客制化主题（CustomThemePage 那边存/删）——之前这里漏掉了，只列内置皮肤，存好的自定义
+        // 主题只能在自定义主题页自己那条横向选择条里选，这一页完全看不到、选不到。跟内置皮肤共用
+        // 同一个竖排列表，用一条分隔文字隔开；一个都没存过就不画这一段，不留一段没用的空标题
+        var customThemes = GetCustomThemeStore().ListAll();
+        if (customThemes.Count > 0)
+        {
+            SkinPickerPanel.Children.Add(new TextBlock
+            {
+                Text = "🖌️ 自定义主题",
+                FontFamily = new FontFamily("Consolas"),
+                Foreground = new SolidColorBrush(Color.FromArgb(255, 0xAA, 0xAA, 0xAA)),
+                FontSize = 13,
+                Margin = new Thickness(0, 10, 0, 8),
+            });
+
+            foreach (var entry in customThemes)
+            {
+                var palette = MobileSkinCatalog.FromCustomTheme(entry.Theme);
+                var button = new Button
+                {
+                    Content = palette.DisplayName,
+                    Margin = new Thickness(0, 0, 0, 8),
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    HorizontalContentAlignment = HorizontalAlignment.Left,
+                    Background = new SolidColorBrush(ToUiColor(palette.Accent)),
+                    Foreground = new SolidColorBrush(ToUiColor(RgbaColor.PickReadableForeground(palette.Accent))),
+                };
+                string skinId = MobileSkinCatalog.CustomThemePrefix + entry.FileName; // 闭包坑，同上，显式拷贝一份
+                button.Click += (_, _) => SelectSkin(skinId);
+                SkinPickerPanel.Children.Add(button);
+            }
+        }
+
         UpdateCurrentSkinLabel(selectedId);
 #else
         TxtCurrentSkin.Text = "悬浮窗皮肤：这个功能只在 Android 上有意义";

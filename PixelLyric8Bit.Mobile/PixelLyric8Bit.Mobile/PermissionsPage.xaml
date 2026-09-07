@@ -13,14 +13,34 @@
         <TextBlock Text="🔔 权限与悬浮窗" FontFamily="Consolas" Foreground="White" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
       </StackPanel>
 
-      <TextBlock x:Name="TxtMediaSessionStatus" Text="通知使用权：检查中…" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" TextWrapping="Wrap"/>
-      <Button x:Name="BtnOpenNotificationSettings" Content="去开启「通知使用权」" Click="BtnOpenNotificationSettings_Click" Margin="0,6,0,0" HorizontalAlignment="Left"/>
+      <!-- 卡片容器——跟首页/其它设置页统一（App.xaml PrimaryButtonStyle 那次改动同一批），页面背景
+           #0D0D0D 上再叠一层稍亮的卡片色，内容跟页面背景分出层次，不是所有东西糊在同一个纯黑面上 -->
+      <Border Background="#141414" BorderBrush="#262626" BorderThickness="1" CornerRadius="14" Padding="18">
+        <StackPanel>
+          <TextBlock x:Name="TxtMediaSessionStatus" Text="通知使用权：检查中…" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" TextWrapping="Wrap"/>
+          <Button x:Name="BtnOpenNotificationSettings" Content="去开启「通知使用权」" Click="BtnOpenNotificationSettings_Click" Margin="0,6,0,0" HorizontalAlignment="Left"/>
 
-      <TextBlock x:Name="TxtOverlayStatus" Text="悬浮窗权限：检查中…" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,12,0,0" TextWrapping="Wrap"/>
-      <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-        <Button x:Name="BtnOpenOverlaySettings" Content="去开启「悬浮窗权限」" Click="BtnOpenOverlaySettings_Click" Margin="0,0,8,0"/>
-        <Button x:Name="BtnToggleOverlay" Content="显示悬浮窗" Click="BtnToggleOverlay_Click"/>
-      </StackPanel>
+          <TextBlock x:Name="TxtOverlayStatus" Text="悬浮窗权限：检查中…" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,16,0,0" TextWrapping="Wrap"/>
+          <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+            <Button x:Name="BtnOpenOverlaySettings" Content="去开启「悬浮窗权限」" Click="BtnOpenOverlaySettings_Click" Margin="0,0,8,0"/>
+            <Button x:Name="BtnToggleOverlay" Content="显示悬浮窗" Click="BtnToggleOverlay_Click"/>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- 皮肤音乐律动——跟着别的 App 正在播的响度/鼓点给 animation/layers 变速，见
+           AudioReactiveCapture.cs 顶部注释这条链路为什么绕不开一次系统"开始录制"同意框。这个开关
+           只管"想不想要"，勾上会立刻跳一次那个同意框；同意框是一次性的、不持久化，App 进程重启后
+           （不是隐藏/显示悬浮窗，是整个 App 被系统杀掉重开）这个开关就算还勾着，也得再点一次才能
+           重新拿到真的能采集的 token——所以这里单独放一个"状态"文字，跟"开着没开着"这个设置项分开，
+           别把两件事看成一回事 -->
+      <Border Background="#141414" BorderBrush="#262626" BorderThickness="1" CornerRadius="14" Padding="18" Margin="0,14,0,0">
+        <StackPanel>
+          <CheckBox x:Name="ChkMusicReactive" Content="🎵 皮肤音乐律动" Foreground="#AAAAAA" Checked="ChkMusicReactive_Toggled" Unchecked="ChkMusicReactive_Toggled"/>
+          <TextBlock Text="跟着系统正在播的响度/鼓点给主题动画变速——只对客制化主题里写了 animation.musicReactive:true 的招式生效；勾上会跳一次系统「开始录制」同意框（长得像录屏，实际只抓声音不抓画面），App 完全重启后要重新勾一次才能重新拿到授权。得先点上面「显示悬浮窗」，悬浮窗开着的时候才能开这个开关（Android 系统要求同意框跳出来之前就已经在跑悬浮窗那个后台服务）。" FontFamily="Consolas" Foreground="#666666" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
+          <TextBlock x:Name="TxtMusicReactiveStatus" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,10,0,0" TextWrapping="Wrap"/>
+        </StackPanel>
+      </Border>
     </StackPanel>
   </ScrollViewer>
 </Page>

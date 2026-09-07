@@ -1,0 +1,87 @@
+<Page x:Class="PixelLyric8Bit.Mobile.FullScreenPlayerPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Background="Black">
+
+  <!-- 全屏播放——只有 Android 有意义，见 FullScreenPlayerPage.xaml.cs 顶部说明。占满整个屏幕
+       （沉浸式隐藏状态栏/导航栏），大字歌词 + 底部一条播放控制条，不是悬浮窗那种小条。背景/图标/
+       强调色/文字色都跟着当前选中的皮肤（内置皮肤或客制化主题）走，见 ApplyPalette——RootGrid 的
+       Background 就是从这来的，XAML 里给的 Black 只是皮肤还没套上之前那一瞬间的兜底色。播放控制
+       三个按钮不用 emoji（⏮⏸⏭），用 PixelIconRenderer 现画的像素图标，颜色也跟着皮肤走，见
+       ApplyPalette 里 IconPrev/IconPlayPause/IconNext 这几个 Image 的 Source 是怎么来的。 -->
+  <Grid x:Name="RootGrid" PointerPressed="RootGrid_PointerPressed">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <!-- 顶部：退出全屏 + 皮肤图标（客制化主题的 icon.frames 会在这动，见 IconFrameTimer_Tick）+
+         当前曲名/艺人——无操作几秒后整条淡出（见 IdleHideTimer_Tick），点一下屏幕任意位置唤出 -->
+    <StackPanel x:Name="TopBar" Grid.Row="0" Orientation="Horizontal" Padding="20,20,20,0" VerticalAlignment="Top">
+      <Button x:Name="BtnExit" Content="✕ 退出全屏" Click="BtnExit_Click" Padding="12,6"/>
+      <Image x:Name="SkinIcon" Width="32" Height="32" Stretch="Uniform" Margin="16,0,0,0"
+             VerticalAlignment="Center" Visibility="Collapsed"/>
+      <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+        <TextBlock x:Name="TxtTitle" Text="ZipPlay" FontFamily="Consolas" FontSize="14" FontWeight="Bold" Foreground="#DDDDDD"/>
+        <TextBlock x:Name="TxtArtist" Text="" FontFamily="Consolas" FontSize="12" Foreground="#777777"/>
+      </StackPanel>
+    </StackPanel>
+
+    <!-- 只在非 Android 平台显示——这个功能本身只有 Android 有意义，见类顶部注释 -->
+    <TextBlock x:Name="TxtAndroidOnlyHint" Grid.Row="0" Text="全屏播放：这个功能只在 Android 上有意义"
+               FontFamily="Consolas" Foreground="#FF8080" FontSize="12" TextWrapping="Wrap"
+               Margin="20,70,20,0" Visibility="Collapsed"/>
+
+    <!-- 中间：大字歌词，逐字卡拉OK 上色（跟悬浮窗同一个思路，两级颜色，颜色来自当前皮肤的 Text）+
+         可选双语翻译另起一行；一句词很长会自动缩小字号，见 ApplyLyricFontSize，不然长句子会被
+         挤成好几行甚至看不全。
+
+         Grid.RowSpan="3"（不是只占中间那个 Grid.Row="1"）+ VerticalAlignment="Center"：让这块歌词
+         按整个 RootGrid 的高度居中，不是只按"中间那一行剩余空间"居中——底部播放控制条（进度条+时间+
+         三个按钮，Padding 32 起步）比顶部条（就一个退出按钮+曲名，Padding 20）高出一大截，如果只在
+         Row 1 里居中，歌词的视觉中心会被这个高度差往上拽，看起来比屏幕正中间偏高。跨三行按整个屏幕
+         的高度重新居中，视觉上就正好落在正中间偏下一点（因为底部条更高，正中间往下才是真正视觉平衡
+         的位置），不用再手动拍一个固定的偏移量。 -->
+    <StackPanel Grid.Row="0" Grid.RowSpan="3" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="36,0">
+      <TextBlock x:Name="TxtLyricLine" FontFamily="Consolas" FontSize="30" FontWeight="Bold"
+                 TextAlignment="Center" TextWrapping="Wrap" HorizontalAlignment="Center"/>
+      <TextBlock x:Name="TxtTranslationLine" FontFamily="Consolas" FontSize="18" Foreground="#999999"
+                 TextAlignment="Center" TextWrapping="Wrap" HorizontalAlignment="Center" Margin="0,10,0,0"/>
+    </StackPanel>
+
+    <!-- 底部：可拖动的播放进度条（拖完松手才真的 seek，见 ProgressSlider_PointerReleased，不知道
+         总时长就直接隐藏，拖不出比例）+ 时间文字 + 上一首/播放暂停/下一首。播放/暂停键用当前皮肤的
+         强调色做底色（不是固定颜色），上一首/下一首用调暗一档的同色系，见 ApplyPalette。
+
+         PointerCaptureLost 是拖动这条进度条真正能拖到底的关键补丁：手指按下去、还没松开这段时间，
+         如果系统半路把这次触摸抢走了（比如被判定成了别的手势），Slider 只会收到 PointerCaptureLost，
+         不会收到 PointerReleased——只挂 PointerReleased 的话 _isDraggingSeek 会卡在 true 出不来，
+         之后 UpdateLyricUi 每次都因为"正在拖"跳过真实位置回写，进度条看起来像卡死了、怎么点都不动，
+         这就是"感觉拖不动"的一种常见成因。两个事件都接到同一个收尾逻辑，见 ProgressSlider_PointerReleased
+         方法体后面紧跟着的这个新方法。
+
+         ValueChanged 补的是另一半体验：光是拖动条本身能动还不够，拖的时候下面的时间文字如果还在
+         照抄"实际正在播放的位置"，看起来就像这条进度条跟时间数字是两个不同步的东西、拖了也没反应，
+         见 ProgressSlider_ValueChanged——拖的时候时间文字改成跟着手指下的目标位置走，松手才真的
+         提交 seek，这样"拖着看时间往前/往后走"这个直观反馈才对得上。 -->
+    <StackPanel Grid.Row="2" HorizontalAlignment="Center" Padding="0,0,0,32">
+      <Slider x:Name="ProgressSlider" Width="280" Minimum="0" Visibility="Collapsed"
+              PointerPressed="ProgressSlider_PointerPressed" PointerReleased="ProgressSlider_PointerReleased"
+              PointerCaptureLost="ProgressSlider_PointerCaptureLost" ValueChanged="ProgressSlider_ValueChanged"/>
+      <TextBlock x:Name="TxtProgress" FontFamily="Consolas" FontSize="13" Foreground="#777777"
+                 TextAlignment="Center" HorizontalAlignment="Center" Margin="0,4,0,18"/>
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="28">
+        <Button x:Name="BtnPrev" Click="BtnPrev_Click" Width="64" Height="64" CornerRadius="32" Padding="0">
+          <Image x:Name="IconPrev" Width="26" Height="26" Stretch="Uniform"/>
+        </Button>
+        <Button x:Name="BtnPlayPause" Click="BtnPlayPause_Click" Width="80" Height="80" CornerRadius="40" Padding="0">
+          <Image x:Name="IconPlayPause" Width="32" Height="32" Stretch="Uniform"/>
+        </Button>
+        <Button x:Name="BtnNext" Click="BtnNext_Click" Width="64" Height="64" CornerRadius="32" Padding="0">
+          <Image x:Name="IconNext" Width="26" Height="26" Stretch="Uniform"/>
+        </Button>
+      </StackPanel>
+    </StackPanel>
+  </Grid>
+</Page>

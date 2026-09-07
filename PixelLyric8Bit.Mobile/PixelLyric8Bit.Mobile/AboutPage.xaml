@@ -1,0 +1,37 @@
+<Page x:Class="PixelLyric8Bit.Mobile.AboutPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:local="using:PixelLyric8Bit.Mobile"
+      Background="#0D0D0D">
+
+  <!-- 关于与更新——版本号 + 手动检查更新，对应桌面版 AboutWindow，见 AboutPage.xaml.cs 顶部说明 -->
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Padding="24">
+      <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
+        <Button Content="‹ 返回" Click="BtnBack_Click" Margin="0,0,12,0"/>
+        <TextBlock Text="ℹ️ 关于与更新" FontFamily="Consolas" Foreground="White" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
+      </StackPanel>
+
+      <Border Background="#141414" BorderBrush="#262626" BorderThickness="1" CornerRadius="14" Padding="18">
+        <StackPanel>
+          <TextBlock x:Name="TxtVersion" Text="版本 …" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"/>
+          <Button Content="检查更新" Click="BtnCheckUpdate_Click" Margin="0,10,0,0" HorizontalAlignment="Left"/>
+          <TextBlock x:Name="TxtUpdateStatus" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13" Margin="0,10,0,0" TextWrapping="Wrap"/>
+          <ProgressBar x:Name="ProgressDownload" Margin="0,10,0,0" Visibility="Collapsed"/>
+          <Button x:Name="BtnDownloadUpdate" Content="下载并安装更新" Click="BtnDownloadUpdate_Click" Margin="0,10,0,0"
+                  HorizontalAlignment="Left" Visibility="Collapsed" Style="{StaticResource PrimaryButtonStyle}"/>
+        </StackPanel>
+      </Border>
+
+      <!-- 一份纯说明性文字——检查更新本身不需要，但"手机版为什么需要重新走一次悬浮窗/通知权限"这类
+           疑问在跳过 PermissionsPage 直接来这页看版本号的人身上更容易出现，顺手放一句在这，不用
+           另外开一个"常见问题"页 -->
+      <Border Background="#141414" BorderBrush="#262626" BorderThickness="1" CornerRadius="14" Padding="18" Margin="0,14,0,0">
+        <StackPanel>
+          <TextBlock Text="使用小贴士" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"/>
+          <TextBlock Text="悬浮窗权限、通知使用权这两个是系统特殊权限，得在系统设置里手动开一次；关掉悬浮窗、退出 App 都不影响这两个权限本身的开关状态，下次再打开 App 还是已授权，不用重新走一遍。皮肤音乐律动那个开关例外——系统同意框拿到的授权不持久化，App 进程被完全杀掉重开之后要重新勾一次。" FontFamily="Consolas" Foreground="#666666" FontSize="12" Margin="0,8,0,0" TextWrapping="Wrap"/>
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</Page>

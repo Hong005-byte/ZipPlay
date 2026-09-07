@@ -12,10 +12,15 @@
         <TextBlock Text="🎨 悬浮窗皮肤" FontFamily="Consolas" Foreground="White" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
       </StackPanel>
 
-      <TextBlock x:Name="TxtCurrentSkin" Text="悬浮窗皮肤：简约风" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"/>
-      <!-- 竖着一条条往下排——外层 Page 本来就包了一层纵向 ScrollViewer，皮肤够多的话跟着整页一起往下
-           滚，不用再单独套一层横向 ScrollViewer -->
-      <StackPanel x:Name="SkinPickerPanel" Orientation="Vertical" Margin="0,6,0,0"/>
+      <!-- 卡片容器——见 PermissionsPage.xaml 同处注释 -->
+      <Border Background="#141414" BorderBrush="#262626" BorderThickness="1" CornerRadius="14" Padding="18">
+        <StackPanel>
+          <TextBlock x:Name="TxtCurrentSkin" Text="悬浮窗皮肤：简约风" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"/>
+          <!-- 竖着一条条往下排——外层 Page 本来就包了一层纵向 ScrollViewer，皮肤够多的话跟着整页一起往下
+               滚，不用再单独套一层横向 ScrollViewer -->
+          <StackPanel x:Name="SkinPickerPanel" Orientation="Vertical" Margin="0,6,0,0"/>
+        </StackPanel>
+      </Border>
     </StackPanel>
   </ScrollViewer>
 </Page>

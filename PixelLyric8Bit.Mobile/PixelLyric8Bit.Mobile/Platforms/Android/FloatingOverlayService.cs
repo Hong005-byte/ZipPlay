@@ -24,8 +24,14 @@ namespace PixelLyric8Bit.Mobile.Droid;
 /// 单项目模型没关系，是 Android 系统层面"这块窗口该由谁来管"的问题）。视觉上现在接了一版精简皮肤
 /// （见 ApplySkin）：背景/边框/文字配色跟着 MobileSkinCatalog 里选的那套走，边框还带一圈呼吸感的
 /// 淡入淡出，图标（内置皮肤或者客制化主题的 icon.rows/icon.frames）也画得出来了，>1 帧的话还会按
-/// frameDuration 循环播放（见 IconFrameTick）——多层装饰/点击切姿势/专属律动动画这些桌面版才有的
-/// 完整皮肤系统还没有，那套留给以后真要做的时候。
+/// frameDuration 循环播放（见 FrameAnimState.Tick）。客制化主题专属的多层装饰（layers，最多 2 个，
+/// 见 ApplySkin 里 layer0/layer1 那两段）和点击切姿势（icon.actions，见 CycleIconAction）也接上了；
+/// animation 字段的 6 种"简单招式"（pulse/twinkle/sway/spin/flicker/bob，见 IconMotionState）也接了
+/// 固定节奏的版本——drift/fall/walk 这三招桌面版要专属渲染轨道（三重影飘过/飘落、装饰带里来回走），
+/// 这版还没做，选了这三招图标就静止不动，不报错也不崩。皮肤专属律动动画里"跟着音乐响度/鼓点实时
+/// 变速"这一层（musicReactive 开关）还没有——那套依赖 Android 端的实时音频采集，目前还没有对应
+/// 桌面版 WASAPI 回环采集的那一整套管线，musicReactive 暂时不生效，帧动画/装饰层动画/这几招简单
+/// 招式都是固定节奏播放，见 IconFrameTick/MotionTick。
 ///
 /// 悬浮窗权限（SYSTEM_ALERT_WINDOW）是特殊权限，跟"通知使用权"（MediaNotificationListenerService）
 /// 同一个套路：普通的运行时权限弹窗申请不了，必须让用户自己去系统设置里手动开一次。
@@ -49,7 +55,7 @@ namespace PixelLyric8Bit.Mobile.Droid;
 /// 一遍 8 个 AchievementCalculator 成就，MobileAchievementUnlockTracker 记"见过哪些"，刚解锁的用系统
 /// Toast 弹一下，见 FlushListeningStats。
 /// </summary>
-[Service(Exported = false, ForegroundServiceType = ForegroundService.TypeSpecialUse)]
+[Service(Exported = false, ForegroundServiceType = ForegroundService.TypeSpecialUse | ForegroundService.TypeMediaProjection)]
 public class FloatingOverlayService : Service
 {
     private const string ChannelId = "zipplay_overlay";
@@ -62,9 +68,13 @@ public class FloatingOverlayService : Service
     private const int RenderIntervalMs = 200;
 
     private IWindowManager? _windowManager;
-    private LinearLayout? _overlayContainer; // 真正加进 WindowManager、参与拖动的是这一个，图标 + 文字都是它的子 View
+    private FrameLayout? _rootFrame; // 真正加进 WindowManager 的是这一个——里面装着居中的 _overlayContainer（皮肤主体）
+                                      // 加最多 2 个贴在角上的装饰层（_layer0View/_layer1View），拖动/点击手势也挂在这上面
+    private LinearLayout? _overlayContainer; // 图标 + 文字横排的那个"药丸"卡片，本身不再直接加进 WindowManager，见 _rootFrame
     private ImageView? _iconView;
     private TextView? _overlayView;
+    private ImageView? _layer0View; // 多层装饰第 1 层，见 ApplySkin 里 layer0 那段——没有客制化主题/主题没配 layers 就一直 Gone
+    private ImageView? _layer1View; // 多层装饰第 2 层，规则同上
     private WindowManagerLayoutParams? _layoutParams;
     private Handler? _mainHandler;
     private Action? _renderAction;
@@ -94,11 +104,47 @@ public class FloatingOverlayService : Service
     // 变速（musicReactive），这边没有——Android 端还没有 AudioVisualizer 那一整套音频采集/分析
     // 管线，帧间隔就按 JSON 里的 frameDuration 老老实实播放，不做变速这一层
     private const int IconFrameTickIntervalMs = 100; // 单开一份 tick，比呼吸动效(120ms)/歌词渲染(200ms)独立，互不干扰
-    private Bitmap[]? _iconFrameBitmaps; // null 或者只有 1 张就是静态图标，IconFrameTick 直接跳过
-    private double _iconFrameDurationSeconds;
-    private double _iconFrameElapsedMs; // 累计经过的时间，攒够一帧的时长才真的切，不是每个 tick 都切
-    private int _iconFrameIndex;
+    private const int LayerIconSizeDp = 18; // 装饰层比主图标（28dp）小一档，是"点缀"不是喧宾夺主
+    private const int LayerMarginDp = 4; // 装饰层贴角的内缩距离，避免正好卡在圆角卡片被裁掉的那一小块
+    private int _layerMarginPx;
+
+    // 主图标（含点击切姿势换上来的那一帧）+ 两个装饰层，三处都是同一套"tick 累计时间、攒够一帧的
+    // 时长才切"逻辑，抽成 FrameAnimState 复用，见该类定义
+    private readonly FrameAnimState _mainIconAnim = new();
+    private readonly FrameAnimState _layer0Anim = new();
+    private readonly FrameAnimState _layer1Anim = new();
     private Action? _iconFrameAction;
+
+    // ── 🖱️ 点击切姿势（icon.actions），见 CycleIconAction/EvaluateAutoSwitchIconAction ───────
+    // "动作 0" 是主图标自己的 Rows/Frames，不用存进这个列表；_baseIconFrames/_baseIconFrameDurationSeconds
+    // 是切回动作 0 时要用的那一份，跟 _mainIconAnim 分开存是因为 _mainIconAnim 当前显示的可能是某个
+    // 动作、不是主图标本身，得留一份"原样"才能切得回去
+    private Bitmap[]? _baseIconFrames;
+    private double _baseIconFrameDurationSeconds;
+    private List<PixelLyric8BitFix.CustomThemeIconAction>? _iconActions;
+    private Bitmap[][]? _actionFrameBitmaps; // 跟 _iconActions 一一对应，ApplySkin 时就预渲染好，点击只是切现成位图
+    private double[]? _actionFrameDurations;
+    private int _currentIconActionIndex; // 0 = 主图标本身，1.. 对应 _iconActions[index-1]
+
+    // 数据驱动的自动切换阈值（CustomThemeIconAction.AutoSwitchAfterSeconds）要用的"这首歌连续播放了
+    // 多久"——暂停不计时、换歌清零，见 UpdateListeningStats 里顺手累加的那一段和 HandleMetadataChanged
+    // 换歌时的清零，跟桌面版 MainWindow.ListeningStats.cs 的 _customIconContinuousTrackSeconds 是
+    // 同一个口径
+    private double _continuousPlaySeconds;
+
+    // ── animation 字段的 6 种简单招式（pulse/twinkle/sway/spin/flicker/bob），见 IconMotionState ──
+    // 主图标 + 两个装饰层各自一份独立状态（互不干扰，比如主图标 sway、装饰层 twinkle 同时播不会
+    // 打架）；_themeIconAnimationType/_themeIconAnimationDuration 是主图标顶层那份 animation，切姿势
+    // （CycleIconAction）时如果新姿势没有自己的 animation 就落回这一份，见 ApplyCurrentIconActionFrame
+    private const int MotionTickIntervalMs = 50; // 20fps，这几招都是缓慢的呼吸/摆动，不需要更密的 tick
+    private readonly IconMotionState _mainIconMotion = new();
+    private readonly IconMotionState _layer0Motion = new();
+    private readonly IconMotionState _layer1Motion = new();
+    private Action? _motionTickAction;
+    private string? _themeIconAnimationType;
+    private double? _themeIconAnimationDuration;
+    private bool _themeIconMusicReactive;
+    private string? _themeIconSensitivity;
 
     // ── 歌词同步偏移 / 卡拉OK / 双语——三个都是设置页可以随时改的开关，见 RefreshSettingsFromStore ──
     private int _syncOffsetMs;
@@ -185,16 +231,30 @@ public class FloatingOverlayService : Service
             .Build();
 
         // 3 参数重载（带 foregroundServiceType）是 API 29 起才有的，配合上面 [Service] 特性上声明的
-        // ForegroundServiceType 一起，两边都要对得上，缺一个都会在 API 34+ 的设备上直接崩
+        // ForegroundServiceType 一起，两边都要对得上，缺一个都会在 API 34+ 的设备上直接崩。
+        // TypeMediaProjection 一直带着、不是等真的开始采集才加——真机踩过的坑：一开始想着"只在真的
+        // 用着这个 token 的这段时间才声明这个类型"，等 AudioReactiveCapture.IsActive 变 true 才补一次
+        // StartForeground，结果 MainActivity.OnActivityResult 调 GetMediaProjection 那一步直接抛
+        // SecurityException（"Media projections require a foreground service of type
+        // ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION"）——Android 要求的是"拿 token 这一刻
+        // 之前"就已经是这个类型的前台服务，不是"拿到 token 之后"才补声明，先后顺序反了。所以只要悬浮窗
+        // 开着，就一直带上这个类型，不等 AudioReactiveCapture 真的开始采集，见 AudioReactiveCapture.
+        // ActiveChanged 订阅那边（RefreshForegroundServiceType）仍然留着，是防着"以后这个类型的判断
+        // 条件又要改"这种情况，不是这次真正修 bug 靠的那一行
         if (Build.VERSION.SdkInt >= BuildVersionCodes.Q)
         {
-            StartForeground(NotificationId, notification, ForegroundService.TypeSpecialUse);
+            StartForeground(NotificationId, notification, ForegroundService.TypeSpecialUse | ForegroundService.TypeMediaProjection);
         }
         else
         {
             StartForeground(NotificationId, notification);
         }
     }
+
+    /// <summary>AudioReactiveCapture.IsActive 变了（拿到/收回了 MediaProjection token）就重新调一遍
+    /// StartForegroundWithNotification，把前台服务类型更新成当前实际在用的那一份，见该方法注释。
+    /// 事件可能从别的线程触发，这里统一 Post 回主 Handler 再碰 Service API，不直接在触发线程上跑。</summary>
+    private void RefreshForegroundServiceType() => _mainHandler?.Post(StartForegroundWithNotification);
 
     private void ShowOverlay()
     {
@@ -213,6 +273,8 @@ public class FloatingOverlayService : Service
         _iconView = new ImageView(this) { Visibility = ViewStates.Gone };
         float density = Resources?.DisplayMetrics?.Density ?? 3f;
         int iconSizePx = (int)(IconSizeDp * density);
+        int layerSizePx = (int)(LayerIconSizeDp * density);
+        _layerMarginPx = (int)(LayerMarginDp * density);
 
         _overlayView = new TextView(this)
         {
@@ -225,6 +287,18 @@ public class FloatingOverlayService : Service
         _overlayContainer.AddView(_iconView, new LinearLayout.LayoutParams(iconSizePx, iconSizePx) { RightMargin = (int)(10 * density) });
         _overlayContainer.AddView(_overlayView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent));
         _overlayContainer.SetPadding(32, 20, 32, 20);
+
+        // 多层装饰（layers）——最多 2 个，各自贴在卡片四个角之一，见 ApplySkin。真正加进 WindowManager
+        // 的从 _overlayContainer 换成这一层 FrameLayout：_overlayContainer 本身居中摆放，两个装饰层
+        // 用 Gravity 贴角，具体贴哪个角、显不显示是 ApplySkin 每次套主题时现算的（ApplyLayerAnchor），
+        // 这里先建好两个默认 Gone 的 ImageView 占位
+        _layer0View = new ImageView(this) { Visibility = ViewStates.Gone };
+        _layer1View = new ImageView(this) { Visibility = ViewStates.Gone };
+
+        _rootFrame = new FrameLayout(this);
+        _rootFrame.AddView(_overlayContainer, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent) { Gravity = GravityFlags.Center });
+        _rootFrame.AddView(_layer0View, new FrameLayout.LayoutParams(layerSizePx, layerSizePx) { Gravity = GravityFlags.Top | GravityFlags.Left, LeftMargin = _layerMarginPx, TopMargin = _layerMarginPx });
+        _rootFrame.AddView(_layer1View, new FrameLayout.LayoutParams(layerSizePx, layerSizePx) { Gravity = GravityFlags.Top | GravityFlags.Left, LeftMargin = _layerMarginPx, TopMargin = _layerMarginPx });
 
         // 客制化主题跟统计一样存 FilesDir（持久私有存储），不是 CacheDir——用户手写/粘贴进去的东西，
         // 不该被系统当"可以随便清掉的缓存"处理掉
@@ -252,17 +326,21 @@ public class FloatingOverlayService : Service
 
         // 拖动手势——按住拖到屏幕任意位置，这是悬浮窗最基本的交互，不给拖的话跟一张固定贴纸没区别。
         // 手动记初始触点+初始窗口位置，松手不用做任何事，Android 的 WindowManager 会记着这个
-        // LayoutParams 对象最后一次 UpdateViewLayout 传的位置，不用自己再存一份。
+        // LayoutParams 对象最后一次 UpdateViewLayout 传的位置，不用自己再存一份。挂在 _rootFrame 上
+        // （不是 _overlayContainer）——现在整个悬浮窗是"药丸卡片 + 两个角上的装饰层"这一整块，拖动
+        // 手势要覆盖这一整块，不能只有卡片本身能拖、摸到装饰层那块地方就拖不动。
         //
-        // 顺手在这上面加了"点一下（不是拖）分享当前这句歌词"——按下到松手之间移动距离没超过
-        // tapMoveThresholdPx 就算一次单纯的点击，不是拖动，见 MotionEventActions.Up；跟拖动共用同一个
-        // 手势识别器而不是单独挂一个 Click，是因为悬浮窗一直在拦截触摸事件做拖动，另外挂的 Click
-        // 永远收不到事件
+        // 顺手在这上面加了两种"点一下（不是拖）"的反应：点在图标上、且当前主题真的配了 icon.actions
+        // 就循环切一次姿势（CycleIconAction，呼应桌面版 MainWindow.SkinInteractions.cs 的
+        // CustomIcon_MouseLeftButtonDown）；点在悬浮窗其它地方（文字/装饰层/空白）还是老行为，分享
+        // 当前这句歌词。按下到松手之间移动距离没超过 tapMoveThresholdPx 才算"点一下"，不是拖动，
+        // 见 MotionEventActions.Up；跟拖动共用同一个手势识别器而不是单独挂 Click，是因为悬浮窗一直在
+        // 拦截触摸事件做拖动，另外挂的 Click 永远收不到事件
         float touchStartX = 0, touchStartY = 0;
         int windowStartX = 0, windowStartY = 0;
         bool movedPastTapThreshold = false;
         float tapMoveThresholdPx = 12 * density;
-        _overlayContainer.Touch += (s, e) =>
+        _rootFrame.Touch += (s, e) =>
         {
             var ev = e.Event!;
             switch (ev.Action)
@@ -280,17 +358,21 @@ public class FloatingOverlayService : Service
                     if (Math.Abs(dx) > tapMoveThresholdPx || Math.Abs(dy) > tapMoveThresholdPx) movedPastTapThreshold = true;
                     _layoutParams.X = windowStartX + (int)dx;
                     _layoutParams.Y = windowStartY + (int)dy;
-                    _windowManager.UpdateViewLayout(_overlayContainer, _layoutParams);
+                    _windowManager.UpdateViewLayout(_rootFrame, _layoutParams);
                     e.Handled = true;
                     break;
                 case MotionEventActions.Up:
-                    if (!movedPastTapThreshold) ShareCurrentLyricLine();
+                    if (!movedPastTapThreshold)
+                    {
+                        if (_iconActions is { Count: > 0 } && IsPointInsideIconView(ev.RawX, ev.RawY)) CycleIconAction();
+                        else ShareCurrentLyricLine();
+                    }
                     e.Handled = true;
                     break;
             }
         };
 
-        _windowManager.AddView(_overlayContainer, _layoutParams);
+        _windowManager.AddView(_rootFrame, _layoutParams);
 
         _lyricsFetcher = new PixelLyric8BitFix.LyricsFetcher(_httpClient);
         _lyricsCache = new PixelLyric8BitFix.LyricsCacheStore(System.IO.Path.Combine(CacheDir!.AbsolutePath, "lyrics_cache"));
@@ -318,26 +400,43 @@ public class FloatingOverlayService : Service
         _iconFrameAction = IconFrameTick;
         _mainHandler.Post(_iconFrameAction);
 
+        _motionTickAction = MotionTick;
+        _mainHandler.Post(_motionTickAction);
+
         // 皮肤/同步偏移/卡拉OK/双语都是在 MainPage 的设置页改的，悬浮窗这边是另一个进程/组件——不会
         // 自动知道设置变了，靠 SharedPreferences 自带的变更通知订阅一下，改了哪一项，悬浮窗（哪怕已经
         // 开着）都立刻跟着生效，不用先隐藏再重新显示一次才生效
         _settingsPrefListener = new SettingsPrefListener(() => _mainHandler?.Post(RefreshSettingsFromStore));
         MobileSettingsStore.RegisterChangeListener(_settingsPrefListener);
+
+        // 皮肤音乐律动——AudioReactiveCapture 是静态类（MainActivity 拿到用户同意后从那边直接调），
+        // 这边订阅它的状态变化，好在真的开始/停止采集的时候把前台服务类型跟着更新，见
+        // RefreshForegroundServiceType
+        AudioReactiveCapture.ActiveChanged += RefreshForegroundServiceType;
     }
 
     // ── 精简皮肤：配色 + 边框呼吸动效 ─────────────────────────────────────────────
 
-    /// <summary>把选中的皮肤配色 + 图标套到悬浮窗上——背景/边框颜色来自 MobileSkinPalette，边框宽度/
-    /// 圆角只在第一次算一遍（用的是 dp -> px 换算，屏幕密度中途不会变），换皮肤只是换颜色，不用重新
-    /// 创建 Drawable 对象。图标来自 MobileSkinIconCatalog（内置皮肤，目前都是单帧）或者客制化主题
-    /// 自己的 icon.rows/icon.frames——客制化主题给了 Frames 就用它（1 帧当静态图，>1 帧顺手把
-    /// _iconFrameBitmaps 填上，IconFrameTick 会接着播放，见该方法注释），两者都没有才把 ImageView
-    /// 隐藏掉退回纯文字，不会留一块空白占位。</summary>
+    /// <summary>把选中的皮肤配色 + 图标（主图标 + 最多 2 个装饰层）套到悬浮窗上——背景/边框颜色来自
+    /// MobileSkinPalette，边框宽度/圆角只在第一次算一遍（用的是 dp -> px 换算，屏幕密度中途不会变），
+    /// 换皮肤只是换颜色，不用重新创建 Drawable 对象。主图标来自 MobileSkinIconCatalog（内置皮肤，
+    /// 目前都是单帧）或者客制化主题自己的 icon.rows/icon.frames；点击切姿势（icon.actions）和多层
+    /// 装饰（layers）只有客制化主题才有，内置皮肤没有这两样，见 RenderIconFrames。</summary>
     private void ApplySkin(string skinId)
     {
-        PixelLyric8BitFix.MobileSkinIcon? icon;
-        Bitmap[]? animatedFrames = null; // 只有客制化主题的 icon.frames 会用到，内置皮肤/单帧图标保持 null
-        double frameDurationSeconds = 0;
+        Bitmap[]? mainFrames = null; // 主图标预渲染好的帧数组（长度 1 就是静态图），null 就是这套皮肤压根没有图标
+        double mainFrameDurationSeconds = 0;
+        List<PixelLyric8BitFix.CustomThemeIconAction>? actions = null;
+        Bitmap[][]? actionFrames = null;
+        double[]? actionDurations = null;
+        Bitmap[]? layer0Frames = null; double layer0Duration = 0; string? layer0Anchor = null;
+        Bitmap[]? layer1Frames = null; double layer1Duration = 0; string? layer1Anchor = null;
+        string? mainAnimationType = null; double? mainAnimationDuration = null;
+        bool mainMusicReactive = false; string? mainSensitivity = null;
+        string? layer0AnimationType = null; double? layer0AnimationDuration = null;
+        bool layer0MusicReactive = false; string? layer0Sensitivity = null;
+        string? layer1AnimationType = null; double? layer1AnimationDuration = null;
+        bool layer1MusicReactive = false; string? layer1Sensitivity = null;
 
         // "custom:文件名" 是选了个客制化主题——去 MobileCustomThemeStore 查，查不到（文件被删了/坏了）
         // 就落回内置表默认那一套，不能让悬浮窗因为一个坏掉的自定义主题直接失去配色
@@ -350,44 +449,100 @@ public class FloatingOverlayService : Service
                 _currentPalette = PixelLyric8BitFix.MobileSkinCatalog.FromCustomTheme(customTheme);
                 var themeIcon = customTheme.Icon;
 
-                // 有 Frames 就只认 Frames、忽略 Rows（跟桌面版 CustomThemeIcon.Frames 的注释规则一样）；
-                // 1 帧当静态图标处理，>1 帧才真的要跑动画。没有 Frames 才退回旧的 Rows 判断
-                if (themeIcon?.Frames is { Count: > 0 } frames)
+                mainAnimationType = customTheme.Animation?.Type;
+                mainAnimationDuration = customTheme.Animation?.Duration;
+                mainMusicReactive = customTheme.Animation?.MusicReactive ?? false;
+                mainSensitivity = customTheme.Animation?.Sensitivity;
+
+                if (themeIcon != null)
                 {
-                    var palette = PixelLyric8BitFix.CustomThemeValidator.BuildIconPalette(themeIcon);
-                    var frameRows = frames.Select(f => f.ToArray()).ToList();
-                    icon = new PixelLyric8BitFix.MobileSkinIcon(frameRows[0], palette); // 立刻显示第一帧，不用等第一次 tick
-                    if (frameRows.Count > 1)
+                    (mainFrames, mainFrameDurationSeconds) = RenderIconFrames(themeIcon);
+
+                    // 点击切姿势——每个动作各自预渲染一份帧数组存起来，点击的时候（CycleIconAction）
+                    // 直接切现成的位图，不用现画。一个动作没给 Frames（理论上校验会拦，这里兜底）就
+                    // 落回主图标自己那份，总不能切出一个空白图标
+                    if (themeIcon.Actions is { Count: > 0 } themeActions)
                     {
-                        animatedFrames = MobilePixelIconRenderer.RenderFrames(frameRows, palette);
-                        frameDurationSeconds = PixelLyric8BitFix.CustomThemeValidator.GetFrameDurationSeconds(themeIcon);
+                        actions = themeActions;
+                        actionFrames = new Bitmap[themeActions.Count][];
+                        actionDurations = new double[themeActions.Count];
+                        var actionPalette = PixelLyric8BitFix.CustomThemeValidator.BuildIconPalette(themeIcon);
+                        for (int i = 0; i < themeActions.Count; i++)
+                        {
+                            var action = themeActions[i];
+                            var frameRows = (action.Frames ?? new List<List<string>>()).Select(f => f.ToArray()).ToList();
+                            actionFrames[i] = frameRows.Count > 0
+                                ? MobilePixelIconRenderer.RenderFrames(frameRows, actionPalette)
+                                : (mainFrames ?? Array.Empty<Bitmap>());
+                            actionDurations[i] = action.FrameDuration is double d && d > 0
+                                ? d
+                                : PixelLyric8BitFix.CustomThemeValidator.GetFrameDurationSeconds(themeIcon);
+                        }
                     }
                 }
-                else
+
+                // 多层装饰——最多 2 个，各自贴在卡片四个角之一，见 ApplyLayerAnchor；layer.animation
+                // 走跟主图标同一套 IconMotionState（6 种简单招式，drift/fall/walk 静止不动），见类顶部注释
+                if (customTheme.Layers is { Count: > 0 } layers)
                 {
-                    icon = themeIcon?.Rows is { Count: > 0 } rows
-                        ? new PixelLyric8BitFix.MobileSkinIcon(rows.ToArray(), PixelLyric8BitFix.CustomThemeValidator.BuildIconPalette(themeIcon))
-                        : null;
+                    if (layers.Count > 0 && layers[0].Icon != null)
+                    {
+                        (layer0Frames, layer0Duration) = RenderIconFrames(layers[0].Icon!);
+                        layer0Anchor = layers[0].Anchor;
+                        layer0AnimationType = layers[0].Animation?.Type;
+                        layer0AnimationDuration = layers[0].Animation?.Duration;
+                        layer0MusicReactive = layers[0].Animation?.MusicReactive ?? false;
+                        layer0Sensitivity = layers[0].Animation?.Sensitivity;
+                    }
+                    if (layers.Count > 1 && layers[1].Icon != null)
+                    {
+                        (layer1Frames, layer1Duration) = RenderIconFrames(layers[1].Icon!);
+                        layer1Anchor = layers[1].Anchor;
+                        layer1AnimationType = layers[1].Animation?.Type;
+                        layer1AnimationDuration = layers[1].Animation?.Duration;
+                        layer1MusicReactive = layers[1].Animation?.MusicReactive ?? false;
+                        layer1Sensitivity = layers[1].Animation?.Sensitivity;
+                    }
                 }
             }
             else
             {
                 _currentPalette = PixelLyric8BitFix.MobileSkinCatalog.Find(null);
-                icon = null;
             }
         }
         else
         {
             _currentPalette = PixelLyric8BitFix.MobileSkinCatalog.Find(skinId);
-            icon = PixelLyric8BitFix.MobileSkinIconCatalog.Find(skinId);
+            if (PixelLyric8BitFix.MobileSkinIconCatalog.Find(skinId) is { } builtinIcon)
+            {
+                mainFrames = new[] { MobilePixelIconRenderer.Render(builtinIcon) };
+            }
         }
 
-        // 换皮肤/主题了，不管新皮肤有没有动画，先把上一套的帧动画状态清掉——不清的话切到一个没有
-        // 动画的皮肤，IconFrameTick 还会拿着上一套主题的 Bitmap 数组继续切，图标对不上当前选中的皮肤
-        _iconFrameBitmaps = animatedFrames;
-        _iconFrameDurationSeconds = frameDurationSeconds;
-        _iconFrameIndex = 0;
-        _iconFrameElapsedMs = 0;
+        // 换皮肤/主题了：点击切姿势的状态、"连续听了多久"的计时都要归零——不能让新主题继续顶着
+        // 上一个主题攒下来的"已经点到第几个动作"，也不能让上一个主题的自动切换阈值拿新主题的
+        // 播放时长去比
+        _baseIconFrames = mainFrames;
+        _baseIconFrameDurationSeconds = mainFrameDurationSeconds;
+        _iconActions = actions;
+        _actionFrameBitmaps = actionFrames;
+        _actionFrameDurations = actionDurations;
+        _currentIconActionIndex = 0;
+        _continuousPlaySeconds = 0;
+
+        _mainIconAnim.Reset(_iconView, mainFrames, mainFrameDurationSeconds);
+        _layer0Anim.Reset(_layer0View, layer0Frames, layer0Duration);
+        _layer1Anim.Reset(_layer1View, layer1Frames, layer1Duration);
+
+        // 简单招式动画（pulse/twinkle/sway/spin/flicker/bob）——主图标这份顺手记一份 type/duration，
+        // 点击切姿势（CycleIconAction）时新姿势没自己配 animation 就落回这一份，见 ApplyCurrentIconActionFrame
+        _themeIconAnimationType = mainAnimationType;
+        _themeIconAnimationDuration = mainAnimationDuration;
+        _themeIconMusicReactive = mainMusicReactive;
+        _themeIconSensitivity = mainSensitivity;
+        _mainIconMotion.Start(_iconView, mainAnimationType, mainAnimationDuration, mainMusicReactive, mainSensitivity);
+        _layer0Motion.Start(_layer0View, layer0AnimationType, layer0AnimationDuration, layer0MusicReactive, layer0Sensitivity);
+        _layer1Motion.Start(_layer1View, layer1AnimationType, layer1AnimationDuration, layer1MusicReactive, layer1Sensitivity);
 
         if (_overlayContainer == null || _overlayView == null) return;
 
@@ -405,18 +560,144 @@ public class FloatingOverlayService : Service
         _overlayBackground.SetStroke(_strokeWidthPx, ToAndroidColor(_currentPalette.Accent));
         _overlayView.SetTextColor(ToAndroidColor(_currentPalette.Text));
 
-        if (_iconView != null)
+        if (_iconView != null) _iconView.Visibility = mainFrames is { Length: > 0 } ? ViewStates.Visible : ViewStates.Gone;
+        ApplyLayerAnchor(_layer0View, layer0Frames, layer0Anchor);
+        ApplyLayerAnchor(_layer1View, layer1Frames, layer1Anchor);
+    }
+
+    /// <summary>一份 CustomThemeIcon（主图标、某个装饰层、都是同一个形状）转成预渲染好的帧数组——
+    /// 有 Frames 就只认 Frames、忽略 Rows（跟桌面版 CustomThemeIcon.Frames 的注释规则一样，1 帧当
+    /// 静态图，>1 帧真的要循环播放），没有 Frames 才退回 Rows 当唯一一帧；两者都没有给 null，调用方
+    /// 各自决定"没有图标"该怎么办（隐藏 ImageView）。</summary>
+    private static (Bitmap[]? Frames, double DurationSeconds) RenderIconFrames(PixelLyric8BitFix.CustomThemeIcon icon)
+    {
+        var palette = PixelLyric8BitFix.CustomThemeValidator.BuildIconPalette(icon);
+        if (icon.Frames is { Count: > 0 } frames)
         {
-            if (icon != null)
+            var frameRows = frames.Select(f => f.ToArray()).ToList();
+            return (MobilePixelIconRenderer.RenderFrames(frameRows, palette), PixelLyric8BitFix.CustomThemeValidator.GetFrameDurationSeconds(icon));
+        }
+        if (icon.Rows is { Count: > 0 } rows)
+        {
+            return (new[] { MobilePixelIconRenderer.Render(new PixelLyric8BitFix.MobileSkinIcon(rows.ToArray(), palette)) }, 0);
+        }
+        return (null, 0);
+    }
+
+    /// <summary>按 layer.anchor（四个角之一）摆放这个装饰层的 Gravity + 边距，没有图标/没配 anchor 就
+    /// 整个隐藏。四个方向各自只设跟自己贴的那两条边的 margin（比如贴左上就只给 Left/Top），不然上一次
+    /// 贴的是右下角、这次换成贴左上，没清掉的 Right/Bottom margin 会跟新的 Left/Top margin 一起生效，
+    /// 图标被顶到不是任何一个角的奇怪位置。</summary>
+    private void ApplyLayerAnchor(ImageView? view, Bitmap[]? frames, string? anchor)
+    {
+        if (view == null) return;
+        if (frames is not { Length: > 0 } || anchor == null)
+        {
+            view.Visibility = ViewStates.Gone;
+            return;
+        }
+        view.Visibility = ViewStates.Visible;
+        if (view.LayoutParameters is not FrameLayout.LayoutParams lp) return;
+
+        lp.LeftMargin = 0; lp.TopMargin = 0; lp.RightMargin = 0; lp.BottomMargin = 0;
+        switch (anchor)
+        {
+            case "top-right":
+                lp.Gravity = GravityFlags.Top | GravityFlags.Right;
+                lp.RightMargin = _layerMarginPx; lp.TopMargin = _layerMarginPx;
+                break;
+            case "bottom-left":
+                lp.Gravity = GravityFlags.Bottom | GravityFlags.Left;
+                lp.LeftMargin = _layerMarginPx; lp.BottomMargin = _layerMarginPx;
+                break;
+            case "bottom-right":
+                lp.Gravity = GravityFlags.Bottom | GravityFlags.Right;
+                lp.RightMargin = _layerMarginPx; lp.BottomMargin = _layerMarginPx;
+                break;
+            default: // "top-left" 以及任何理论上不该出现的值（校验已经拦过），都落回左上角，不留一个摆不出去的装饰层
+                lp.Gravity = GravityFlags.Top | GravityFlags.Left;
+                lp.LeftMargin = _layerMarginPx; lp.TopMargin = _layerMarginPx;
+                break;
+        }
+        view.LayoutParameters = lp; // 重新赋值触发 FrameLayout 按新 Gravity/margin 重新摆放
+    }
+
+    /// <summary>点一下装饰栏图标——循环切到下一个姿势，绕完一圈回到"动作 0"（主图标自己），跟桌面版
+    /// MainWindow.SkinInteractions.cs 的 CustomIcon_MouseLeftButtonDown 是同一条规则。只换帧，不做
+    /// 桌面版那个"同一条轨道才淡入淡出"的交叉淡化——Android 端还没有那一整套移动轨道的概念，见类顶部
+    /// 注释，这版是瞬间切换。</summary>
+    private void CycleIconAction()
+    {
+        if (_iconActions is not { Count: > 0 }) return;
+        _currentIconActionIndex = (_currentIconActionIndex + 1) % (_iconActions.Count + 1); // 0 = 主图标本身
+        ApplyCurrentIconActionFrame();
+    }
+
+    /// <summary>切到当前索引对应的那一份帧数组 + 那一份 animation——"动作 0"（主图标自己）永远用
+    /// _themeIconAnimationType/_themeIconAnimationDuration（ApplySkin 时记的那份顶层 animation）；
+    /// 别的动作如果自己填了 animation 就用自己那份，没填就落回顶层那份，跟桌面版 CustomThemeIconAction.
+    /// Animation 的注释是同一条规则（"不填就是所有动作共用 icon 顶层那一个 animation"）。</summary>
+    private void ApplyCurrentIconActionFrame()
+    {
+        if (_currentIconActionIndex <= 0)
+        {
+            _mainIconAnim.Reset(_iconView, _baseIconFrames, _baseIconFrameDurationSeconds);
+            _mainIconMotion.Start(_iconView, _themeIconAnimationType, _themeIconAnimationDuration, _themeIconMusicReactive, _themeIconSensitivity);
+            return;
+        }
+
+        int i = _currentIconActionIndex - 1;
+        if (_actionFrameBitmaps != null && _actionFrameDurations != null && i >= 0 && i < _actionFrameBitmaps.Length)
+        {
+            _mainIconAnim.Reset(_iconView, _actionFrameBitmaps[i], _actionFrameDurations[i]);
+
+            var actionAnimation = (_iconActions != null && i < _iconActions.Count) ? _iconActions[i].Animation : null;
+            if (actionAnimation != null)
             {
-                _iconView.SetImageBitmap(MobilePixelIconRenderer.Render(icon.Value));
-                _iconView.Visibility = ViewStates.Visible;
+                _mainIconMotion.Start(_iconView, actionAnimation.Type, actionAnimation.Duration, actionAnimation.MusicReactive, actionAnimation.Sensitivity);
             }
             else
             {
-                _iconView.Visibility = ViewStates.Gone;
+                _mainIconMotion.Start(_iconView, _themeIconAnimationType, _themeIconAnimationDuration, _themeIconMusicReactive, _themeIconSensitivity);
             }
         }
+    }
+
+    /// <summary>数据驱动的自动切换——当前这首歌"连续播放"满 CustomThemeIconAction.AutoSwitchAfterSeconds
+    /// 秒就自动切到那个动作，不用等用户点，见 UpdateListeningStats 里顺手累加的 _continuousPlaySeconds。
+    /// 多个动作都设了这个字段的话取"阈值已经被跨过的里面动作序号最大"的那个；已经手动点到（或者被
+    /// 更高阶段自动切到）更靠后的动作时不会被拉回来，只会把索引往前推——跟桌面版 MainWindow.Skins.cs
+    /// 的 EvaluateAutoSwitchIconAction 是同一条规则。</summary>
+    private void EvaluateAutoSwitchIconAction()
+    {
+        if (_iconActions is not { Count: > 0 }) return;
+
+        int target = _currentIconActionIndex;
+        for (int i = 0; i < _iconActions.Count; i++)
+        {
+            if (_iconActions[i].AutoSwitchAfterSeconds is double threshold && threshold > 0 && _continuousPlaySeconds >= threshold)
+            {
+                int candidateIndex = i + 1; // 动作 0 是主图标，_iconActions[i] 对应索引 i+1
+                if (candidateIndex > target) target = candidateIndex;
+            }
+        }
+        if (target != _currentIconActionIndex)
+        {
+            _currentIconActionIndex = target;
+            ApplyCurrentIconActionFrame();
+        }
+    }
+
+    /// <summary>这次点击落点是不是在主图标的屏幕范围内——点在图标上循环切姿势，点在悬浮窗其它地方
+    /// （文字/装饰层/空白）分享歌词，见 _rootFrame.Touch 的 Up 分支。图标当前隐藏（Visibility != Visible，
+    /// 比如没有任何图标数据的皮肤）直接当"没点中"，不会点到一块看不见的区域却触发切换。</summary>
+    private bool IsPointInsideIconView(float rawX, float rawY)
+    {
+        if (_iconView == null || _iconView.Visibility != ViewStates.Visible) return false;
+        var location = new int[2];
+        _iconView.GetLocationOnScreen(location);
+        return rawX >= location[0] && rawX <= location[0] + _iconView.Width
+            && rawY >= location[1] && rawY <= location[1] + _iconView.Height;
     }
 
     /// <summary>边框颜色的透明度按正弦波来回变化——呼吸感的淡入淡出，呼应桌面版自定义主题里
@@ -435,28 +716,208 @@ public class FloatingOverlayService : Service
         _mainHandler?.PostDelayed(_pulseAction!, PulseIntervalMs);
     }
 
-    /// <summary>客制化主题 icon.frames 的逐帧播放——跟桌面版 MainWindow.Skins.cs 的
+    /// <summary>主图标 + 两个装饰层的逐帧播放——跟桌面版 MainWindow.Skins.cs 的
     /// UpdateCustomIconFrameAnimation 是同一个"tick 累计时间、攒够一帧的时长才切"思路，只是这边按
     /// 真实毫秒数累加（IconFrameTickIntervalMs 是固定的 tick 间隔），桌面版按 50ms 一次的固定 tick
-    /// 数硬算，两种写法效果一样，这边这样写更顺手。_iconFrameBitmaps 为 null 或者只有 1 张（静态图标）
-    /// 就什么都不做，但这个 tick 本身照样一直跑着（跟 _pulseAction 一样常驻），不然下次 ApplySkin
-    /// 切到一个真的有动画的主题时，还得再额外想办法把这个 tick 重新启动一遍。</summary>
+    /// 数硬算，两种写法效果一样，这边这样写更顺手。三处各自的状态（帧数组/帧间隔/累计时间/当前帧号）
+    /// 都收在 FrameAnimState 里，静态图标/没有图标（Frames 为 null 或只有 1 张）Tick 内部直接跳过，
+    /// 但这个 tick 本身照样一直跑着（跟 _pulseAction 一样常驻），不然下次 ApplySkin 切到一个真的有
+    /// 动画的主题时，还得再额外想办法把这个 tick 重新启动一遍。</summary>
     private void IconFrameTick()
     {
-        var frames = _iconFrameBitmaps;
-        if (frames is { Length: > 1 } && _iconView != null)
+        _mainIconAnim.Tick(IconFrameTickIntervalMs);
+        _layer0Anim.Tick(IconFrameTickIntervalMs);
+        _layer1Anim.Tick(IconFrameTickIntervalMs);
+
+        _mainHandler?.PostDelayed(_iconFrameAction!, IconFrameTickIntervalMs);
+    }
+
+    /// <summary>主图标 + 两个装饰层的"简单招式"动画（pulse/twinkle/sway/spin/flicker/bob）——每个 tick
+    /// 按累计时间现算这一刻该是什么 Alpha/Rotation/TranslationY，直接改 View 属性，不是像
+    /// IconFrameTick 那样"攒够时长才动一下"，这几招是连续渐变的，20fps（50ms 一次）才够顺滑。</summary>
+    private void MotionTick()
+    {
+        _mainIconMotion.Tick(MotionTickIntervalMs);
+        _layer0Motion.Tick(MotionTickIntervalMs);
+        _layer1Motion.Tick(MotionTickIntervalMs);
+
+        _mainHandler?.PostDelayed(_motionTickAction!, MotionTickIntervalMs);
+    }
+
+    /// <summary>客制化主题 animation 字段的 6 种"简单招式"——跟桌面版 MainWindow.Skins.cs 的
+    /// StartCustomIconAnimation 是同一套参数（幅度/默认时长），桌面版是给每一招各自开一条 WPF
+    /// Storyboard，这边没有 Storyboard，用 tick 手动算每一帧该是什么值，效果尽量对齐：
+    /// pulse/twinkle/flicker 三招桌面版分别是"图标外发光的透明度"和"图标本体的透明度"两个不同的
+    /// 视觉层，Android 端的 ImageView 没有现成的发光效果，这版统一收敛成图标本体的 Alpha，用不同的
+    /// 幅度区间让三招看起来还是有区分度（不是完全一样的呼吸感）；sway/spin 都是 Rotation；bob 是
+    /// TranslationY。drift/fall/walk 这三招桌面版要专属的渲染轨道（三重影飘过/飘落、装饰带里来回
+    /// 走），这版还没做，选了这三招图标就静止不动，不报错也不崩——见类顶部注释这块已知的范围限制。
+    ///
+    /// type 支持用 "+" 连接的组合（比如 "pulse+sway"）——CustomThemeValidator.ValidateAnimation 已经
+    /// 校验过组合本身是合法的（不会撞同一个 View 属性），这里直接信任传进来的数据，逐段拆开、各自
+    /// 影响自己的属性，互不覆盖。</summary>
+    private sealed class IconMotionState
+    {
+        private View? _target;
+        private string[] _types = Array.Empty<string>();
+        private double _durationSeconds;
+        private double _elapsedMs;
+        private bool _musicReactive;
+        private double _sensitivityMultiplier = 1.0;
+
+        public void Start(View? target, string? animationType, double? durationSeconds, bool musicReactive = false, string? sensitivity = null)
         {
-            _iconFrameElapsedMs += IconFrameTickIntervalMs;
-            double frameDurationMs = Math.Max(50, _iconFrameDurationSeconds * 1000); // 下限保护，免得 JSON 填了个离谱小的值导致每 tick 都切帧
-            if (_iconFrameElapsedMs >= frameDurationMs)
+            _target = target;
+            _types = string.IsNullOrWhiteSpace(animationType)
+                ? Array.Empty<string>()
+                : animationType.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            _durationSeconds = durationSeconds is double d && d > 0 ? d : 0; // 0 = 没填，每一招用自己的默认时长
+            _elapsedMs = 0;
+            _musicReactive = musicReactive;
+            _sensitivityMultiplier = PixelLyric8BitFix.CustomThemeValidator.SensitivityToMultiplier(sensitivity);
+
+            // 换了动画（或者压根没有动画）就把上一套可能留下的变形复位，不然比如从 sway 切到没有
+            // animation 的皮肤，图标会卡在上一次摆到一半的角度不回正
+            if (_target != null)
             {
-                _iconFrameElapsedMs = 0;
-                _iconFrameIndex = (_iconFrameIndex + 1) % frames.Length;
-                _iconView.SetImageBitmap(frames[_iconFrameIndex]);
+                _target.Alpha = 1f;
+                _target.Rotation = 0f;
+                _target.TranslationY = 0f;
             }
         }
 
-        _mainHandler?.PostDelayed(_iconFrameAction!, IconFrameTickIntervalMs);
+        /// <summary>皮肤音乐律动——musicReactive 开着、总开关（MobileSettingsStore.MusicReactiveEnabled）
+        /// 也开着、AudioReactiveCapture 真的在采集（IsActive）这三个条件都满足才会让这几招"跟着响度/
+        /// 鼓点变速"，缺一个都退回正常速度（rate=1.0）播放，不是"没数据就随便定一个慢速"，见
+        /// AudioReactiveCapture.cs 顶部注释。ratio 的原始值所有正在播的 animation 共用同一份，这里只
+        /// 是套自己那份 sensitivity（跟桌面版 ApplyReactiveSensitivity 同一条公式），把"响度→速度"这条
+        /// 曲线拉大/收窄，不是重新算一遍响度。</summary>
+        public void Tick(int intervalMs)
+        {
+            if (_target == null || _types.Length == 0) return;
+
+            double rate = 1.0;
+            if (_musicReactive && MobileSettingsStore.MusicReactiveEnabled && AudioReactiveCapture.IsActive)
+            {
+                double raw = AudioReactiveCapture.RawRatio;
+                double adjusted = AudioReactiveCapture.BaseSpeedRatio + (raw - AudioReactiveCapture.BaseSpeedRatio) * _sensitivityMultiplier;
+                rate = Math.Clamp(adjusted, AudioReactiveCapture.MinSpeedRatio, AudioReactiveCapture.MaxSpeedRatio);
+            }
+
+            _elapsedMs += intervalMs * rate;
+            double t = _elapsedMs / 1000.0;
+
+            float? alpha = null, rotation = null, translationY = null;
+            foreach (var type in _types)
+            {
+                switch (type)
+                {
+                    case "pulse": // 呼吸发光——幅度收窄一点（0.6~1.0），比 twinkle 更平缓
+                        alpha = (float)Triangle(t, _durationSeconds > 0 ? _durationSeconds : 2.2, 0.6, 1.0);
+                        break;
+                    case "twinkle": // 渐隐渐现，幅度比 pulse 大，更像星星闪烁
+                        alpha = (float)Triangle(t, _durationSeconds > 0 ? _durationSeconds : 1.6, 0.25, 1.0);
+                        break;
+                    case "flicker": // 不规则明暗跳动，节奏比 pulse/twinkle 更"毛躁"，见 Flicker
+                        alpha = (float)Flicker(t, _durationSeconds > 0 ? _durationSeconds : 2.0);
+                        break;
+                    case "sway": // 以图标中心为轴心左右轻摆，±8°
+                        rotation = (float)Triangle(t, _durationSeconds > 0 ? _durationSeconds : 3.2, -8, 8);
+                        break;
+                    case "spin": // 匀速转圈
+                        {
+                            double dur = _durationSeconds > 0 ? _durationSeconds : 4;
+                            double frac = (t % dur) / dur;
+                            rotation = (float)(frac * 360);
+                        }
+                        break;
+                    case "bob": // 上下轻轻浮动，纯位置浮动不是旋转摆动（那是 sway）
+                        {
+                            double dur = _durationSeconds > 0 ? _durationSeconds : 3;
+                            translationY = (float)(Math.Sin(t / dur * 2 * Math.PI) * 5);
+                        }
+                        break;
+                    // drift/fall/walk：没有对应分支，静默跳过——图标继续静止不动，见类顶部注释
+                }
+            }
+
+            if (alpha is float a) _target.Alpha = a;
+            if (rotation is float r) _target.Rotation = r;
+            if (translationY is float ty) _target.TranslationY = ty;
+        }
+
+        /// <summary>三角波：from 到 to 一个来回正好是 2×oneWayDurationSeconds——对应桌面版
+        /// DoubleAnimation(from, to, oneWayDuration) 配 AutoReverse=true 的效果（那个 Duration
+        /// 参数是"去程"一趟的时间，AutoReverse 会自动补一趟等长的回程）。</summary>
+        private static double Triangle(double t, double oneWayDurationSeconds, double from, double to)
+        {
+            double full = oneWayDurationSeconds * 2;
+            double phase = t % full;
+            double frac = phase < oneWayDurationSeconds ? phase / oneWayDurationSeconds : (full - phase) / oneWayDurationSeconds; // 0→1→0
+            return from + (to - from) * frac;
+        }
+
+        /// <summary>不规则明暗跳动——照抄桌面版 StartCustomIconAnimation 里 flicker 那几个关键帧的
+        /// 时间比例，数值换算到这版收窄过的 Alpha 区间（0.55~0.85，原始是 drop shadow opacity 的
+        /// 0.4~0.75，挪到图标本体上幅度收一点，免得跟主体一起变暗时太突兀）。</summary>
+        private static double Flicker(double t, double durationSeconds)
+        {
+            double frac = (t % durationSeconds) / durationSeconds; // 0~1
+            Span<(double X, double Y)> keys = stackalloc (double, double)[]
+            {
+                (0, 0.65), (0.15, 0.85), (0.3, 0.55), (0.42, 0.8), (1.0, 0.65),
+            };
+            for (int i = 0; i < keys.Length - 1; i++)
+            {
+                var (x0, y0) = keys[i];
+                var (x1, y1) = keys[i + 1];
+                if (frac >= x0 && frac <= x1)
+                {
+                    double localFrac = x1 > x0 ? (frac - x0) / (x1 - x0) : 0;
+                    return y0 + (y1 - y0) * localFrac;
+                }
+            }
+            return keys[^1].Y;
+        }
+    }
+
+    /// <summary>逐帧动画的播放状态——主图标（含点击切姿势换上来的那一帧）、两个装饰层，三处都是同一套
+    /// "tick 累计时间、攒够一帧的时长才切"逻辑，抽成这个小类避免三份重复的帧数组/帧间隔/累计时间/
+    /// 当前帧号字段，见 IconFrameTick。Frames 只有 1 张（或 null）就是静态图标/没有图标，Tick 直接
+    /// 跳过；Reset 换一套新数据的同时会立刻把第一帧画出来，不用等下一次 tick 才第一次显示。</summary>
+    private sealed class FrameAnimState
+    {
+        private Bitmap[]? _frames;
+        private double _durationSeconds;
+        private double _elapsedMs;
+        private int _index;
+        private ImageView? _target;
+
+        public void Reset(ImageView? target, Bitmap[]? frames, double durationSeconds)
+        {
+            _target = target;
+            _frames = frames;
+            _durationSeconds = durationSeconds;
+            _elapsedMs = 0;
+            _index = 0;
+            if (_target != null && _frames is { Length: > 0 })
+            {
+                _target.SetImageBitmap(_frames[0]);
+            }
+        }
+
+        public void Tick(int intervalMs)
+        {
+            if (_target == null || _frames is not { Length: > 1 }) return;
+            _elapsedMs += intervalMs;
+            double frameDurationMs = Math.Max(50, _durationSeconds * 1000); // 下限保护，免得 JSON 填了个离谱小的值导致每 tick 都切帧
+            if (_elapsedMs >= frameDurationMs)
+            {
+                _elapsedMs = 0;
+                _index = (_index + 1) % _frames.Length;
+                _target.SetImageBitmap(_frames[_index]);
+            }
+        }
     }
 
     private static global::Android.Graphics.Color ToAndroidColor(PixelLyric8BitFix.RgbaColor c) =>
@@ -563,6 +1024,7 @@ public class FloatingOverlayService : Service
             _currentLines = null;
             _currentLrcContent = null;
             _translationLines = null;
+            _continuousPlaySeconds = 0; // 换歌清零——点击切姿势的自动切换阈值是按"这首歌连续播放了多久"算的，见 EvaluateAutoSwitchIconAction
             _fetchCts?.Cancel();
             _fetchCts = new System.Threading.CancellationTokenSource();
             _ = FetchLyricsAsync(_currentTitle, _currentArtist, _totalDuration, _fetchCts.Token);
@@ -641,6 +1103,11 @@ public class FloatingOverlayService : Service
         if (_isPlaying && _controller != null && !string.IsNullOrEmpty(_currentTitle) && elapsed > 0 && elapsed < StatsMaxTickGapSeconds)
         {
             _pendingListenSeconds += elapsed;
+
+            // 点击切姿势的数据驱动自动切换（AutoSwitchAfterSeconds）用的"这首歌连续播放了多久"，
+            // 复用同一段"暂停不计时、tick 间隔太长不计入"的口径，不用单独再攒一份，见类顶部注释
+            _continuousPlaySeconds += elapsed;
+            EvaluateAutoSwitchIconAction();
         }
 
         if (_pendingListenSeconds >= StatsFlushThresholdSeconds)
@@ -943,6 +1410,12 @@ public class FloatingOverlayService : Service
     {
         FlushListeningStats(_currentTitle + "|" + _currentArtist); // 悬浮窗要关了，不丢最后几秒听歌时长，跟桌面版关窗时的 flush 是同一个用意
 
+        // 皮肤音乐律动——悬浮窗都关了就没必要继续占着 AudioRecord/MediaProjection 这些系统资源，
+        // 也顺手把 Android 15 那个"正在被捕获"的状态栏提示收掉，不留着白占，见 AudioReactiveCapture.
+        // Stop 注释
+        AudioReactiveCapture.ActiveChanged -= RefreshForegroundServiceType;
+        AudioReactiveCapture.Stop();
+
         if (_mainHandler != null && _renderAction != null)
         {
             _mainHandler.RemoveCallbacks(_renderAction);
@@ -961,7 +1434,18 @@ public class FloatingOverlayService : Service
             _mainHandler.RemoveCallbacks(_iconFrameAction);
         }
         _iconFrameAction = null;
-        _iconFrameBitmaps = null;
+        _baseIconFrames = null;
+        _iconActions = null;
+        _actionFrameBitmaps = null;
+        _actionFrameDurations = null;
+        _currentIconActionIndex = 0;
+        _continuousPlaySeconds = 0;
+
+        if (_mainHandler != null && _motionTickAction != null)
+        {
+            _mainHandler.RemoveCallbacks(_motionTickAction);
+        }
+        _motionTickAction = null;
 
         if (_settingsPrefListener != null)
         {
@@ -985,13 +1469,16 @@ public class FloatingOverlayService : Service
 
         _mainHandler = null;
 
-        if (_overlayContainer != null && _windowManager != null)
+        if (_rootFrame != null && _windowManager != null)
         {
-            _windowManager.RemoveView(_overlayContainer);
+            _windowManager.RemoveView(_rootFrame);
         }
+        _rootFrame = null;
         _overlayContainer = null;
         _iconView = null;
         _overlayView = null;
+        _layer0View = null;
+        _layer1View = null;
         _layoutParams = null;
     }
 

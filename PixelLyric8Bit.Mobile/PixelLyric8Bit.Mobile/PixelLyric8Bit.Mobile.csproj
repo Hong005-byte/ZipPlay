@@ -10,7 +10,10 @@
     <!-- App Identifier -->
     <ApplicationId>com.zipplay.mobile</ApplicationId>
     <!-- Versions -->
-    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <!-- ApplicationDisplayVersion 要跟 AppVersion.cs 的 AppVersion.Current 保持一致（那边给检查
+         更新用来跟 GitHub Release 的 "mobile-v" tag 比大小，这边是系统层面显示的版本号），发布新
+         版本时两处一起改，见 AppVersion.cs 顶部注释 -->
+    <ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
     <ApplicationVersion>1</ApplicationVersion>
     <!-- Package Publisher -->
     <ApplicationPublisher>PixelLyric8Bit.Mobile</ApplicationPublisher>
