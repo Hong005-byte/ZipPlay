@@ -16,10 +16,29 @@
       <RowDefinition Height="Auto"/>
     </Grid.RowDefinitions>
 
+    <!-- 跟着音乐跳动的律动条——铺在整个全屏页面的最底层当背景（Grid 里最先声明的元素在最下层，见
+         UpdateMusicBars 注释），不是挤在播放控制条上方那一小条。IsHitTestVisible="False"：这一层
+         纯装饰，不该抢点击/拖动事件，唤出顶部条的 RootGrid_PointerPressed 得照样能收到事件。宽度不
+         写死（Stretch），实际每根柱子的间距在 UpdateMusicBars 里按 ActualWidth 现算，不同屏幕宽度
+         都能铺满。 -->
+    <Canvas x:Name="MusicBarsCanvas" Grid.Row="0" Grid.RowSpan="3" HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch" IsHitTestVisible="False" Visibility="Collapsed"/>
+    <!-- 灰色蒙版——盖在律动条上面，把柱子（以及柱子后面的皮肤背景色）一起压暗一档，不然柱子跳动的
+         颜色太抢眼、跟前景的歌词/按钮抢注意力。压得比第一版更暗一些（0x99 ≈ 60% 黑）——见这次反馈
+         "律动会抢到歌词的呈现"，柱子本身在 ApplyPalette 里上色时也把透明度收得更低了，两边一起压。
+         同样不接触点，见上面注释。 -->
+    <Rectangle x:Name="MusicBarsDimOverlay" Grid.Row="0" Grid.RowSpan="3" HorizontalAlignment="Stretch"
+               VerticalAlignment="Stretch" Fill="#99000000" IsHitTestVisible="False" Visibility="Collapsed"/>
+
     <!-- 顶部：退出全屏 + 皮肤图标（客制化主题的 icon.frames 会在这动，见 IconFrameTimer_Tick）+
          当前曲名/艺人——无操作几秒后整条淡出（见 IdleHideTimer_Tick），点一下屏幕任意位置唤出 -->
     <StackPanel x:Name="TopBar" Grid.Row="0" Orientation="Horizontal" Padding="20,20,20,0" VerticalAlignment="Top">
       <Button x:Name="BtnExit" Content="✕ 退出全屏" Click="BtnExit_Click" Padding="12,6"/>
+      <!-- 动感歌词的快捷开关——跟「歌词功能设置」页那个 ✨ 动感歌词勾选框是同一个设置项
+           （MobileSettingsStore.KineticLyricsEnabled），这里直接翻转它，不用退出全屏再进设置页
+           才能切换，见 BtnToggleKinetic_Click。两边改的是同一份 SharedPreferences，哪边改了
+           另一边下次打开都会读到最新值，互相同步不用额外接线。 -->
+      <Button x:Name="BtnToggleKinetic" Content="✨" Click="BtnToggleKinetic_Click" Padding="12,6" Margin="10,0,0,0"/>
       <Image x:Name="SkinIcon" Width="32" Height="32" Stretch="Uniform" Margin="16,0,0,0"
              VerticalAlignment="Center" Visibility="Collapsed"/>
       <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
@@ -43,12 +62,34 @@
          Row 1 里居中，歌词的视觉中心会被这个高度差往上拽，看起来比屏幕正中间偏高。跨三行按整个屏幕
          的高度重新居中，视觉上就正好落在正中间偏下一点（因为底部条更高，正中间往下才是真正视觉平衡
          的位置），不用再手动拍一个固定的偏移量。 -->
-    <StackPanel Grid.Row="0" Grid.RowSpan="3" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="36,0">
+    <StackPanel x:Name="LyricStackPanel" Grid.Row="0" Grid.RowSpan="3" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="36,0">
       <TextBlock x:Name="TxtLyricLine" FontFamily="Consolas" FontSize="30" FontWeight="Bold"
                  TextAlignment="Center" TextWrapping="Wrap" HorizontalAlignment="Center"/>
       <TextBlock x:Name="TxtTranslationLine" FontFamily="Consolas" FontSize="18" Foreground="#999999"
                  TextAlignment="Center" TextWrapping="Wrap" HorizontalAlignment="Center" Margin="0,10,0,0"/>
     </StackPanel>
+
+    <!-- 动感歌词——开了「✨ 动感歌词」这个设置（见 LyricFeaturesPage，或者顶部条那个 ✨ 按钮，见
+         BtnToggleKinetic）才会露出来，跟上面 LyricStackPanel 互斥显示，见 FullScreenPlayerPage.
+         xaml.cs 里 ShowKineticLyricHost。当前行按几个词一组拆成"段"，跟着播放进度依次冒出来——
+         已经冒出来的段不会被顶掉/删除，一直留到这一行结束、下一行歌词开始才整体清空重摆（见
+         UpdateKineticLyric 顶部注释这次改动的取舍），不是逐词互相替换的快速闪烁。每个段自己的
+         字号/位置（左/中/右 + 上下浮动）/倾斜角度是这一段第一次冒出来的时候抽一次定下来的，这里
+         不放具体的 TextBlock——AddKineticSegment 每冒出一段就现造一个塞进来，见该方法注释。
+         TxtKineticTranslation 固定贴在这块区域底部，字号小、位置不跟着抖，双语歌词的翻译行在这个
+         模式下也不会跟丢。
+
+         Grid.Row="1"（不是像 LyricStackPanel 那样 Grid.Row="0" Grid.RowSpan="3"）是这次改动的关键：
+         Row 1 是 RowDefinitions 里那个 Height="*" 的行，天生就是"整个屏幕减去顶部条（Row 0，Auto）
+         和底部播放控制条（Row 2，Auto）之后剩下的那一块"——把动感歌词锁在这一行里，段落的位置/
+         上下浮动范围只在这一块区域内换算（见 AddKineticSegment 里按 KineticLyricHost.ActualHeight
+         算的那几个锚点），跳不到时长/进度条/三个播放按钮那一整块地盘去，这是 Grid 布局系统本身保证
+         的、不是靠猜一个像素数硬凑——见反馈"歌词跳动不要跳到歌长/按钮后面"。 -->
+    <Grid x:Name="KineticLyricHost" Grid.Row="1" Visibility="Collapsed">
+      <TextBlock x:Name="TxtKineticTranslation" FontFamily="Consolas" FontSize="16" Foreground="#999999"
+                 TextAlignment="Center" TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                 Margin="36,0,36,12"/>
+    </Grid>
 
     <!-- 底部：可拖动的播放进度条（拖完松手才真的 seek，见 ProgressSlider_PointerReleased，不知道
          总时长就直接隐藏，拖不出比例）+ 时间文字 + 上一首/播放暂停/下一首。播放/暂停键用当前皮肤的
@@ -65,7 +106,7 @@
          照抄"实际正在播放的位置"，看起来就像这条进度条跟时间数字是两个不同步的东西、拖了也没反应，
          见 ProgressSlider_ValueChanged——拖的时候时间文字改成跟着手指下的目标位置走，松手才真的
          提交 seek，这样"拖着看时间往前/往后走"这个直观反馈才对得上。 -->
-    <StackPanel Grid.Row="2" HorizontalAlignment="Center" Padding="0,0,0,32">
+    <StackPanel x:Name="BottomControlsPanel" Grid.Row="2" HorizontalAlignment="Center" Padding="0,0,0,32">
       <Slider x:Name="ProgressSlider" Width="280" Minimum="0" Visibility="Collapsed"
               PointerPressed="ProgressSlider_PointerPressed" PointerReleased="ProgressSlider_PointerReleased"
               PointerCaptureLost="ProgressSlider_PointerCaptureLost" ValueChanged="ProgressSlider_ValueChanged"/>
@@ -83,5 +124,40 @@
         </Button>
       </StackPanel>
     </StackPanel>
+
+    <!-- 客制化主题的多层装饰（layers，最多 2 个）——只有客制化主题才有，内置皮肤没有这两样。贴在
+         整个全屏页面四角之一，跟悬浮窗 FloatingOverlayService.ApplyLayerAnchor 是同一份数据源、同
+         一条"top-left/top-right/bottom-left/bottom-right"规则，只是那边贴的是悬浮窗那一小张卡片
+         的角，这边贴的是整块屏幕的角——用户要求"全屏模式右下角放主题自己的图标"，配的 anchor 填
+         bottom-right 就会贴到这。Grid.RowSpan="3" 让它按整个屏幕定位，不受顶部条/底部控制条这两个
+         Auto 行影响。>1 帧会跟着 LayerFrameTick 播放逐帧动画（跟主图标 IconFrameTick 同一个"tick
+         累计时间、攒够一帧才切"思路），没有图标/没配 anchor 就整个 Collapsed，见 ApplyPalette。 -->
+    <Image x:Name="LayerIcon0" Grid.Row="0" Grid.RowSpan="3" Width="40" Height="40" Stretch="Uniform"
+           Margin="20" Visibility="Collapsed"/>
+    <Image x:Name="LayerIcon1" Grid.Row="0" Grid.RowSpan="3" Width="40" Height="40" Stretch="Uniform"
+           Margin="20" Visibility="Collapsed"/>
+
+    <!-- 右下角的主题图标——就是当前皮肤/客制化主题自己那个图标（跟顶部条 SkinIcon 显示的是同一份
+         数据、同一份逐帧动画，见 ApplyPalette 和 IconFrameTick 里两个一起赋值的那几行），有
+         icon.frames 多帧的话这里也会跟着动。
+
+         跟上面 LayerIcon0/1 那套"多层装饰"不是一回事：那套是客制化主题 JSON 里可选的 layers 字段，
+         得用户自己手写 anchor="bottom-right" 才会出现，内置皮肤根本没有这个字段——这就是之前
+         用户反馈"右下角没显示我的 icon"的原因（他要的是主题本身那个图标，不是额外写一层 layers）。
+         这个 CornerSkinIcon 不挑主题：只要当前皮肤有图标（内置皮肤、客制化主题都算），右下角就有。
+
+         Grid.RowSpan="3" + 右下角对齐：贴的是整块屏幕的右下角。底部三个播放按钮是水平居中的，
+         右下角这块是空的，不会挡住按钮。 -->
+    <Image x:Name="CornerSkinIcon" Grid.Row="0" Grid.RowSpan="3" Width="56" Height="56" Stretch="Uniform"
+           HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,24"
+           IsHitTestVisible="False" Visibility="Collapsed"/>
+
+    <!-- 手动导入 LRC——确认联网抓不到词（不是还没抓完）才露出来，见 UpdateLyricUi 里
+         _currentLines.Count == 0 那个分支。放屏幕左下角，不是歌词区域中间——中间那个位置跟底部
+         播放控制条（进度条+时间文字）是同一块屏幕空间，按钮摆那会挡住时长文字，见这次改动的反馈。
+         Margin 的下边距比 LayerIcon0/1（也是 bottom-left 时）大一截，两个都出现的话不会叠在一起。 -->
+    <Button x:Name="BtnImportLrc" Content="📄 导入 LRC" Click="BtnImportLrc_Click"
+            Grid.Row="0" Grid.RowSpan="3" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+            Padding="14,8" Margin="20,20,20,84" Visibility="Collapsed"/>
   </Grid>
 </Page>

@@ -19,6 +19,7 @@ public static class MobileSettingsStore
     private const string KeyKaraokeEnabled = "karaoke_enabled";
     private const string KeyBilingualEnabled = "bilingual_enabled";
     private const string KeyMusicReactiveEnabled = "music_reactive_enabled";
+    private const string KeyKineticLyricsEnabled = "kinetic_lyrics_enabled";
 
     private static ISharedPreferences Prefs =>
         global::Android.App.Application.Context.GetSharedPreferences(PrefsName, FileCreationMode.Private)!;
@@ -87,6 +88,22 @@ public static class MobileSettingsStore
         {
             using var editor = Prefs.Edit()!;
             editor.PutBoolean(KeyMusicReactiveEnabled, value);
+            editor.Apply();
+        }
+    }
+
+    /// <summary>动感歌词开关——只有全屏播放页（FullScreenPlayerPage）认这个设置，悬浮窗那一小条不接
+    /// （地方太小，装不下"字忽大忽小到处飘"这种效果）。开了之后当前行不再整行居中显示，而是按空格
+    /// 拆成一个个词、跟着播放进度轮流放大显示在屏幕不同位置/角度，见 FullScreenPlayerPage.
+    /// UpdateKineticLyric 顶部注释。默认关——这是个"好玩但不是所有人都想要"的效果，不该在没问过用户
+    /// 的情况下就把默认的清晰歌词显示换掉。</summary>
+    public static bool KineticLyricsEnabled
+    {
+        get => Prefs.GetBoolean(KeyKineticLyricsEnabled, false);
+        set
+        {
+            using var editor = Prefs.Edit()!;
+            editor.PutBoolean(KeyKineticLyricsEnabled, value);
             editor.Apply();
         }
     }

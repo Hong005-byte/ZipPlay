@@ -97,6 +97,14 @@ internal static class AudioReactiveCapture
 
         try
         {
+            // 必须夹在"用户刚在系统同意框上点了同意"和"真的调 GetMediaProjection"这两步之间，见
+            // FloatingOverlayService.EnsureMediaProjectionForegroundType 顶部注释——这是两条互相
+            // 矛盾的系统要求（老版本要求拿 token 前服务已经是这个类型；新版本要求 declare 这个类型
+            // 时已经有 project_media 这个 app-op）叠加后唯一站得住的时机窗口，不能提前也不能推迟。
+            // 悬浮窗没开着的话 Instance 是 null——但这个开关本来就要求先开悬浮窗才能勾（见
+            // PermissionsPage.ChkMusicReactive_Toggled），正常流程走到这里不会是 null。
+            FloatingOverlayService.Instance?.EnsureMediaProjectionForegroundType();
+
             var projection = manager.GetMediaProjection((int)resultCode, data);
             Android.Util.Log.Debug("ZipPlayAudio", $"GetMediaProjection -> {(projection == null ? "null" : "ok")}");
             if (projection == null) return;

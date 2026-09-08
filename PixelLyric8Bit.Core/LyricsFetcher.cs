@@ -20,12 +20,51 @@ namespace PixelLyric8BitFix
     {
         private readonly HttpClient _httpClient;
 
+        // 部分引擎（尤其是逆向出来的非官方接口，网易云/QQ音乐/酷狗都是）对没带 User-Agent 的请求会
+        // 直接拒绝或者限流。桌面版一直没显式带这个头也大多能跑通，大概率是桌面常见的家庭宽带固定/
+        // 半固定 IP 本来就不太容易被这类反爬策略盯上；手机走的是运营商 NAT 出口 IP，跟大量其它用户
+        // 共用同一个出口 IP，更容易被限流/拒绝——这是手机上"很多歌词都找不到"的一个可能成因，加一个
+        // 常见浏览器 UA 不会让情况变得更差，见 LyricsFetcher 构造函数。
+        private const string DefaultUserAgent =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
         public LyricsFetcher(HttpClient httpClient)
         {
             _httpClient = httpClient;
+
+            // 只在调用方还没设置过的时候补一次，不覆盖以后可能出现的自定义值；同一个 HttpClient 实例
+            // 也会被 LyricsTranslator 共用（见 FullScreenPlayerPage/FloatingOverlayService 里两个都拿
+            // 同一个 _httpClient 构造），这个 UA 对翻译那条请求（Google 翻译网页版接口）同样有意义,
+            // 一次设置两边都受益，不用分别设置两遍。
+            if (_httpClient.DefaultRequestHeaders.UserAgent.Count == 0)
+            {
+                _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", DefaultUserAgent);
+            }
         }
 
-        // 四引擎并发抓词，谁先给出时长对得上的结果就用谁；全部落空（或者版本都对不上）返回 null。
+        /// <summary>对外的入口——先带着调用方给的 artist 查一遍（见 FetchOnePassAsync），全军覆没
+        /// 且 artist 确实非空的话，再用空 artist 兜底重试一遍，见下面那段注释。两遍都落空/被取消
+        /// 就返回 null。</summary>
+        public async Task<LyricsFetchResult?> FetchAsync(
+            string title, string artist, TimeSpan expectedDuration, CancellationToken token,
+            Action<string>? onLateTranslation = null)
+        {
+            var result = await FetchOnePassAsync(title, artist, expectedDuration, token, onLateTranslation);
+            if (result != null) return result;
+
+            // 带着 artist 那一遍全军覆没了——手机上不少播放 App（尤其不是专门的音乐 App）报的
+            // artist 字段不干净：夹带好几个署名/合作方、频道名、平台 ID 之类的杂质，四个引擎大多是
+            // "标题+艺人"整串去搜，artist 这段杂质越多，搜索串跟对方库里干净的标题/艺人越对不上，
+            // 越容易全部落空——这是"手机上很多歌词找不到"的一个可能成因，桌面版从本地文件 ID3 标签
+            // 读到的 artist 通常干净得多，不太会踩到这个问题。只用标题再搜一遍，大多数引擎支持模糊
+            // 搜索，命中率通常比死磕一个不准的 artist 高；只有 artist 本来非空才值得再试，不然就是
+            // 同一次查询重复问一遍，白费一次网络往返。
+            if (string.IsNullOrWhiteSpace(artist) || token.IsCancellationRequested) return null;
+            return await FetchOnePassAsync(title, "", expectedDuration, token, onLateTranslation);
+        }
+
+        // 四引擎并发抓词，谁先给出时长对得上的结果就用谁；全部落空（或者版本都对不上）返回 null——
+        // FetchAsync 会照着这个结果决定要不要带空 artist 再调一次这同一个方法。
         //
         // 翻译这块单独处理：四个引擎里只有网易云会带翻译，其它三个接口本身不返回翻译。以前的写法是
         // "谁先给出原文就直接返回谁的翻译字段"——如果网易云不是最先响应的那个（大概率不是，
@@ -34,9 +73,9 @@ namespace PixelLyric8BitFix
         // 现在改成：原文该多快出来还是多快出来（不拖慢主流程），但如果赢的不是网易云，
         // 网易云那个请求不取消、放到后台继续等，真等到了（且版本对得上号）再通过 onLateTranslation
         // 回调补一份翻译上去——原文显示速度完全不受影响，只是翻译不再白白被浪费。
-        public async Task<LyricsFetchResult?> FetchAsync(
+        private async Task<LyricsFetchResult?> FetchOnePassAsync(
             string title, string artist, TimeSpan expectedDuration, CancellationToken token,
-            Action<string>? onLateTranslation = null)
+            Action<string>? onLateTranslation)
         {
             var neteaseTask = FetchFromNeteaseAsync(title, artist, token);
             var pending = new List<Task<(string? Lrc, string? Translation)>>

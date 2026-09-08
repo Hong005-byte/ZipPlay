@@ -19,6 +19,10 @@
                     Checked="ChkKaraoke_Toggled" Unchecked="ChkKaraoke_Toggled"/>
           <CheckBox x:Name="ChkBilingual" Content="🌐 双语歌词（联网翻译）" Foreground="#AAAAAA" Margin="0,4,0,0"
                     Checked="ChkBilingual_Toggled" Unchecked="ChkBilingual_Toggled"/>
+          <!-- 只有全屏播放页认这个开关，悬浮窗那一小条地方太小装不下，见 MobileSettingsStore.
+               KineticLyricsEnabled 顶部注释 -->
+          <CheckBox x:Name="ChkKinetic" Content="✨ 动感歌词（仅全屏播放，字忽大忽小满屏跳）" Foreground="#AAAAAA" Margin="0,4,0,0"
+                    Checked="ChkKinetic_Toggled" Unchecked="ChkKinetic_Toggled"/>
           <StackPanel Orientation="Horizontal" Margin="0,10,0,0" VerticalAlignment="Center">
             <TextBlock x:Name="TxtSyncOffset" Text="歌词同步偏移：0ms" FontFamily="Consolas" Foreground="#AAAAAA" FontSize="13"
                        VerticalAlignment="Center" Margin="0,0,10,0"/>

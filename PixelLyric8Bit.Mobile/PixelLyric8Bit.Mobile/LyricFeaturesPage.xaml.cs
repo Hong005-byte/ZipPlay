@@ -17,10 +17,12 @@ public sealed partial class LyricFeaturesPage : Page
 #if __ANDROID__
         ChkKaraoke.IsChecked = Droid.MobileSettingsStore.KaraokeEnabled;
         ChkBilingual.IsChecked = Droid.MobileSettingsStore.BilingualEnabled;
+        ChkKinetic.IsChecked = Droid.MobileSettingsStore.KineticLyricsEnabled;
         UpdateSyncOffsetLabel(Droid.MobileSettingsStore.SyncOffsetMs);
 #else
         ChkKaraoke.IsEnabled = false;
         ChkBilingual.IsEnabled = false;
+        ChkKinetic.IsEnabled = false;
         TxtSyncOffset.Text = "歌词同步偏移：这个功能只在 Android 上有意义";
 #endif
     }
@@ -41,6 +43,13 @@ public sealed partial class LyricFeaturesPage : Page
     {
 #if __ANDROID__
         Droid.MobileSettingsStore.BilingualEnabled = ChkBilingual.IsChecked == true;
+#endif
+    }
+
+    private void ChkKinetic_Toggled(object sender, RoutedEventArgs e)
+    {
+#if __ANDROID__
+        Droid.MobileSettingsStore.KineticLyricsEnabled = ChkKinetic.IsChecked == true;
 #endif
     }
 

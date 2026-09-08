@@ -193,12 +193,36 @@ public class FloatingOverlayService : Service
 
     public static bool IsRunning { get; private set; }
 
+    /// <summary>正在跑的这个 Service 实例——AudioReactiveCapture.OnConsentGranted 拿到用户同意后要
+    /// 回调 EnsureMediaProjectionForegroundType，但那边是个静态类、没有这个 Service 的引用，见该方法
+    /// 顶部注释为什么必须是这个时序。悬浮窗没开着的话是 null（音乐律动那个勾选框本来就要求先开悬浮窗
+    /// 才能勾，见 PermissionsPage.ChkMusicReactive_Toggled，正常情况不会在 null 的时候被调用）。</summary>
+    public static FloatingOverlayService? Instance { get; private set; }
+
     public override IBinder? OnBind(Intent? intent) => null;
 
     public override StartCommandResult OnStartCommand(Intent? intent, StartCommandFlags flags, int startId)
     {
-        StartForegroundWithNotification();
-        ShowOverlay();
+        Instance = this;
+        StartForegroundWithNotification(includeMediaProjectionType: false);
+        try
+        {
+            ShowOverlay();
+        }
+        catch (Exception ex)
+        {
+            // 真机踩过的坑：ShowOverlay 里头有一步（比如媒体会话订阅，见 TryRegisterActiveSessionsListener
+            // 顶部注释）在某些设备/权限组合下会抛异常，一旦冒出这里没人接，整个 App 进程会被系统直接
+            // 带崩——用户体感就是"点了显示悬浮窗、App 卡死出不来"，得靠系统"应用无响应"强制关闭才能
+            // 脱身。接住、把这次已经加了一半的悬浮窗清理掉、停掉这个前台服务，比让整个进程崩溃体验好
+            // 得多，至少 App 主界面还能正常用、能看到发生了什么。
+            global::Android.Util.Log.Error("ZipPlayOverlay", "ShowOverlay failed: " + ex);
+            try { RemoveOverlay(); } catch { /* 清理阶段本身不该再抛出新的异常 */ }
+            Toast.MakeText(this, "悬浮窗启动失败，请检查悬浮窗/通知使用权权限后重试", ToastLength.Long)?.Show();
+            Instance = null;
+            StopSelf();
+            return StartCommandResult.NotSticky;
+        }
         IsRunning = true;
         return StartCommandResult.Sticky;
     }
@@ -208,13 +232,25 @@ public class FloatingOverlayService : Service
         RemoveOverlay();
         _fetchCts?.Cancel();
         IsRunning = false;
+        Instance = null;
         base.OnDestroy();
     }
 
     // Android 8 (API 26) 起，前台服务必须配一条常驻通知——这是系统强制的，不是我们自己想加的，
     // 用户会在通知栏看到"ZipPlay 悬浮歌词正在运行"这样一条提示，这也是让用户知道"这个悬浮窗
     // 是怎么冒出来的、想关掉去哪关"的正常渠道。
-    private void StartForegroundWithNotification()
+    //
+    // includeMediaProjectionType 这个参数是真机踩出来的第二个坑（第一个坑见下面注释）：早期版本
+    // 一直无条件带上 ForegroundService.TypeMediaProjection（不管音乐律动有没有开），这在这台测试机
+    // （targetSdk 36，更新的系统版本）上会导致悬浮窗一开就崩——logcat 抓到的真实异常是
+    // `SecurityException: Starting FGS with type mediaProjection ... requires permissions: ...
+    // any of the permissions allOf=false [CAPTURE_VIDEO_OUTPUT, android:project_media]`，也就是说
+    // 新版本还多了一条反过来的要求：declare 这个类型本身就要求这一刻已经有 project_media 这个
+    // app-op（用户在系统同意框上点了同意才会有），不是"先声明类型、再去拿 token"这一个方向的要求
+    // 就够了。所以现在默认不带这个类型（普通悬浮窗场景走不到 MediaProjection 这条线，声明了反而
+    // 会被新系统直接拒绝整个前台服务），只有 EnsureMediaProjectionForegroundType 在"用户刚同意
+    // 完、真的要去拿 token 之前"这个窄窗口里才会带上。
+    private void StartForegroundWithNotification(bool includeMediaProjectionType)
     {
         if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
         {
@@ -232,18 +268,15 @@ public class FloatingOverlayService : Service
 
         // 3 参数重载（带 foregroundServiceType）是 API 29 起才有的，配合上面 [Service] 特性上声明的
         // ForegroundServiceType 一起，两边都要对得上，缺一个都会在 API 34+ 的设备上直接崩。
-        // TypeMediaProjection 一直带着、不是等真的开始采集才加——真机踩过的坑：一开始想着"只在真的
-        // 用着这个 token 的这段时间才声明这个类型"，等 AudioReactiveCapture.IsActive 变 true 才补一次
-        // StartForeground，结果 MainActivity.OnActivityResult 调 GetMediaProjection 那一步直接抛
-        // SecurityException（"Media projections require a foreground service of type
-        // ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION"）——Android 要求的是"拿 token 这一刻
-        // 之前"就已经是这个类型的前台服务，不是"拿到 token 之后"才补声明，先后顺序反了。所以只要悬浮窗
-        // 开着，就一直带上这个类型，不等 AudioReactiveCapture 真的开始采集，见 AudioReactiveCapture.
-        // ActiveChanged 订阅那边（RefreshForegroundServiceType）仍然留着，是防着"以后这个类型的判断
-        // 条件又要改"这种情况，不是这次真正修 bug 靠的那一行
+        // TypeMediaProjection 只在 includeMediaProjectionType 为 true 时才带上——见本方法顶部注释这条
+        // 新踩到的坑；老坑（"拿 token 这一刻之前就已经是这个类型的前台服务"，见
+        // EnsureMediaProjectionForegroundType 顶部注释）仍然存在，两条要求叠在一起，唯一站得住的
+        // 时机窗口就是 EnsureMediaProjectionForegroundType 被调用的那一刻。
         if (Build.VERSION.SdkInt >= BuildVersionCodes.Q)
         {
-            StartForeground(NotificationId, notification, ForegroundService.TypeSpecialUse | ForegroundService.TypeMediaProjection);
+            var type = ForegroundService.TypeSpecialUse;
+            if (includeMediaProjectionType) type |= ForegroundService.TypeMediaProjection;
+            StartForeground(NotificationId, notification, type);
         }
         else
         {
@@ -251,10 +284,27 @@ public class FloatingOverlayService : Service
         }
     }
 
+    /// <summary>AudioReactiveCapture.OnConsentGranted 在真的调 MediaProjectionManager.GetMediaProjection
+    /// 之前必须先调这个——这是两条互相矛盾的系统要求叠加后唯一站得住的时机：
+    /// 1）（老坑）拿 token 这一刻之前，前台服务就必须已经是 TypeMediaProjection，见
+    ///    StartForegroundWithNotification 里 "Media projections require a foreground service of type"
+    ///    那段历史注释；
+    /// 2）（新坑，这次真机在 targetSdk 36 的设备上踩到的）declare 这个类型本身要求这一刻已经有
+    ///    project_media 这个 app-op，而这个 app-op 是用户在系统同意框上点了同意才会有——不能在
+    ///    用户同意之前就声明。
+    /// 两条要求的交集只剩"用户点完同意框、GetMediaProjection 还没调"这一刻，所以这个方法只能由
+    /// OnConsentGranted 在那个精确的时间点调用，不能提前到悬浮窗刚开的时候（见
+    /// StartForegroundWithNotification 默认 includeMediaProjectionType=false），也不能推迟到
+    /// AudioRecord 真的开始读数据之后。</summary>
+    public void EnsureMediaProjectionForegroundType() => StartForegroundWithNotification(includeMediaProjectionType: true);
+
     /// <summary>AudioReactiveCapture.IsActive 变了（拿到/收回了 MediaProjection token）就重新调一遍
-    /// StartForegroundWithNotification，把前台服务类型更新成当前实际在用的那一份，见该方法注释。
-    /// 事件可能从别的线程触发，这里统一 Post 回主 Handler 再碰 Service API，不直接在触发线程上跑。</summary>
-    private void RefreshForegroundServiceType() => _mainHandler?.Post(StartForegroundWithNotification);
+    /// StartForegroundWithNotification，把前台服务类型更新成当前实际在用的那一份——主要是收回 token
+    /// 停止采集之后把 TypeMediaProjection 这个类型摘掉（EnsureMediaProjectionForegroundType 在拿
+    /// token 之前已经把它加上了，这里补的是反过来这一半）。事件可能从别的线程触发，这里统一 Post
+    /// 回主 Handler 再碰 Service API，不直接在触发线程上跑。</summary>
+    private void RefreshForegroundServiceType() =>
+        _mainHandler?.Post(() => StartForegroundWithNotification(AudioReactiveCapture.IsActive));
 
     private void ShowOverlay()
     {
@@ -949,17 +999,45 @@ public class FloatingOverlayService : Service
 
     // ── 媒体会话订阅：活跃会话列表变化 + 当前会话的播放状态/元数据变化，两层事件都要订 ──────────
 
+    private bool _activeSessionsListenerRegistered;
+
     private void BindMediaSessionManager()
     {
         _sessionManager = (AndroidMediaSession.MediaSessionManager)GetSystemService(MediaSessionService)!;
-        var component = new ComponentName(this, Java.Lang.Class.FromType(typeof(MediaNotificationListenerService)));
-
         _activeSessionsListener = new ActiveSessionsListener(RebindController);
-        _sessionManager.AddOnActiveSessionsChangedListener(_activeSessionsListener, component);
+        TryRegisterActiveSessionsListener();
 
         // listener 只会在"以后列表变了"的时候推——这里先手动查一次现在已经在播的，不然要等下一次
         // 切歌/换 App 才会第一次显示出东西
         RebindController(MediaNotificationListenerService.Instance?.GetActiveMediaControllers());
+    }
+
+    /// <summary>真正订阅"活跃会话列表变化"广播——这一步要求调用方已经拿到"通知使用权"（见
+    /// PermissionsPage），没拿到的话系统会直接抛 SecurityException（不是返回 false/null 这种能提前
+    /// 判断的信号）。真机踩过的坑：用户先点了"显示悬浮窗"、还没去开通知使用权，这个异常会一路冒出
+    /// Service.OnStartCommand 没人接，把整个 App 进程带崩——用户体感就是"悬浮窗点了没反应、App 卡死
+    /// 出不来"，得靠系统"应用无响应"强制关闭才能脱身，见 OnStartCommand 的兜底 catch。这里先查一遍
+    /// 权限、真的抛了也接住，悬浮窗照样能正常显示出来（只是暂时读不到"现在在播什么"），不会因为这
+    /// 一步崩掉整个前台服务。RetryBindControllerIfMissing 每隔几秒会再调一次这个方法，用户去设置里
+    /// 把通知使用权补上之后，不用重开一次悬浮窗，自己就能重新连上。</summary>
+    private void TryRegisterActiveSessionsListener()
+    {
+        if (_activeSessionsListenerRegistered || _sessionManager == null || _activeSessionsListener == null) return;
+        if (!MediaNotificationListenerService.IsListenerAccessGranted(this)) return;
+
+        try
+        {
+            var component = new ComponentName(this, Java.Lang.Class.FromType(typeof(MediaNotificationListenerService)));
+            _sessionManager.AddOnActiveSessionsChangedListener(_activeSessionsListener, component);
+            _activeSessionsListenerRegistered = true;
+        }
+        catch (Exception ex)
+        {
+            // 权限查询（IsListenerAccessGranted）和系统实际校验之间偶尔会有一拍时间差（刚开权限那一
+            // 瞬间）——接住就行，下一次 RetryBindControllerIfMissing 的 tick 会再试一次，不影响悬浮窗
+            // 本身正常显示
+            global::Android.Util.Log.Warn("ZipPlayOverlay", "AddOnActiveSessionsChangedListener failed: " + ex);
+        }
     }
 
     /// <summary>活跃会话列表变了（新 App 开始播/原来那个会话没了）——挑第一个当"现在显示这个"，
@@ -1087,6 +1165,7 @@ public class FloatingOverlayService : Service
         if ((DateTimeOffset.Now - _lastControllerRebindAttempt).TotalMilliseconds < ControllerRebindRetryIntervalMs) return;
 
         _lastControllerRebindAttempt = DateTimeOffset.Now;
+        TryRegisterActiveSessionsListener(); // 没注册成功过的话顺手再试一次，见该方法顶部注释——权限是这次才补上的话，不用重开悬浮窗就能自愈
         RebindController(MediaNotificationListenerService.Instance?.GetActiveMediaControllers());
     }
 
@@ -1459,6 +1538,7 @@ public class FloatingOverlayService : Service
         }
         _sessionManager = null;
         _activeSessionsListener = null;
+        _activeSessionsListenerRegistered = false;
 
         if (_controller != null && _controllerCallback != null)
         {
