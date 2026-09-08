@@ -12,5 +12,5 @@ namespace PixelLyric8Bit.Mobile;
 ///    见 MobileUpdateChecker 顶部注释、README「发布新版本」那节）</summary>
 public static class AppVersion
 {
-    public const string Current = "1.0.0";
+    public const string Current = "1.1.0";
 }
